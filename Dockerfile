@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1.6
-# Official Nowen Video image, optimized for NAS and self-hosted home media use.
-# cmd/server-lite remains an internal migration-stable implementation path only;
-# it is no longer a separate Lite product edition. Dockerfile.full is retained
-# solely for legacy compatibility and rollback validation.
+# fan-video: 轻量级媒体库管理服务
+# 仅支持本地海报匹配（同名图片 + 视频第一帧兜底）
+# 无网络刮削、无 AI 功能、无元数据管理
+# 基于 nowen-video server-lite 重构精简而来
 
 FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend
 ARG NOWEN_VERSION=0.1.0

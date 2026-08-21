@@ -233,24 +233,24 @@ var nfoVideoExts = map[string]bool{
 // 常见图片文件扩展名
 var nfoImageExts = map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".webp": true}
 
-// 常见本地海报文件名（按优先级排序）
+// 常见本地海报文件名（按优先级排序，支持 .jpg/.jpeg/.png/.webp）
 var standardPosterNames = []string{
-	"poster.jpg", "poster.png", "poster.webp",
-	"cover.jpg", "cover.png", "cover.webp",
-	"folder.jpg", "folder.png", "folder.webp",
-	"thumb.jpg", "thumb.png", "thumb.webp",
-	"movie.jpg", "movie.png",
-	"show.jpg", "show.png",
+	"poster.jpg", "poster.jpeg", "poster.png", "poster.webp",
+	"cover.jpg", "cover.jpeg", "cover.png", "cover.webp",
+	"folder.jpg", "folder.jpeg", "folder.png", "folder.webp",
+	"thumb.jpg", "thumb.jpeg", "thumb.png", "thumb.webp",
+	"movie.jpg", "movie.jpeg", "movie.png",
+	"show.jpg", "show.jpeg", "show.png",
 }
 
 // 常见本地背景图文件名
 var standardBackdropNames = []string{
-	"fanart.jpg", "fanart.png", "fanart.webp",
-	"backdrop.jpg", "backdrop.png", "backdrop.webp",
-	"banner.jpg", "banner.png", "banner.webp",
-	"background.jpg", "background.png", "background.webp",
-	"clearart.jpg", "clearart.png",
-	"landscape.jpg", "landscape.png",
+	"fanart.jpg", "fanart.jpeg", "fanart.png", "fanart.webp",
+	"backdrop.jpg", "backdrop.jpeg", "backdrop.png", "backdrop.webp",
+	"banner.jpg", "banner.jpeg", "banner.png", "banner.webp",
+	"background.jpg", "background.jpeg", "background.png", "background.webp",
+	"clearart.jpg", "clearart.jpeg", "clearart.png",
+	"landscape.jpg", "landscape.jpeg", "landscape.png",
 }
 
 // FindLocalImages 在指定目录下查找本地图片（poster/fanart/banner 等）

@@ -283,7 +283,7 @@
     --nv-player-side: 10px;
     --nv-player-side-l: max(10px, env(safe-area-inset-left, 0px));
     --nv-player-side-r: max(10px, env(safe-area-inset-right, 0px));
-    --nv-player-bottom: max(9px, env(safe-area-inset-bottom, 0px));
+    --nv-player-bottom: max(24px, env(safe-area-inset-bottom, 0px));
     --nv-player-control-size: 38px;
   }
   .group\/player > .nv-player-runtime-status {
@@ -308,9 +308,11 @@
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
+    height: 100% !important;
     padding-left: var(--nv-player-side-l) !important;
     padding-right: var(--nv-player-side-r) !important;
     padding-bottom: var(--nv-player-bottom) !important;
+    overflow: hidden !important;
   }
   .group\/player .player-controls > .progress-bar {
     position: relative !important;
@@ -324,10 +326,12 @@
     position: static !important;
     flex-wrap: wrap;
     justify-content: flex-start;
-    row-gap: 2px;
+    align-content: flex-start;
+    row-gap: 4px;
     min-height: 50px !important;
-    padding: 5px 6px !important;
+    padding: 8px 10px 12px !important;
     border-radius: 14px !important;
+    overflow: hidden !important;
   }
   .group\/player .player-controls > div.flex.items-center.gap-1 > button,
   .group\/player .player-controls > div.flex.items-center.gap-1 > div.relative > button {

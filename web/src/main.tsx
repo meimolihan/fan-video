@@ -16,6 +16,20 @@ import './styles/player.css'
 import './styles/legacy-ui-pages.css'
 import './styles/ui.css'
 
+// Mobile responsive styles
+import './styles/ui-home-responsive.css'
+import './styles/ui-home-mobile-final.css'
+import './styles/ui-mobile-bottom-nav.css'
+import './styles/ui-media-detail-mobile-actions.css'
+import './styles/ui-media-detail-mobile-poster.css'
+import './styles/ui-media-detail-mobile-hero-density.css'
+import './styles/ui-home-mobile-hero-actions.css'
+import './styles/ui-home-mobile-hero-surface.css'
+import './styles/ui-home-mobile-immersive-chrome.css'
+import './styles/ui-topbar-responsive-stability.css'
+import './styles/ui-home-poster-density-final.css'
+import './styles/neo-aurora-responsive.css'
+
 const SW_DEV_RELOAD_KEY = 'nowen-sw-dev-cleanup-reload'
 const SW_UPDATE_RELOAD_KEY = 'nowen-sw-production-update-reload'
 
