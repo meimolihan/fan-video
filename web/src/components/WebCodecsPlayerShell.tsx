@@ -23,6 +23,7 @@ import clsx from 'clsx'
 import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, Gauge, Cpu } from 'lucide-react'
 import WebCodecsPlayer, { type WebCodecsPlayerHandle } from './WebCodecsPlayer'
 import { usePlayerStore } from '@/stores/player'
+import { usePlayerFullscreen } from '@/hooks/usePlayerFullscreen'
 import { userApi } from '@/api'
 import { Tag } from '@/components/design-system'
 
@@ -71,7 +72,6 @@ export default function WebCodecsPlayerShell({
   const [duration, setDuration] = useState(knownDuration || 0)
   const [volume, setVolume] = useState(1)
   const [muted, setMuted] = useState(false)
-  const [isFullscreen, setIsFullscreen] = useState(false)
   const [showControls, setShowControls] = useState(true)
   const [playbackRate, setPlaybackRate] = useState(1)
   const [showSpeedMenu, setShowSpeedMenu] = useState(false)
@@ -79,6 +79,9 @@ export default function WebCodecsPlayerShell({
 
   const setStoreTime = usePlayerStore(s => s.setCurrentTime)
   const setStoreDuration = usePlayerStore(s => s.setDuration)
+  const setStorePlaying = usePlayerStore(s => s.setPlaying)
+
+  const { isFullscreen, toggleFullscreen } = usePlayerFullscreen({ containerRef })
 
   const displayDuration = (knownDuration && knownDuration > duration) ? knownDuration : duration
   const progress = displayDuration > 0 ? (currentTime / displayDuration) * 100 : 0
@@ -93,12 +96,21 @@ export default function WebCodecsPlayerShell({
     setStoreDuration(d)
   }, [setStoreDuration])
 
-  const handlePlay = useCallback(() => setIsPlaying(true), [])
-  const handlePause = useCallback(() => setIsPlaying(false), [])
+  const handlePlay = useCallback(() => {
+    setIsPlaying(true)
+    setStorePlaying(true)
+  }, [setStorePlaying])
+
+  const handlePause = useCallback(() => {
+    setIsPlaying(false)
+    setStorePlaying(false)
+  }, [setStorePlaying])
+
   const handleEnded = useCallback(() => {
     setIsPlaying(false)
+    setStorePlaying(false)
     if (onNext) setNextCountdown(5)
-  }, [onNext])
+  }, [onNext, setStorePlaying])
 
   const handleError = useCallback((msg: string) => {
     console.warn('[WebCodecs] 播放失败:', msg)
@@ -143,22 +155,10 @@ export default function WebCodecsPlayerShell({
     playerRef.current?.setMuted(next)
   }, [muted])
 
-  const toggleFullscreen = useCallback(() => {
-    if (!containerRef.current) return
-    if (!document.fullscreenElement) containerRef.current.requestFullscreen?.()
-    else document.exitFullscreen?.()
-  }, [])
-
   const changePlaybackRate = useCallback((r: number) => {
     setPlaybackRate(r)
     playerRef.current?.setPlaybackRate(r)
     setShowSpeedMenu(false)
-  }, [])
-
-  useEffect(() => {
-    const onFs = () => setIsFullscreen(!!document.fullscreenElement)
-    document.addEventListener('fullscreenchange', onFs)
-    return () => document.removeEventListener('fullscreenchange', onFs)
   }, [])
 
   useEffect(() => {
@@ -173,6 +173,10 @@ export default function WebCodecsPlayerShell({
       if (isPlaying) setShowControls(false)
     }, 3000)
   }, [isPlaying])
+
+  // 移动端：触摸也能唤出/保持控制条（此前只监听鼠标事件，控制条隐藏后无法再唤出）
+  const handleTouchStart = useCallback(() => resetControlsTimer(), [resetControlsTimer])
+  const handleTouchMove = useCallback(() => resetControlsTimer(), [resetControlsTimer])
 
   useEffect(() => {
     let tick = 0
@@ -244,6 +248,8 @@ export default function WebCodecsPlayerShell({
       className="group/player relative h-full w-full bg-[var(--nv-player-canvas)]"
       onMouseMove={resetControlsTimer}
       onMouseLeave={() => { if (isPlaying) setShowControls(false) }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
     >
       <div className="absolute inset-0 cursor-pointer" onClick={togglePlay} onDoubleClick={toggleFullscreen}>
         <WebCodecsPlayer

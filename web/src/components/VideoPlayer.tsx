@@ -27,6 +27,7 @@ import {
   MessageCircle,
 } from 'lucide-react'
 import clsx from 'clsx'
+import { usePlayerFullscreen } from '@/hooks/usePlayerFullscreen'
 import CastPanel from './CastPanel'
 import SubtitleSearchPanel from './SubtitleSearchPanel'
 import SubtitleContentSearch from './SubtitleContentSearch'
@@ -82,7 +83,6 @@ export default function VideoPlayer({
     duration,
     volume,
     isMuted,
-    isFullscreen,
     showControls,
     setPlaying,
     setCurrentTime,
@@ -126,6 +126,12 @@ export default function VideoPlayer({
   const [showSpeedMenu, setShowSpeedMenu] = useState(false)
   const [playbackRate, setPlaybackRate] = useState(1)
   const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5, 6, 7, 8]
+
+  // 画中画仅在浏览器支持时显示（iPhone Safari 不支持元素级画中画）
+  const [pipSupported] = useState(() => typeof document !== 'undefined'
+    && 'pictureInPictureEnabled' in document
+    && Boolean((document as Document & { pictureInPictureEnabled?: boolean }).pictureInPictureEnabled)
+    && 'requestPictureInPicture' in HTMLVideoElement.prototype)
 
   const displayDuration = (knownDuration && knownDuration > 0 && knownDuration > duration) ? knownDuration : duration
   const progress = displayDuration > 0 ? (currentTime / displayDuration) * 100 : 0
@@ -560,12 +566,6 @@ export default function VideoPlayer({
     return () => clearInterval(progressReportRef.current)
   }, [mediaId, displayDuration])
 
-  useEffect(() => {
-    const onFullscreenChange = () => setFullscreen(!!document.fullscreenElement)
-    document.addEventListener('fullscreenchange', onFullscreenChange)
-    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
-  }, [setFullscreen])
-
   const resetControlsTimer = useCallback(() => {
     setShowControls(true)
     clearTimeout(controlsTimerRef.current)
@@ -607,6 +607,8 @@ export default function VideoPlayer({
   }
 
   const handleProgressClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    // 触摸拖动刚结束时浏览器会补发模拟 click，跳过避免重复 seek
+    if (Date.now() - progressTouchRef.current.endAt < 500) return
     const video = videoRef.current
     if (!video) return
     const rect = event.currentTarget.getBoundingClientRect()
@@ -617,6 +619,51 @@ export default function VideoPlayer({
     }
     if (video.duration > 0 && targetTime <= video.duration) video.currentTime = targetTime
     else if (video.duration > 0) video.currentTime = video.duration - 0.5
+  }
+
+  // 移动端进度条拖动：拖动中仅预览时间，松手后真正 seek，避免拖动过程中反复重新加载
+  const progressTouchRef = useRef<{ active: boolean; target: number; endAt: number }>({ active: false, target: 0, endAt: 0 })
+
+  const commitProgressSeek = useCallback((targetTime: number) => {
+    if (mode === 'remux' || mode === 'smart_remux') {
+      remuxSeek(Math.max(0, Math.min(displayDuration, targetTime)))
+      return
+    }
+    const video = videoRef.current
+    if (!video) return
+    const maxTime = video.duration > 0 ? video.duration - 0.25 : displayDuration
+    video.currentTime = Math.max(0, Math.min(targetTime, maxTime))
+  }, [mode, remuxSeek, displayDuration])
+
+  const syncProgressTouch = (event: React.TouchEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const ratio = Math.max(0, Math.min(1, (event.touches[0].clientX - rect.left) / rect.width))
+    progressTouchRef.current.target = ratio * displayDuration
+    setSeekHint({ text: formatTime(progressTouchRef.current.target), visible: true })
+  }
+
+  const handleProgressTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    event.stopPropagation()
+    resetControlsTimer()
+    progressTouchRef.current = { active: true, target: 0, endAt: 0 }
+    syncProgressTouch(event)
+  }
+
+  const handleProgressTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (!progressTouchRef.current.active) return
+    event.stopPropagation()
+    resetControlsTimer()
+    syncProgressTouch(event)
+  }
+
+  const handleProgressTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    event.stopPropagation()
+    if (!progressTouchRef.current.active) return
+    progressTouchRef.current.active = false
+    progressTouchRef.current.endAt = Date.now()
+    if (displayDuration > 0) commitProgressSeek(progressTouchRef.current.target)
+    clearTimeout(seekHintTimer.current)
+    seekHintTimer.current = window.setTimeout(() => setSeekHint(prev => ({ ...prev, visible: false })), 600)
   }
 
   const handleProgressHover = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -650,10 +697,11 @@ export default function VideoPlayer({
     seekHintTimer.current = window.setTimeout(() => setSeekHint(prev => ({ ...prev, visible: false })), 800)
   }, [])
 
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) document.exitFullscreen()
-    else containerRef.current?.requestFullscreen()
-  }
+  const { isFullscreen, toggleFullscreen } = usePlayerFullscreen({
+    containerRef,
+    videoRef,
+    onFullscreenChange: setFullscreen,
+  })
 
   const switchQuality = (index: number) => {
     if (hlsRef.current) {
@@ -792,7 +840,11 @@ export default function VideoPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playbackRate, onNext, showContentSearch, showSubtitleSearch])
 
+  const lastTouchTimeRef = useRef(0)
+
   const handleTouchStart = useCallback((event: React.TouchEvent) => {
+    lastTouchTimeRef.current = Date.now()
+    resetControlsTimer()
     const touch = event.touches[0]
     const rect = containerRef.current?.getBoundingClientRect()
     if (!rect) return
@@ -804,9 +856,10 @@ export default function VideoPlayer({
       direction: 'none',
       side: touch.clientX < rect.width / 2 ? 'left' : 'right',
     }
-  }, [currentTime, volume])
+  }, [currentTime, volume, resetControlsTimer])
 
   const handleTouchMove = useCallback((event: React.TouchEvent) => {
+    resetControlsTimer()
     const gesture = gestureRef.current
     if (!gesture) return
     const touch = event.touches[0]
@@ -831,6 +884,11 @@ export default function VideoPlayer({
       })
     } else if (gesture.side === 'right') {
       const nextVolume = Math.max(0, Math.min(1, gesture.startVolume - deltaY / rect.height))
+      const video = videoRef.current
+      if (video) {
+        video.volume = nextVolume
+        video.muted = nextVolume === 0
+      }
       setVolume(nextVolume)
       setGestureOverlay({ type: 'volume', value: `${Math.round(nextVolume * 100)}%` })
     } else {
@@ -854,6 +912,16 @@ export default function VideoPlayer({
     clearTimeout(gestureOverlayTimer.current)
     gestureOverlayTimer.current = window.setTimeout(() => setGestureOverlay(null), 500)
   }, [])
+
+  // 移动端：控制条隐藏时第一次点按视频只唤出控制条，不触发暂停
+  const handleVideoClick = useCallback(() => {
+    const fromTouch = Date.now() - lastTouchTimeRef.current < 800
+    if (fromTouch && !showControls) {
+      resetControlsTimer()
+      return
+    }
+    togglePlay()
+  }, [showControls, resetControlsTimer])
 
   const closeAllMenus = () => {
     setShowQuality(false)
@@ -902,7 +970,7 @@ export default function VideoPlayer({
       <video
         ref={videoRef}
         className="h-full w-full cursor-pointer"
-        onClick={togglePlay}
+        onClick={handleVideoClick}
         onDoubleClick={toggleFullscreen}
         playsInline
         crossOrigin="anonymous"
@@ -1028,6 +1096,10 @@ export default function VideoPlayer({
           onClick={handleProgressClick}
           onMouseMove={handleProgressHover}
           onMouseLeave={() => { setHoverProgress(null); setHoverSprite(null) }}
+          onTouchStart={handleProgressTouchStart}
+          onTouchMove={handleProgressTouchMove}
+          onTouchEnd={handleProgressTouchEnd}
+          onTouchCancel={handleProgressTouchEnd}
           role="slider"
           aria-label="播放进度"
           aria-valuemin={0}
@@ -1327,20 +1399,22 @@ export default function VideoPlayer({
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={() => {
-              const video = videoRef.current
-              if (!video) return
-              if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => {})
-              else video.requestPictureInPicture().catch(() => {})
-            }}
-            className={PLAYER_CONTROL_CLASS}
-            title="画中画"
-            aria-label="画中画"
-          >
-            <PictureInPicture2 size={18} aria-hidden="true" />
-          </button>
+          {pipSupported && (
+            <button
+              type="button"
+              onClick={() => {
+                const video = videoRef.current
+                if (!video) return
+                if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => {})
+                else video.requestPictureInPicture().catch(() => {})
+              }}
+              className={PLAYER_CONTROL_CLASS}
+              title="画中画"
+              aria-label="画中画"
+            >
+              <PictureInPicture2 size={18} aria-hidden="true" />
+            </button>
+          )}
 
           <button type="button" onClick={toggleFullscreen} className={PLAYER_CONTROL_CLASS} aria-label={isFullscreen ? '退出全屏' : '进入全屏'}>
             {isFullscreen ? <Minimize size={18} aria-hidden="true" /> : <Maximize size={18} aria-hidden="true" />}

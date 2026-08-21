@@ -367,3 +367,19 @@
     }
   }
 }
+
+/* CSS 伪全屏兜底：当浏览器不支持任何全屏 API 时（如 iPhone 上的非 video 元素），
+ * 由 usePlayerFullscreen 添加此类实现铺满视口的全屏效果。 */
+.player-fake-fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483000 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  background: #000;
+}

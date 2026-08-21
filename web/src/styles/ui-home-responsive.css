@@ -265,12 +265,21 @@
     display: flex !important;
     align-items: flex-end !important;
     gap: 0 !important;
-    padding: 150px 18px 46px !important;
+    padding: 112px 18px 56px !important;
     overflow: hidden !important;
   }
 
   html body .nv-home-page .nv-home-hero-poster {
     display: none !important;
+  }
+
+  /* 内容过高时向上裁剪而不是向下挤压：
+   * 收藏按钮（全宽行）绝不允许越过底部安全区遮挡轮播指示点 */
+  html body .nv-home-page .nv-home-hero-content {
+    max-height: 100% !important;
+    min-height: 0 !important;
+    justify-content: flex-end !important;
+    overflow: hidden !important;
   }
 
   html body .nv-home-page .nv-home-hero-content {
@@ -376,8 +385,14 @@
     display: none !important;
   }
 
+  /* 竖屏下收藏按钮为全宽行且贴近底部，指示点移到顶部居中，
+   * 从布局上彻底避开遮挡（顶部无任何其他控件） */
   html body .nv-home-page .nv-home-hero-dots {
-    bottom: 14px !important;
+    top: 14px !important;
+    right: auto !important;
+    left: 50% !important;
+    bottom: auto !important;
+    transform: translateX(-50%) !important;
     gap: 6px !important;
   }
 

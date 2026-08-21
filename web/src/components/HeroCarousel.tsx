@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo, type SyntheticEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { AnimatePresence, motion, useReducedMotion, type PanInfo } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { ChevronLeft, ChevronRight, Film, Heart, Play, RotateCcw } from 'lucide-react'
 import { streamApi } from '@/api'
 import { useTranslation } from '@/i18n'
@@ -10,7 +10,6 @@ import { MediaArtwork, MediaHeroContent } from '@/ui'
 
 const AUTO_PLAY_INTERVAL = 7000
 const SWIPE_THRESHOLD = 50
-const SWIPE_VELOCITY = 300
 
 // A stale media record can still advertise a backdrop whose file has already
 // disappeared. Remember failed endpoints for this page lifetime so the carousel
@@ -259,12 +258,28 @@ export default function HeroCarousel({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [goNext, goPrev, isInViewport, isPageVisible])
 
-  const handleDragEnd = useCallback((_: unknown, info: PanInfo) => {
-    if (Math.abs(info.offset.x) > SWIPE_THRESHOLD || Math.abs(info.velocity.x) > SWIPE_VELOCITY) {
-      if (info.offset.x > 0) goPrev()
+  // 移动端触摸滑动：在整块轮播上监听 touch 手势（此前 framer drag 挂在背景图层上，
+  // 会被上层前景内容拦截，且浏览器原生滚动会取消 pointer 拖拽，导致手机端无法滑动切换）
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null)
+
+  const handleTouchStart = useCallback((event: React.TouchEvent) => {
+    const touch = event.touches[0]
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY }
+  }, [])
+
+  const handleTouchEnd = useCallback((event: React.TouchEvent) => {
+    const start = touchStartRef.current
+    touchStartRef.current = null
+    if (!start || items.length <= 1) return
+    const touch = event.changedTouches[0]
+    const deltaX = touch.clientX - start.x
+    const deltaY = touch.clientY - start.y
+    // 仅当水平位移明显占主导且超过阈值时才切换，避免干扰页面纵向滚动与按钮点按
+    if (Math.abs(deltaX) >= SWIPE_THRESHOLD && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+      if (deltaX > 0) goPrev()
       else goNext()
     }
-  }, [goNext, goPrev])
+  }, [items.length, goNext, goPrev])
 
   if (!items.length) return null
   const item = items[current]
@@ -289,6 +304,8 @@ export default function HeroCarousel({
       aria-label={t('home.recommended')}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     >
       <AnimatePresence initial={false} mode="sync">
         <motion.div
@@ -298,10 +315,6 @@ export default function HeroCarousel({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: prefersReducedMotion ? 0.1 : 0.28, ease: 'easeOut' }}
-          drag={items.length > 1 ? 'x' : false}
-          dragConstraints={{ left: 0, right: 0 }}
-          dragElastic={0.08}
-          onDragEnd={handleDragEnd}
         >
           {artwork.primary && (
             <img

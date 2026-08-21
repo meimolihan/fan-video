@@ -7,6 +7,7 @@ import WebCodecsPlayerShell from '@/components/WebCodecsPlayerShell'
 import STRMDiagnostics from '@/components/player/STRMDiagnostics'
 import { useToast } from '@/components/Toast'
 import { usePlayerStore } from '@/stores/player'
+import { useTitleClock } from '@/hooks/useTitleClock'
 import { Zap, Loader2, Cpu, Clapperboard } from 'lucide-react'
 import { detectWebCodecs, canUseWebCodecs, type WebCodecsCapability } from '@/utils/webcodecs'
 import { getMediaCapabilities, type BrowserMediaCapability } from '@/utils/media-capabilities'
@@ -49,10 +50,16 @@ export default function PlayerPage() {
   const currentTimeRef = useRef(0)
   const clipEndedRef = useRef(false)
   const hasHistoryOnMountRef = useRef<boolean>(window.history.length > 1)
-  const { currentTime } = usePlayerStore()
+  const { currentTime, isPlaying } = usePlayerStore()
 
   useEffect(() => { currentTimeRef.current = currentTime }, [currentTime])
   useEffect(() => { detectWebCodecs().then(setWebcodecsCap).catch(() => setWebcodecsCap(null)) }, [])
+
+  // 离开播放页时停止播放状态（同时会停掉地址栏时钟）
+  useEffect(() => () => { usePlayerStore.getState().setPlaying(false) }, [])
+
+  // 播放时在浏览器标签页/地址栏显示当前时间，方便移动端全屏观看时查看
+  useTitleClock(media?.title ? `${media.title} · Nowen Video` : 'Nowen Video', isPlaying)
 
   useEffect(() => {
     if (!highlightMode || !clipEnd) return
@@ -126,7 +133,7 @@ export default function PlayerPage() {
 
   if (loading || !media || !playInfo || !id) {
     return (
-      <div className="group/player flex h-screen items-center justify-center bg-[var(--nv-player-canvas)]">
+      <div className="group/player flex h-dvh items-center justify-center bg-[var(--nv-player-canvas)]">
         <div className="flex flex-col items-center gap-3">
           <Loader2 size={32} className="animate-spin text-[var(--nv-player-accent)]" aria-hidden="true" />
           <p className="text-sm text-[var(--nv-player-text-tertiary)]">正在加载播放信息...</p>
@@ -223,7 +230,7 @@ export default function PlayerPage() {
       : 'var(--nv-player-accent)'
 
   return (
-    <div className="group/player relative h-screen w-screen bg-[var(--nv-player-canvas)]">
+    <div className="group/player relative h-dvh w-screen bg-[var(--nv-player-canvas)]">
       <div className="nv-player-runtime-status absolute right-4 top-4 z-50 flex flex-col items-end gap-2 transition-opacity duration-200">
         {!highlightMode && playInfo.is_strm && <STRMDiagnostics mediaId={id} compact />}
         {statusContent && (
