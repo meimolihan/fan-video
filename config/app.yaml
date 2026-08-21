@@ -1,0 +1,9 @@
+cors_origins: []
+data_dir: ./data
+debug: false
+env: production
+ffmpeg_path: ffmpeg
+ffprobe_path: ffprobe
+port: 8080
+vaapi_device: /dev/dri/renderD128
+web_dir: ./web/dist

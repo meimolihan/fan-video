@@ -1,0 +1,66 @@
+package handler
+
+import (
+	"testing"
+
+	"github.com/fan-video/fan-video/internal/model"
+)
+
+func TestHighlightViewExposesDistributedPreviewForClientResult(t *testing.T) {
+	highlight := model.VideoHighlight{
+		ID:        "highlight-client",
+		MediaID:   "media-1",
+		Source:    "client_android",
+		Thumbnail: "/tmp/client.webp",
+	}
+
+	view := highlightView("media-1", highlight)
+	if view.ThumbnailURL == "" {
+		t.Fatal("客户端结果应继续暴露静态缩略图")
+	}
+	if view.PreviewURL == "" {
+		t.Fatal("preview_thumbnail_v1 接入后，客户端精彩片段也应暴露统一 lazy preview URL")
+	}
+}
+
+func TestHighlightViewExposesPortableThumbnailURLWhenGenerationMissed(t *testing.T) {
+	highlight := model.VideoHighlight{
+		ID:      "highlight-without-thumbnail",
+		MediaID: "media-1",
+		Source:  "ffmpeg",
+	}
+
+	view := highlightView("media-1", highlight)
+	if view.ThumbnailURL == "" {
+		t.Fatal("分析阶段缩略图生成失败时仍应暴露 lazy thumbnail URL，由 portable fallback 首次请求时补生成")
+	}
+}
+
+func TestHighlightViewKeepsLazyPreviewForServerResult(t *testing.T) {
+	highlight := model.VideoHighlight{
+		ID:        "highlight-server",
+		MediaID:   "media-1",
+		Source:    "ffmpeg",
+		Thumbnail: "/tmp/server.webp",
+	}
+
+	view := highlightView("media-1", highlight)
+	if view.PreviewURL == "" {
+		t.Fatal("服务端 Sparse V2 结果应继续支持首次悬停懒生成动态预览")
+	}
+}
+
+func TestHighlightViewExposesAlreadyStoredClientPreview(t *testing.T) {
+	highlight := model.VideoHighlight{
+		ID:          "highlight-client-preview",
+		MediaID:     "media-1",
+		Source:      "client_desktop",
+		Thumbnail:   "/tmp/client.webp",
+		PreviewPath: "/tmp/client-preview.webp",
+	}
+
+	view := highlightView("media-1", highlight)
+	if view.PreviewURL == "" {
+		t.Fatal("客户端已经持久化预览时应继续暴露 preview_url")
+	}
+}

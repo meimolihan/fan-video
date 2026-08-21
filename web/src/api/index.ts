@@ -1,0 +1,69 @@
+/**
+ * API 统一导出入口
+ *
+ * 所有 API 模块已按领域拆分为独立文件，此文件仅负责 re-export。
+ * 这样做的好处：
+ * 1. Tree-shaking 更有效 — 未使用的 API 不会打包
+ * 2. 每个模块独立维护 — 减少合并冲突
+ * 3. IDE 导航更快 — 代码补全更精准
+ *
+ * 使用方式不变：
+ *   import { mediaApi, libraryApi } from '@/api'
+ */
+
+// 核心模块
+export { authApi } from './auth'
+export { serverApi } from './server'
+export type { ServerCapability, ServerProfileManifest, ServerHealthData } from './server'
+export { taskCenterApi } from './tasks'
+export { runtimeHistoryApi } from './runtimeHistory'
+export type {
+  RuntimeHistoryRetentionPolicy,
+  RuntimeHistoryItem,
+  RuntimeHistoryAttempt,
+  RuntimeHistoryArtifact,
+  RuntimeHistoryList,
+  RuntimeHistoryDetail,
+  RuntimeHistorySummary,
+} from './runtimeHistory'
+export type {
+  UnifiedTask,
+  UnifiedTaskAction,
+  UnifiedTaskKind,
+  UnifiedTaskStatus,
+  TaskActionResult,
+  TaskCenterSnapshot,
+  TaskCenterSummary,
+} from './tasks'
+export { libraryApi } from './library'
+export { mediaApi, personApi, collectionApi } from './media'
+export { streamApi } from './stream'
+export { subtitleApi, subtitleSearchApi } from './subtitle'
+export { subtitlePreprocessApi } from './subtitlePreprocess'
+export { userApi } from './user'
+export { playlistApi } from './playlist'
+export { seriesApi } from './series'
+
+// 管理模块
+export { adminApi } from './admin'
+export { fileManagerApi } from './scrape'
+export { notificationApi, batchMetadataApi, importExportApi } from './backup'
+export { embyCompatApi } from './emby'
+
+// 社交与互动
+export { recommendApi } from './recommend'
+export { castApi, bookmarkApi, commentApi, statsApi } from './social'
+
+// V2 扩展
+export { userProfileApi, offlineDownloadApi, pluginApi, musicApi, photoApi, federationApi, abrApi } from './v2'
+
+// V6: P1~P3 新增功能
+export { batchMoveApi } from './v4'
+
+// STRM 远程流管理
+export { strmApi } from './strm'
+export type { STRMGlobalConfig, MediaSTRMInfo, UpdateMediaSTRMPayload } from './strm'
+
+// V2.1: WebDAV 存储管理
+export { storageApi } from './storage'
+export type { WebDAVConfig, WebDAVStatus, StorageStatus, TestWebDAVRequest } from './storage'

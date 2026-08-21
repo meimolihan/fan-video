@@ -1,0 +1,38 @@
+{
+  "docker-project": {
+    "projects": [
+      {
+        "name": "fan-video",
+        "path": "docker"
+      }
+    ]
+  },
+  "data-share": {
+    "shares": [
+      {
+        "name": "fan-video",
+        "permission": {
+          "rw": ["docker-fan-video"]
+        }
+      },
+      {
+        "name": "fan-video/data",
+        "permission": {
+          "rw": ["docker-fan-video"]
+        }
+      },
+      {
+        "name": "fan-video/cache",
+        "permission": {
+          "rw": ["docker-fan-video"]
+        }
+      },
+      {
+        "name": "fan-video/media",
+        "permission": {
+          "rw": ["docker-fan-video"]
+        }
+      }
+    ]
+  }
+}

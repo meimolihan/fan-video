@@ -1,0 +1,94 @@
+# nowen-video 构建产物
+bin/
+dist/
+dist-fpk/
+dist-release/
+fnpack
+fnpack.exe
+fnpack-*
+
+# TypeScript 增量编译缓存
+*.tsbuildinfo
+
+# 数据文件
+/data/
+/cmd/server/data/
+/cache/
+/cmd/server/cache/
+
+# Go
+*.exe
+*.test
+*.out
+
+# 运行日志
+*.log
+stdout.log
+stderr.log
+
+# 依赖
+vendor/
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 环境变量
+.env
+.env.local
+
+# 配置文件（不提交实际配置）
+config.yaml
+
+# 分片配置中的敏感信息文件（密钥、API Key 等）
+config/secrets.yaml
+config/.master.key
+config/*.key
+*.master.key
+
+# Android
+android/.gradle/
+android/**/build/
+android/local.properties
+android/captures/
+android/.externalNativeBuild/
+android/.cxx/
+
+# Android signing / build artifacts
+*.apk
+*.aab
+*.aar
+*.ap_
+*.keystore
+*.jks
+*.p12
+*.pfx
+
+# 第三方参考源码（不纳入本仓库）
+mdcx-master/
+
+# Tauri 桌面端构建产物
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+desktop/bin/
+
+# Tauri 桌面端 C 档资源（由 scripts/fetch-assets.ps1 按需下载，不纳入仓库）
+desktop/src-tauri/resources/mpv/
+desktop/src-tauri/resources/shaders/
+desktop/src-tauri/resources/fonts/
+desktop/src-tauri/resources/yt-dlp.exe
+# 但保留占位 .gitkeep（tauri-build 要求 glob 至少命中 1 个文件）
+!desktop/src-tauri/resources/fonts/.gitkeep
+!desktop/src-tauri/resources/mpv/.gitkeep
+!desktop/src-tauri/resources/shaders/.gitkeep
+
+# 临时下载的二进制包
+ffmpeg.zip
+*.zip

@@ -1,0 +1,108 @@
+package repository
+
+import (
+	"gorm.io/gorm"
+)
+
+// Repositories 聚合所有数据仓储
+type Repositories struct {
+	db             *gorm.DB
+	User           *UserRepo
+	Library        *LibraryRepo
+	Media          *MediaRepo
+	Series         *SeriesRepo
+	Person         *PersonRepo
+	MediaPerson    *MediaPersonRepo
+	WatchHistory   *WatchHistoryRepo
+	Favorite       *FavoriteRepo
+	Transcode      *TranscodeRepo
+	Playlist       *PlaylistRepo
+	Bookmark       *BookmarkRepo
+	Comment        *CommentRepo
+	Danmaku        *DanmakuRepo
+	ContentRating  *ContentRatingRepo
+	UserPermission *UserPermissionRepo
+	SystemSetting  *SystemSettingRepo
+	PlaybackStats  *PlaybackStatsRepo
+	MediaProbe     *MediaProbeRepo
+	// V3: 本地媒体分析（章节/高光，本地计算）
+	VideoChapter   *VideoChapterRepo
+	VideoHighlight *VideoHighlightRepo
+	AIAnalysisTask *AIAnalysisTaskRepo
+	// V3: 封面候选
+	CoverCandidate *CoverCandidateRepo
+	GenreMapping   *GenreMappingRepo
+	RecommendCache *RecommendCacheRepo
+	// V6: P1~P3 新增功能
+	Preprocess         *PreprocessRepo
+	SubtitlePreprocess *SubtitlePreprocessRepo
+	// 电影系列合集
+	MovieCollection *MovieCollectionRepo
+	// 多用户安全（审计 / 登录日志 / 邀请码）
+	LoginLog   *LoginLogRepo
+	AuditLog   *AuditLogRepo
+	InviteCode *InviteCodeRepo
+	// 文件管理操作日志（持久化）
+	FileOpLog *FileOpLogRepo
+	// SmartRename 智能扫描重命名
+	Rename *RenameRepo
+	// 扫描后处理：虚拟归类与命名映射（仅 DB 层）
+	ScanClassification *ScanClassificationRepo
+}
+
+func NewRepositories(db *gorm.DB) *Repositories {
+	// 系统日志模块已下线。旧版本留下的 system_logs 表不再保留，
+	// 升级启动时直接物理删除，确保数据库层也完成退役。
+	if err := db.Exec("DROP TABLE IF EXISTS system_logs").Error; err != nil {
+		panic("failed to remove legacy system_logs table: " + err.Error())
+	}
+
+	return &Repositories{
+		db:             db,
+		User:           &UserRepo{db: db},
+		Library:        &LibraryRepo{db: db},
+		Media:          &MediaRepo{db: db},
+		Series:         &SeriesRepo{db: db},
+		Person:         &PersonRepo{db: db},
+		MediaPerson:    &MediaPersonRepo{db: db},
+		WatchHistory:   &WatchHistoryRepo{db: db},
+		Favorite:       &FavoriteRepo{db: db},
+		Transcode:      &TranscodeRepo{db: db},
+		Playlist:       &PlaylistRepo{db: db},
+		Bookmark:       &BookmarkRepo{db: db},
+		Comment:        &CommentRepo{db: db},
+		Danmaku:        NewDanmakuRepo(db),
+		ContentRating:  &ContentRatingRepo{db: db},
+		UserPermission: &UserPermissionRepo{db: db},
+		SystemSetting:  &SystemSettingRepo{db: db},
+		PlaybackStats:  &PlaybackStatsRepo{db: db},
+		MediaProbe:     NewMediaProbeRepo(db),
+		// V3
+		VideoChapter:   &VideoChapterRepo{db: db},
+		VideoHighlight: &VideoHighlightRepo{db: db},
+		AIAnalysisTask: &AIAnalysisTaskRepo{db: db},
+		CoverCandidate: &CoverCandidateRepo{db: db},
+		GenreMapping:   &GenreMappingRepo{db: db},
+		RecommendCache: &RecommendCacheRepo{db: db},
+		// V6: P1~P3 新增功能
+		Preprocess:         &PreprocessRepo{db: db},
+		SubtitlePreprocess: &SubtitlePreprocessRepo{db: db},
+		// 电影系列合集
+		MovieCollection: &MovieCollectionRepo{db: db},
+		// 多用户安全
+		LoginLog:   &LoginLogRepo{db: db},
+		AuditLog:   &AuditLogRepo{db: db},
+		InviteCode: &InviteCodeRepo{db: db},
+		// 文件管理操作日志
+		FileOpLog: NewFileOpLogRepo(db),
+		// SmartRename 智能扫描重命名
+		Rename: NewRenameRepo(db),
+		// 扫描后处理
+		ScanClassification: NewScanClassificationRepo(db),
+	}
+}
+
+// DB 返回底层数据库连接（供需要直接操作数据库的服务使用）
+func (r *Repositories) DB() *gorm.DB {
+	return r.db
+}

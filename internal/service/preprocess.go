@@ -1,0 +1,2676 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"math"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/fan-video/fan-video/internal/config"
+	"github.com/fan-video/fan-video/internal/model"
+	"github.com/fan-video/fan-video/internal/repository"
+	"github.com/fan-video/fan-video/internal/service/ffmpeg"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+)
+
+// ==================== 预处理事件常量 ====================
+
+const (
+	EventPreprocessStarted   = "preprocess_started"
+	EventPreprocessProgress  = "preprocess_progress"
+	EventPreprocessCompleted = "preprocess_completed"
+	EventPreprocessFailed    = "preprocess_failed"
+	EventPreprocessPaused    = "preprocess_paused"
+	EventPreprocessCancelled = "preprocess_cancelled"
+)
+
+// PreprocessProgressData 预处理进度事件数据
+type PreprocessProgressData struct {
+	TaskID     string  `json:"task_id"`
+	MediaID    string  `json:"media_id"`
+	MediaTitle string  `json:"media_title"`
+	Status     string  `json:"status"`
+	Phase      string  `json:"phase"`
+	Progress   float64 `json:"progress"`
+	Speed      string  `json:"speed,omitempty"`
+	Message    string  `json:"message"`
+	Error      string  `json:"error,omitempty"`
+}
+
+// PreprocessService 视频预处理服务
+type PreprocessService struct {
+	cfg        *config.Config
+	repo       *repository.PreprocessRepo
+	mediaRepo  *repository.MediaRepo
+	abrService *ABRService
+	logger     *zap.SugaredLogger
+	wsHub      *WSHub
+
+	// 系统设置仓储（延迟注入，用于读取 ABR 策略等全局设置）
+	settingRepo *repository.SystemSettingRepo
+
+	// 工作协程控制
+	workerCount int32       // 当前活跃工作协程数（0 或 1）
+	maxWorkers  int32       // 最大并发工作协程数（固定为 1，单任务串行）
+	curWorkers  int32       // 保留字段，仅用于兼容旧统计接口
+	jobQueue    chan string // 任务 ID 队列（单任务模式：同一时刻只有 1 个任务在跑，其余在队列中等待）
+	pausedJobs  sync.Map    // 暂停的任务 ID 集合
+	cancelJobs  sync.Map    // 取消的任务 ID 集合
+	runningJobs sync.Map    // 正在运行的任务 ID -> *exec.Cmd
+	mu          sync.RWMutex
+
+	// 动态负载调整
+	lastLoadCheck time.Time
+	hwAccel       string // 硬件加速模式
+
+	// 进度广播节流
+	lastBroadcast sync.Map // taskID -> time.Time（上次广播时间）
+	lastDBWrite   sync.Map // taskID -> time.Time（上次数据库写入时间）
+
+	// GPU 安全监控
+	gpuMonitor *GPUMonitor
+
+	// V2.1: VFS 管理器（用于 WebDAV 路径验证）
+	vfsMgr *VFSManager
+}
+
+// SetVFSManager 设置 VFS 管理器（V2.1）
+func (s *PreprocessService) SetVFSManager(vfsMgr *VFSManager) {
+	s.vfsMgr = vfsMgr
+}
+
+// SetSettingRepo 注入系统设置仓储（延迟注入，用于读取 ABR 策略等全局配置）
+func (s *PreprocessService) SetSettingRepo(repo *repository.SystemSettingRepo) {
+	s.settingRepo = repo
+}
+
+// NewPreprocessService 创建预处理服务
+func NewPreprocessService(
+	cfg *config.Config,
+	repo *repository.PreprocessRepo,
+	mediaRepo *repository.MediaRepo,
+	abrService *ABRService,
+	hwAccel string,
+	logger *zap.SugaredLogger,
+) *PreprocessService {
+	// 【单任务串行模式】预处理一次只处理一个视频。
+	// 由 FFmpeg 内部 threads=0（auto）充分利用多核，避免多视频并发导致：
+	//   - 磁盘 IO 抢占（HLS 切片是写密集型）
+	//   - 显存/编码器会话争用（硬件加速时尤其明显）
+	//   - 内存峰值不可控
+	maxWorkers := int32(1)
+
+	logger.Infof("预处理服务启动（单任务串行模式）: maxWorkers=%d, hwAccel=%s, ffmpeg_threads=0(auto)",
+		maxWorkers, hwAccel)
+
+	s := &PreprocessService{
+		cfg:        cfg,
+		repo:       repo,
+		mediaRepo:  mediaRepo,
+		abrService: abrService,
+		logger:     logger,
+		maxWorkers: maxWorkers,
+		curWorkers: maxWorkers,
+		jobQueue:   make(chan string, 500),
+		hwAccel:    hwAccel,
+	}
+
+	// 启动工作协程池
+	for i := int32(0); i < maxWorkers; i++ {
+		go s.worker(int(i))
+	}
+
+	// 启动自动重试协程
+	go s.retryLoop()
+
+	// 恢复未完成的任务（按优先级排序入队）
+	go s.recoverPendingTasks()
+
+	return s
+}
+
+// SetGPUMonitor 设置 GPU 安全监控服务
+func (s *PreprocessService) SetGPUMonitor(monitor *GPUMonitor) {
+	s.gpuMonitor = monitor
+}
+
+// SetWSHub 设置 WebSocket Hub
+func (s *PreprocessService) SetWSHub(hub *WSHub) {
+	s.wsHub = hub
+}
+
+// ==================== 公开 API ====================
+
+// SubmitMedia 提交单个媒体进行预处理。
+//
+// force 语义：
+//   - false（自动调度路径使用）：如果媒体已经可以浏览器零转码直接播放
+//     （mp4/H.264+AAC 等），则直接返回错误不入队，避免无谓的 CPU/GPU 消耗。
+//   - true（用户手动点击"预处理/强制转码"按钮）：绕过上述判定，一律入队。
+func (s *PreprocessService) SubmitMedia(mediaID string, priority int, force bool) (*model.PreprocessTask, error) {
+	// 检查是否已有活跃任务
+	existing, err := s.repo.FindActiveByMediaID(mediaID)
+	if err == nil && existing != nil {
+		return existing, nil // 已有任务，直接返回
+	}
+
+	media, err := s.mediaRepo.FindByID(mediaID)
+	if err != nil {
+		return nil, fmt.Errorf("媒体不存在: %w", err)
+	}
+
+	// STRM 远程流不支持预处理
+	if media.StreamURL != "" {
+		return nil, fmt.Errorf("STRM 远程流不支持预处理")
+	}
+
+	// 自动场景下，若浏览器可零转码直接播放则跳过，避免无谓消耗
+	// 用户通过前端按钮手动触发（force=true）可以绕过该限制
+	if !force && canMediaPlayDirectly(media) {
+		return nil, fmt.Errorf("该媒体可在浏览器直接播放（%s / %s），无需预处理",
+			media.VideoCodec, media.AudioCodec)
+	}
+
+	// V2.1: WebDAV 路径 → HTTP URL（FFmpeg 会直接流式读取，不需要全文件下载）
+	inputPath := media.FilePath
+	if IsWebDAVPath(inputPath) {
+		// 通过 VFS 检查文件存在性
+		if s.vfsMgr != nil {
+			if _, err := s.vfsMgr.Stat(inputPath); err != nil {
+				return nil, fmt.Errorf("WebDAV 媒体文件不可访问: %s, %w", inputPath, err)
+			}
+		}
+		// 翻译为 HTTP URL（ffmpeg 直读）
+		inputPath = ResolveRemoteFFmpegURL(s.cfg, inputPath)
+		s.logger.Infof("WebDAV 预处理输入: %s", SprintSafeFFmpegURL(inputPath))
+	} else {
+		// 本地文件存在性检查
+		if _, err := os.Stat(media.FilePath); os.IsNotExist(err) {
+			return nil, fmt.Errorf("媒体文件不存在: %s", media.FilePath)
+		}
+	}
+
+	outputDir := filepath.Join(s.cfg.Cache.CacheDir, "preprocess", mediaID)
+	os.MkdirAll(outputDir, 0755)
+
+	task := &model.PreprocessTask{
+		MediaID:    mediaID,
+		Status:     "pending",
+		Priority:   priority,
+		Message:    "等待处理...",
+		InputPath:  inputPath,
+		OutputDir:  outputDir,
+		MediaTitle: media.DisplayTitle(),
+		MaxRetry:   3,
+	}
+
+	if err := s.repo.Create(task); err != nil {
+		return nil, fmt.Errorf("创建预处理任务失败: %w", err)
+	}
+
+	// 优先级入队：高优先级任务直接入队，低优先级任务在队列满时等待
+	// 任务优先级规则：
+	//   priority > 0: 高优先级（用户手动提交）
+	//   priority = 0: 普通优先级（默认）
+	//   priority < 0: 低优先级（后台自动任务）
+	// 注意：由于单任务模式，队列中的任务会按 FIFO 顺序消费，
+	// 但 recoverPendingTasks 和 retryLoop 会按优先级排序重新入队
+	select {
+	case s.jobQueue <- task.ID:
+		s.logger.Infof("任务已入队: %s (优先级=%d)", task.MediaTitle, priority)
+	default:
+		s.logger.Warnf("预处理队列已满，任务 %s 将在下次调度时处理", task.ID)
+	}
+
+	return task, nil
+}
+
+// BatchSubmit 批量提交预处理任务
+//
+// force 语义同 SubmitMedia：
+//   - false：自动跳过可直接播放的媒体；
+//   - true：用户显式要求强制预处理所有指定媒体。
+func (s *PreprocessService) BatchSubmit(mediaIDs []string, priority int, force bool) ([]*model.PreprocessTask, error) {
+	var tasks []*model.PreprocessTask
+	for _, id := range mediaIDs {
+		task, err := s.SubmitMedia(id, priority, force)
+		if err != nil {
+			s.logger.Warnf("批量提交跳过 %s: %v", id, err)
+			continue
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, nil
+}
+
+// SubmitLibrary 提交整个媒体库的所有视频进行预处理。
+//
+// 该路径始终以 force=false 调用 SubmitMedia：
+// 已经能浏览器零转码播放的媒体（mp4/H.264+AAC/MKV+H.264+AAC 等）
+// 不会被纳入预处理队列，避免 CPU/GPU 的无谓消耗。
+// 用户如需强制预处理某个媒体，应走 MediaDetailPage 的"预处理/强制转码"按钮。
+func (s *PreprocessService) SubmitLibrary(libraryID string, priority int) (int, error) {
+	// 查找媒体库中所有视频
+	medias, err := s.mediaRepo.ListByLibraryID(libraryID)
+	if err != nil {
+		return 0, fmt.Errorf("查询媒体库失败: %w", err)
+	}
+
+	count := 0
+	skippedDirect := 0
+	for _, media := range medias {
+		// 跳过 STRM 远程流
+		if media.StreamURL != "" {
+			continue
+		}
+		// 跳过已有活跃任务的
+		if _, err := s.repo.FindActiveByMediaID(media.ID); err == nil {
+			continue
+		}
+		// 跳过已完成预处理的
+		if existing, err := s.repo.FindByMediaID(media.ID); err == nil && existing.Status == "completed" {
+			continue
+		}
+		// 跳过浏览器可零转码直接播放的媒体（由 SubmitMedia 内部判定，这里提前剪枝减少日志噪声）
+		if canMediaPlayDirectly(&media) {
+			skippedDirect++
+			continue
+		}
+
+		if _, err := s.SubmitMedia(media.ID, priority, false); err == nil {
+			count++
+		}
+	}
+
+	if skippedDirect > 0 {
+		s.logger.Infof("媒体库 %s 自动预处理：跳过 %d 个可直接播放的媒体", libraryID, skippedDirect)
+	}
+	return count, nil
+}
+
+// ==================== 自定义条件筛选预处理 ====================
+
+// PreprocessFilter 预处理筛选条件（多个条件之间是 AND 关系；同一条件内的多值是 IN 关系）
+type PreprocessFilter struct {
+	LibraryIDs   []string `json:"library_ids"`    // 限定媒体库（空 = 全部）
+	MediaTypes   []string `json:"media_types"`    // movie / episode（空 = 全部）
+	VideoCodecs  []string `json:"video_codecs"`   // h264 / hevc / av1 / vp9 ...（空 = 全部，大小写敏感按 DB 中存的来）
+	AudioCodecs  []string `json:"audio_codecs"`   // aac / ac3 / dts / flac ...
+	Containers   []string `json:"containers"`     // 容器格式：mp4 / mkv / avi / mov / ts / flv / webm（按文件扩展名匹配，不带点）
+	Resolutions  []string `json:"resolutions"`    // 1080p / 720p / 4K / 480p ...
+	Keyword      string   `json:"keyword"`        // 标题/番号模糊匹配
+	MinSizeBytes int64    `json:"min_size_bytes"` // 文件大小下限（字节，0 = 不限）
+	MaxSizeBytes int64    `json:"max_size_bytes"` // 文件大小上限（字节，0 = 不限）
+	MinYear      int      `json:"min_year"`       // 年份下限（0 = 不限）
+	MaxYear      int      `json:"max_year"`       // 年份上限（0 = 不限）
+	MinDuration  float64  `json:"min_duration"`   // 时长下限（秒，0 = 不限）
+	MaxDuration  float64  `json:"max_duration"`   // 时长上限（秒，0 = 不限）
+
+	// 排除策略（默认两项都为 true，由 handler 显式注入）
+	ExcludeAlreadyPreprocessed bool `json:"exclude_already_preprocessed"` // 排除已在 preprocess_tasks 中的（不论状态）
+	ExcludeDirectlyPlayable    bool `json:"exclude_directly_playable"`    // 排除浏览器可零转码直接播放的
+	ExcludeStrm                bool `json:"exclude_strm"`                 // 排除 STRM 远程流（默认 true，远程流不应被本地预处理）
+}
+
+// PreprocessFilterPreview 筛选预览结果
+type PreprocessFilterPreview struct {
+	MatchedCount     int                `json:"matched_count"`     // 命中数量（应用排除策略后）
+	RawCount         int                `json:"raw_count"`         // 仅按筛选条件命中的数量（未应用排除）
+	ExcludedAlready  int                `json:"excluded_already"`  // 因"已存在 task"而排除的数量
+	ExcludedPlayable int                `json:"excluded_playable"` // 因"可直接播放"而排除的数量
+	ExcludedStrm     int                `json:"excluded_strm"`     // 因 STRM 而排除的数量
+	TotalSize        int64              `json:"total_size"`        // 命中媒体的总文件大小（源文件，非预处理产物）
+	Sample           []PreprocessSample `json:"sample"`            // 抽样列表（最多 50 条，按更新时间倒序）
+	CodecHistogram   map[string]int     `json:"codec_histogram"`   // 命中媒体按 video_codec 分布
+	ResolutionHist   map[string]int     `json:"resolution_hist"`   // 命中媒体按分辨率分布
+}
+
+// PreprocessSample 预览中的一条媒体样例
+type PreprocessSample struct {
+	MediaID    string  `json:"media_id"`
+	Title      string  `json:"title"`
+	Year       int     `json:"year"`
+	MediaType  string  `json:"media_type"`
+	VideoCodec string  `json:"video_codec"`
+	AudioCodec string  `json:"audio_codec"`
+	Resolution string  `json:"resolution"`
+	Duration   float64 `json:"duration"`
+	FileSize   int64   `json:"file_size"`
+	FilePath   string  `json:"file_path"`
+}
+
+// applyFilterToQuery 把筛选条件转成 GORM where（不含排除策略）
+func applyFilterToQuery(db *gorm.DB, f *PreprocessFilter) *gorm.DB {
+	q := db.Model(&model.Media{})
+
+	if len(f.LibraryIDs) > 0 {
+		q = q.Where("library_id IN ?", f.LibraryIDs)
+	}
+	if len(f.MediaTypes) > 0 {
+		q = q.Where("media_type IN ?", f.MediaTypes)
+	}
+	if len(f.VideoCodecs) > 0 {
+		q = q.Where("LOWER(video_codec) IN ?", lowerSlice(f.VideoCodecs))
+	}
+	if len(f.AudioCodecs) > 0 {
+		q = q.Where("LOWER(audio_codec) IN ?", lowerSlice(f.AudioCodecs))
+	}
+	if len(f.Resolutions) > 0 {
+		q = q.Where("resolution IN ?", f.Resolutions)
+	}
+	if len(f.Containers) > 0 {
+		// 按 file_path 后缀做不区分大小写匹配；SQLite 用 LOWER 兼容
+		var clauses []string
+		var args []any
+		for _, ext := range f.Containers {
+			ext = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(ext)), ".")
+			if ext == "" {
+				continue
+			}
+			clauses = append(clauses, "LOWER(file_path) LIKE ?")
+			args = append(args, "%."+ext)
+		}
+		if len(clauses) > 0 {
+			q = q.Where("("+strings.Join(clauses, " OR ")+")", args...)
+		}
+	}
+	if f.Keyword != "" {
+		k := "%" + f.Keyword + "%"
+		q = q.Where("title LIKE ? OR orig_title LIKE ? OR num LIKE ?", k, k, k)
+	}
+	if f.MinSizeBytes > 0 {
+		q = q.Where("file_size >= ?", f.MinSizeBytes)
+	}
+	if f.MaxSizeBytes > 0 {
+		q = q.Where("file_size <= ?", f.MaxSizeBytes)
+	}
+	if f.MinYear > 0 {
+		q = q.Where("year >= ?", f.MinYear)
+	}
+	if f.MaxYear > 0 {
+		q = q.Where("year <= ?", f.MaxYear)
+	}
+	if f.MinDuration > 0 {
+		q = q.Where("duration >= ?", f.MinDuration)
+	}
+	if f.MaxDuration > 0 {
+		q = q.Where("duration <= ?", f.MaxDuration)
+	}
+	return q
+}
+
+func lowerSlice(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		out = append(out, strings.ToLower(strings.TrimSpace(s)))
+	}
+	return out
+}
+
+// resolveFilterMediaIDs 根据筛选条件和排除策略，得到最终需要处理的 mediaID 列表，
+// 同时返回完整命中媒体（用于预览统计）和各项排除数。
+func (s *PreprocessService) resolveFilterMediaIDs(f *PreprocessFilter) (
+	matched []model.Media,
+	excludedAlready int,
+	excludedPlayable int,
+	excludedStrm int,
+	rawCount int,
+	err error,
+) {
+	q := applyFilterToQuery(s.mediaRepo.DB(), f)
+	var all []model.Media
+	if err = q.Order("updated_at DESC").Find(&all).Error; err != nil {
+		return
+	}
+	rawCount = len(all)
+
+	// 一次性查出已存在 task 的 media_id 集合（包括所有状态：完成/失败/进行中），避免 N+1
+	already := make(map[string]struct{})
+	if f.ExcludeAlreadyPreprocessed {
+		var ids []string
+		if e := s.repo.DB().Model(&model.PreprocessTask{}).
+			Distinct("media_id").
+			Pluck("media_id", &ids).Error; e == nil {
+			for _, id := range ids {
+				already[id] = struct{}{}
+			}
+		}
+	}
+
+	matched = make([]model.Media, 0, len(all))
+	for i := range all {
+		m := &all[i]
+		if f.ExcludeStrm && m.StreamURL != "" {
+			excludedStrm++
+			continue
+		}
+		if f.ExcludeDirectlyPlayable && canMediaPlayDirectly(m) {
+			excludedPlayable++
+			continue
+		}
+		if f.ExcludeAlreadyPreprocessed {
+			if _, ok := already[m.ID]; ok {
+				excludedAlready++
+				continue
+			}
+		}
+		matched = append(matched, *m)
+	}
+	return
+}
+
+// PreviewFilter 预览：只统计、不入队
+func (s *PreprocessService) PreviewFilter(f *PreprocessFilter) (*PreprocessFilterPreview, error) {
+	matched, excAlready, excPlayable, excStrm, rawCount, err := s.resolveFilterMediaIDs(f)
+	if err != nil {
+		return nil, err
+	}
+
+	preview := &PreprocessFilterPreview{
+		MatchedCount:     len(matched),
+		RawCount:         rawCount,
+		ExcludedAlready:  excAlready,
+		ExcludedPlayable: excPlayable,
+		ExcludedStrm:     excStrm,
+		CodecHistogram:   make(map[string]int),
+		ResolutionHist:   make(map[string]int),
+		Sample:           make([]PreprocessSample, 0, 50),
+	}
+
+	for i, m := range matched {
+		preview.TotalSize += m.FileSize
+
+		codec := strings.ToLower(strings.TrimSpace(m.VideoCodec))
+		if codec == "" {
+			codec = "unknown"
+		}
+		preview.CodecHistogram[codec]++
+
+		res := strings.TrimSpace(m.Resolution)
+		if res == "" {
+			res = "unknown"
+		}
+		preview.ResolutionHist[res]++
+
+		if i < 50 {
+			preview.Sample = append(preview.Sample, PreprocessSample{
+				MediaID:    m.ID,
+				Title:      m.Title,
+				Year:       m.Year,
+				MediaType:  m.MediaType,
+				VideoCodec: m.VideoCodec,
+				AudioCodec: m.AudioCodec,
+				Resolution: m.Resolution,
+				Duration:   m.Duration,
+				FileSize:   m.FileSize,
+				FilePath:   m.FilePath,
+			})
+		}
+	}
+	return preview, nil
+}
+
+// SubmitByFilter 按筛选条件批量提交预处理。
+//
+// 行为：
+//   - 应用 PreprocessFilter 筛选媒体；
+//   - 调用 SubmitMedia（force 由调用方传入）逐条入队，跳过已存在活跃任务的；
+//   - 返回成功入队数量、跳过数量。
+func (s *PreprocessService) SubmitByFilter(f *PreprocessFilter, priority int, force bool) (submitted int, skipped int, err error) {
+	matched, _, _, _, _, e := s.resolveFilterMediaIDs(f)
+	if e != nil {
+		err = e
+		return
+	}
+	for _, m := range matched {
+		if _, e2 := s.SubmitMedia(m.ID, priority, force); e2 != nil {
+			s.logger.Debugf("按条件提交跳过 %s: %v", m.ID, e2)
+			skipped++
+			continue
+		}
+		submitted++
+	}
+	s.logger.Infof("按条件预处理：匹配 %d，提交 %d，跳过 %d", len(matched), submitted, skipped)
+	return
+}
+
+// ==================== 候选影视列表（手动选择预处理） ====================
+
+// PreprocessCandidateParams 候选列表查询参数
+type PreprocessCandidateParams struct {
+	Page               int    // 从 1 起
+	Size               int    // 每页条数（默认 20，最大 200）
+	Keyword            string // 标题/番号模糊匹配
+	LibraryID          string // 媒体库 ID（空 = 全部）
+	MediaType          string // movie / episode（空 = 全部）
+	VideoCodec         string // 视频编码过滤（空 = 全部）
+	OnlyNeedPreprocess bool   // 仅显示"需要预处理"的（排除已完成 + 排除可直接播放 + 排除 STRM）
+	SortBy             string // updated_at(默认) / file_size / duration / year
+	SortOrder          string // desc(默认) / asc
+}
+
+// PreprocessCandidate 候选条目（供前端勾选）
+type PreprocessCandidate struct {
+	MediaID          string  `json:"media_id"`
+	Title            string  `json:"title"`
+	OrigTitle        string  `json:"orig_title,omitempty"`
+	Year             int     `json:"year"`
+	LibraryID        string  `json:"library_id"`
+	MediaType        string  `json:"media_type"`
+	VideoCodec       string  `json:"video_codec"`
+	AudioCodec       string  `json:"audio_codec"`
+	Resolution       string  `json:"resolution"`
+	Duration         float64 `json:"duration"`
+	FileSize         int64   `json:"file_size"`
+	FilePath         string  `json:"file_path"`
+	PosterPath       string  `json:"poster_path"`
+	IsStrm           bool    `json:"is_strm"`           // STRM 远程流（不可预处理）
+	CanPlayDirectly  bool    `json:"can_play_directly"` // 浏览器零转码可直接播放
+	PreprocessStatus string  `json:"preprocess_status"` // none / pending / queued / running / paused / completed / failed / cancelled
+	TaskID           string  `json:"task_id,omitempty"` // 对应预处理任务 ID（若存在）
+	// 剧集专属（仅 media_type=episode 时有意义）
+	SeasonNum    int    `json:"season_num,omitempty"`
+	EpisodeNum   int    `json:"episode_num,omitempty"`
+	EpisodeTitle string `json:"episode_title,omitempty"`
+	// 刮削状态：pending / scraped / partial / failed / manual
+	// 前端用它来判断是否给"未刮削"提示并改用源文件名展示
+	ScrapeStatus string `json:"scrape_status,omitempty"`
+}
+
+// PreprocessCandidateList 候选列表响应
+type PreprocessCandidateList struct {
+	Items []PreprocessCandidate `json:"items"`
+	Total int64                 `json:"total"`
+	Page  int                   `json:"page"`
+	Size  int                   `json:"size"`
+}
+
+// ListCandidateMedia 列出可被手动选择预处理的影视文件。
+//
+// 与"自定义筛选"不同，本接口面向"逐条浏览 + 勾选"交互：
+//   - 默认按 updated_at 倒序，方便用户看到新入库的媒体；
+//   - 不强制排除任何状态，但返回 preprocess_status / is_strm / can_play_directly
+//     等字段供前端做徽标/禁用判断；
+//   - 可选 OnlyNeedPreprocess=true 时，过滤掉"已完成预处理 / 可直接播放 / STRM"的项。
+func (s *PreprocessService) ListCandidateMedia(p PreprocessCandidateParams) (*PreprocessCandidateList, error) {
+	if p.Page < 1 {
+		p.Page = 1
+	}
+	if p.Size <= 0 {
+		p.Size = 20
+	}
+	if p.Size > 200 {
+		p.Size = 200
+	}
+
+	q := s.mediaRepo.DB().Model(&model.Media{})
+
+	if p.LibraryID != "" {
+		q = q.Where("library_id = ?", p.LibraryID)
+	}
+	if p.MediaType != "" {
+		q = q.Where("media_type = ?", p.MediaType)
+	}
+	if p.VideoCodec != "" {
+		q = q.Where("LOWER(video_codec) = ?", strings.ToLower(strings.TrimSpace(p.VideoCodec)))
+	}
+	if p.Keyword != "" {
+		k := "%" + p.Keyword + "%"
+		q = q.Where("title LIKE ? OR orig_title LIKE ? OR num LIKE ?", k, k, k)
+	}
+
+	// 排序
+	sortField := "updated_at"
+	switch p.SortBy {
+	case "file_size", "duration", "year":
+		sortField = p.SortBy
+	}
+	order := "DESC"
+	if strings.EqualFold(p.SortOrder, "asc") {
+		order = "ASC"
+	}
+
+	// OnlyNeedPreprocess 模式下，预筛掉 STRM（在 SQL 层完成，减少返回行数）
+	if p.OnlyNeedPreprocess {
+		q = q.Where("stream_url = ?", "")
+	}
+
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, fmt.Errorf("统计候选媒体失败: %w", err)
+	}
+
+	// 取数据
+	var medias []model.Media
+	offset := (p.Page - 1) * p.Size
+
+	// OnlyNeedPreprocess 模式下需要后置二次过滤（canMediaPlayDirectly 与 task 状态需要应用层判断），
+	// 因此先多取一些（最多 5 倍），再裁剪；普通模式直接按分页取。
+	if p.OnlyNeedPreprocess {
+		// 后置过滤场景，全量加载已 SQL 过滤后的结果（数量已显著减少：strm 已排除）
+		if err := q.Order(sortField + " " + order).Find(&medias).Error; err != nil {
+			return nil, fmt.Errorf("查询候选媒体失败: %w", err)
+		}
+	} else {
+		if err := q.Order(sortField + " " + order).Offset(offset).Limit(p.Size).Find(&medias).Error; err != nil {
+			return nil, fmt.Errorf("查询候选媒体失败: %w", err)
+		}
+	}
+
+	if len(medias) == 0 {
+		return &PreprocessCandidateList{
+			Items: []PreprocessCandidate{},
+			Total: total,
+			Page:  p.Page,
+			Size:  p.Size,
+		}, nil
+	}
+
+	// 一次性查出这些媒体的预处理任务状态（取最新一条），避免 N+1
+	mediaIDs := make([]string, 0, len(medias))
+	for i := range medias {
+		mediaIDs = append(mediaIDs, medias[i].ID)
+	}
+
+	taskByMedia := make(map[string]*model.PreprocessTask, len(mediaIDs))
+	{
+		var tasks []model.PreprocessTask
+		if err := s.repo.DB().
+			Model(&model.PreprocessTask{}).
+			Where("media_id IN ?", mediaIDs).
+			Order("created_at DESC").
+			Find(&tasks).Error; err == nil {
+			for i := range tasks {
+				t := &tasks[i]
+				if _, ok := taskByMedia[t.MediaID]; !ok {
+					// 由于 ORDER BY created_at DESC，第一次出现即最新
+					taskByMedia[t.MediaID] = t
+				}
+			}
+		}
+	}
+
+	items := make([]PreprocessCandidate, 0, len(medias))
+	for i := range medias {
+		m := &medias[i]
+		isStrm := m.StreamURL != ""
+		canPlay := !isStrm && canMediaPlayDirectly(m)
+
+		status := "none"
+		var taskID string
+		if t, ok := taskByMedia[m.ID]; ok {
+			status = t.Status
+			taskID = t.ID
+		}
+
+		// OnlyNeedPreprocess 后置过滤：去掉"已完成 / 可直接播放 / STRM"
+		if p.OnlyNeedPreprocess {
+			if isStrm || canPlay || status == "completed" {
+				continue
+			}
+		}
+
+		items = append(items, PreprocessCandidate{
+			MediaID:          m.ID,
+			Title:            m.Title,
+			OrigTitle:        m.OrigTitle,
+			Year:             m.Year,
+			LibraryID:        m.LibraryID,
+			MediaType:        m.MediaType,
+			VideoCodec:       m.VideoCodec,
+			AudioCodec:       m.AudioCodec,
+			Resolution:       m.Resolution,
+			Duration:         m.Duration,
+			FileSize:         m.FileSize,
+			FilePath:         m.FilePath,
+			PosterPath:       m.PosterPath,
+			IsStrm:           isStrm,
+			CanPlayDirectly:  canPlay,
+			PreprocessStatus: status,
+			TaskID:           taskID,
+			SeasonNum:        m.SeasonNum,
+			EpisodeNum:       m.EpisodeNum,
+			EpisodeTitle:     m.EpisodeTitle,
+			ScrapeStatus:     m.ScrapeStatus,
+		})
+	}
+
+	// OnlyNeedPreprocess 模式下应用应用层分页
+	if p.OnlyNeedPreprocess {
+		total = int64(len(items))
+		start := offset
+		end := offset + p.Size
+		if start > len(items) {
+			start = len(items)
+		}
+		if end > len(items) {
+			end = len(items)
+		}
+		items = items[start:end]
+	}
+
+	return &PreprocessCandidateList{
+		Items: items,
+		Total: total,
+		Page:  p.Page,
+		Size:  p.Size,
+	}, nil
+}
+
+// PauseTask 暂停任务
+func (s *PreprocessService) PauseTask(taskID string) error {
+	task, err := s.repo.FindByID(taskID)
+	if err != nil {
+		return fmt.Errorf("任务不存在: %w", err)
+	}
+
+	if task.Status != "running" && task.Status != "pending" && task.Status != "queued" {
+		return fmt.Errorf("任务状态 %s 不可暂停", task.Status)
+	}
+
+	s.pausedJobs.Store(taskID, true)
+	task.Status = "paused"
+	task.Message = "已暂停"
+	s.repo.Update(task)
+
+	s.broadcastEvent(EventPreprocessPaused, task)
+	return nil
+}
+
+// ResumeTask 恢复任务
+func (s *PreprocessService) ResumeTask(taskID string) error {
+	task, err := s.repo.FindByID(taskID)
+	if err != nil {
+		return fmt.Errorf("任务不存在: %w", err)
+	}
+
+	if task.Status != "paused" {
+		return fmt.Errorf("任务状态 %s 不可恢复", task.Status)
+	}
+
+	s.pausedJobs.Delete(taskID)
+	task.Status = "queued"
+	task.Message = "已恢复，等待处理..."
+	s.repo.Update(task)
+
+	// 重新入队
+	select {
+	case s.jobQueue <- task.ID:
+	default:
+	}
+
+	return nil
+}
+
+// CancelTask 取消任务
+func (s *PreprocessService) CancelTask(taskID string) error {
+	task, err := s.repo.FindByID(taskID)
+	if err != nil {
+		return fmt.Errorf("任务不存在: %w", err)
+	}
+
+	if task.Status == "completed" || task.Status == "cancelled" {
+		return fmt.Errorf("任务状态 %s 不可取消", task.Status)
+	}
+
+	s.cancelJobs.Store(taskID, true)
+	s.pausedJobs.Delete(taskID)
+
+	// 终止正在运行的 FFmpeg 进程
+	if cmdVal, ok := s.runningJobs.Load(taskID); ok {
+		if cmd, ok := cmdVal.(*exec.Cmd); ok && cmd.Process != nil {
+			cmd.Process.Kill()
+			s.logger.Infof("已终止预处理任务 %s 的 FFmpeg 进程", taskID)
+		}
+	}
+
+	task.Status = "cancelled"
+	task.Message = "已取消"
+	s.repo.Update(task)
+
+	s.broadcastEvent(EventPreprocessCancelled, task)
+	return nil
+}
+
+// RetryTask 重试失败的任务
+func (s *PreprocessService) RetryTask(taskID string) error {
+	task, err := s.repo.FindByID(taskID)
+	if err != nil {
+		return fmt.Errorf("任务不存在: %w", err)
+	}
+
+	if task.Status != "failed" {
+		return fmt.Errorf("只有失败的任务可以重试")
+	}
+
+	task.Status = "queued"
+	task.Error = ""
+	task.Message = "重试中..."
+	task.Retries++
+	s.repo.Update(task)
+
+	select {
+	case s.jobQueue <- task.ID:
+	default:
+	}
+
+	return nil
+}
+
+// GetTask 获取任务详情
+func (s *PreprocessService) GetTask(taskID string) (*model.PreprocessTask, error) {
+	return s.repo.FindByID(taskID)
+}
+
+// GetMediaTask 获取媒体的预处理任务
+func (s *PreprocessService) GetMediaTask(mediaID string) (*model.PreprocessTask, error) {
+	return s.repo.FindByMediaID(mediaID)
+}
+
+// ListTasks 分页获取任务列表
+func (s *PreprocessService) ListTasks(page, pageSize int, status string) ([]model.PreprocessTask, int64, error) {
+	tasks, total, err := s.repo.ListAll(page, pageSize, status)
+	if err != nil {
+		return tasks, total, err
+	}
+	// 用关联的 Media 信息补充/修正 media_title（兼容旧任务缺少集数信息的情况）
+	// 列表展示场景使用 DescriptiveTitle：电影会附带年份和原始标题，方便辨识。
+	for i := range tasks {
+		if tasks[i].Media.ID != "" {
+			tasks[i].MediaTitle = tasks[i].Media.DescriptiveTitle()
+		}
+	}
+	return tasks, total, err
+}
+
+// GetStatistics 获取预处理统计
+func (s *PreprocessService) GetStatistics() map[string]interface{} {
+	counts, _ := s.repo.CountByStatus()
+	running, _ := s.repo.ListRunning()
+
+	return map[string]interface{}{
+		"status_counts":  counts,
+		"running_count":  len(running),
+		"max_workers":    atomic.LoadInt32(&s.maxWorkers),
+		"active_workers": atomic.LoadInt32(&s.workerCount),
+		"queue_size":     len(s.jobQueue),
+		"hw_accel":       s.hwAccel,
+		"mode":           "single-task", // 单任务串行模式
+	}
+}
+
+// DeleteTask 删除任务（仅终态任务可删除）
+func (s *PreprocessService) DeleteTask(taskID string) error {
+	task, err := s.repo.FindByID(taskID)
+	if err != nil {
+		return fmt.Errorf("任务不存在: %w", err)
+	}
+
+	if task.Status == "running" {
+		return fmt.Errorf("运行中的任务不可删除，请先取消")
+	}
+
+	return s.repo.DeleteByID(taskID)
+}
+
+// BatchDeleteTasks 批量删除任务（跳过运行中的任务）
+func (s *PreprocessService) BatchDeleteTasks(taskIDs []string) (int64, error) {
+	if len(taskIDs) == 0 {
+		return 0, nil
+	}
+	return s.repo.DeleteByIDs(taskIDs)
+}
+
+// BatchCancelTasks 批量取消任务
+func (s *PreprocessService) BatchCancelTasks(taskIDs []string) (int, error) {
+	if len(taskIDs) == 0 {
+		return 0, nil
+	}
+	cancelled := 0
+	for _, id := range taskIDs {
+		if err := s.CancelTask(id); err == nil {
+			cancelled++
+		}
+	}
+	return cancelled, nil
+}
+
+// BatchRetryTasks 批量重试任务
+func (s *PreprocessService) BatchRetryTasks(taskIDs []string) (int, error) {
+	if len(taskIDs) == 0 {
+		return 0, nil
+	}
+	retried := 0
+	for _, id := range taskIDs {
+		if err := s.RetryTask(id); err == nil {
+			retried++
+		}
+	}
+	return retried, nil
+}
+
+// IsPreprocessed 检查媒体是否已完成预处理
+func (s *PreprocessService) IsPreprocessed(mediaID string) bool {
+	task, err := s.repo.FindByMediaID(mediaID)
+	if err != nil {
+		return false
+	}
+	return task.Status == "completed" && task.HLSMasterPath != ""
+}
+
+// GetPreprocessedMasterPath 获取预处理后的 HLS 主播放列表路径
+func (s *PreprocessService) GetPreprocessedMasterPath(mediaID string) (string, error) {
+	task, err := s.repo.FindByMediaID(mediaID)
+	if err != nil {
+		return "", fmt.Errorf("未找到预处理任务")
+	}
+	if task.Status != "completed" || task.HLSMasterPath == "" {
+		return "", fmt.Errorf("预处理未完成")
+	}
+	if _, err := os.Stat(task.HLSMasterPath); os.IsNotExist(err) {
+		return "", fmt.Errorf("预处理文件已丢失")
+	}
+	return task.HLSMasterPath, nil
+}
+
+// GetPreprocessedMasterPlaylist 获取预处理后的 HLS 主播放列表内容。
+// 对旧缓存动态注入多音轨 EXT-X-MEDIA，避免需要清理并重新生成预处理产物。
+func (s *PreprocessService) GetPreprocessedMasterPlaylist(mediaID string) (string, error) {
+	masterPath, err := s.GetPreprocessedMasterPath(mediaID)
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(masterPath)
+	if err != nil {
+		return "", fmt.Errorf("读取预处理主播放列表失败: %w", err)
+	}
+	playlist := string(data)
+	if strings.Contains(playlist, "#EXT-X-MEDIA:TYPE=AUDIO") && strings.Contains(playlist, `AUDIO="audio"`) {
+		return playlist, nil
+	}
+
+	media, err := s.mediaRepo.FindByID(mediaID)
+	if err != nil {
+		return playlist, nil
+	}
+	tracks := probeAudioTracks(media, s.cfg.App.FFprobePath, s.logger)
+	if len(tracks) < 2 {
+		return playlist, nil
+	}
+	return injectAudioGroupIntoMasterPlaylist(mediaID, playlist, tracks), nil
+}
+
+func injectAudioGroupIntoMasterPlaylist(mediaID, playlist string, tracks []AudioTrackInfo) string {
+	audioEntries := strings.TrimRight(buildAudioMediaEntries(mediaID, tracks), "\n")
+	if audioEntries == "" {
+		return playlist
+	}
+
+	lines := strings.Split(playlist, "\n")
+	var out strings.Builder
+	injected := false
+	for _, raw := range lines {
+		line := strings.TrimRight(raw, "\r")
+		if strings.HasPrefix(line, "#EXT-X-STREAM-INF:") && !strings.Contains(line, "AUDIO=") {
+			line += `,AUDIO="audio"`
+		}
+		out.WriteString(line)
+		out.WriteByte('\n')
+		if !injected && strings.HasPrefix(line, "#EXT-X-VERSION:") {
+			out.WriteString(audioEntries)
+			out.WriteByte('\n')
+			injected = true
+		}
+	}
+	if !injected {
+		return "#EXTM3U\n" + audioEntries + "\n" + strings.TrimPrefix(playlist, "#EXTM3U\n")
+	}
+	return out.String()
+}
+
+// GetMediaTask 获取媒体的预处理任务
+func (s *PreprocessService) CleanPreprocessCache(mediaID string) error {
+	cacheDir := filepath.Join(s.cfg.Cache.CacheDir, "preprocess", mediaID)
+	if err := os.RemoveAll(cacheDir); err != nil {
+		return err
+	}
+	// 更新任务状态
+	task, err := s.repo.FindByMediaID(mediaID)
+	if err == nil {
+		task.Status = "pending"
+		task.HLSMasterPath = ""
+		task.Variants = ""
+		task.ThumbnailPath = ""
+		task.KeyframesDir = ""
+		task.Progress = 0
+		task.Message = "缓存已清理，等待重新处理"
+		s.repo.Update(task)
+	}
+	return nil
+}
+
+// ==================== 存储占用统计 ====================
+
+// PreprocessStorageItem 单个媒体的预处理产物占用
+type PreprocessStorageItem struct {
+	MediaID    string `json:"media_id"`
+	MediaTitle string `json:"media_title"`
+	TaskID     string `json:"task_id,omitempty"` // 关联的 task ID（孤儿目录为空）
+	Status     string `json:"status,omitempty"`  // 关联 task 的状态（孤儿目录为 "orphan"）
+	OutputDir  string `json:"output_dir"`        // 物理目录绝对路径
+	Size       int64  `json:"size"`              // 字节数
+	IsOrphan   bool   `json:"is_orphan"`         // 是否为孤儿目录（DB 中无对应 task）
+}
+
+// PreprocessStorageUsage 预处理总占用统计响应体
+type PreprocessStorageUsage struct {
+	RootDir        string                  `json:"root_dir"`         // 预处理根目录
+	TotalSize      int64                   `json:"total_size"`       // 总占用字节数（含孤儿）
+	TotalCount     int                     `json:"total_count"`      // 占用空间的目录总数
+	TaskSize       int64                   `json:"task_size"`        // DB 中 task 对应的占用
+	OrphanSize     int64                   `json:"orphan_size"`      // 无主目录占用
+	OrphanCount    int                     `json:"orphan_count"`     // 无主目录数量
+	Items          []PreprocessStorageItem `json:"items"`            // 按 size 降序，最多返回 limit 条
+	ScannedAt      time.Time               `json:"scanned_at"`       // 扫描时间
+	ScanDurationMs int64                   `json:"scan_duration_ms"` // 扫描耗时（毫秒）
+}
+
+// ==================== 缓存总览（cache/ 整盘） ====================
+
+// CacheCategory 缓存目录分类条目
+type CacheCategory struct {
+	Key       string `json:"key"`       // preprocess / transcode / abr / thumbnails / images / subtitles / downloads / webdav_download / plugins / other / ...
+	Label     string `json:"label"`     // 中文展示名
+	Path      string `json:"path"`      // 子目录绝对路径
+	Size      int64  `json:"size"`      // 字节数
+	Count     int    `json:"count"`     // 文件数量
+	Cleanable bool   `json:"cleanable"` // 是否安全可清空（删后会自动重生成且不影响业务）
+}
+
+// CacheUsage cache/ 总目录占用统计响应体
+type CacheUsage struct {
+	RootDir        string          `json:"root_dir"`         // cache 根目录
+	TotalSize      int64           `json:"total_size"`       // 整个 cache 字节数
+	TotalCount     int             `json:"total_count"`      // 整个 cache 文件数
+	Categories     []CacheCategory `json:"categories"`       // 按 size 降序的一级子目录分类
+	ScannedAt      time.Time       `json:"scanned_at"`       // 扫描时间
+	ScanDurationMs int64           `json:"scan_duration_ms"` // 扫描耗时（毫秒）
+	FromCache      bool            `json:"from_cache"`       // 是否取自内存缓存（命中即跳过扫盘）
+}
+
+// 一级子目录元信息（标签 / 是否可清）
+// 未在表内的目录归为 "other"，cleanable 默认 false。
+var cacheCategoryMeta = map[string]struct {
+	Label     string
+	Cleanable bool
+}{
+	"preprocess":      {"预处理产物", true},  // 用 CleanOrphan 清孤儿；当前接口仅描述，不直接清空
+	"transcode":       {"在线转码缓存", true}, // 删除后重新点播会重新生成
+	"abr":             {"自适应码率缓存", true},
+	"thumbnails":      {"缩略图/雪碧图", true}, // 重新扫描或播放时会重新生成
+	"images":          {"海报/封面", false},  // 删除会影响列表显示，需重新刮削
+	"subtitles":       {"字幕缓存", false},   // AI 字幕在子目录内，整体不默认可清
+	"downloads":       {"离线下载", false},   // 用户主动下载，不属于"缓存"
+	"webdav_download": {"WebDAV 临时下载", true},
+	"plugins":         {"插件资源", false},
+}
+
+var (
+	cacheUsageMu     sync.Mutex
+	cacheUsageCached *CacheUsage
+	cacheUsageExpire time.Time
+)
+
+const cacheUsageTTL = 30 * time.Second
+
+// invalidateCacheUsage 让缓存失效，下一次调用强制扫盘
+// 调用方：CleanOrphanCache、预处理任务完成（如需）等改变 cache/ 内容的地方
+func (s *PreprocessService) invalidateCacheUsage() {
+	cacheUsageMu.Lock()
+	cacheUsageCached = nil
+	cacheUsageExpire = time.Time{}
+	cacheUsageMu.Unlock()
+}
+
+// GetCacheUsage 统计整个 cache/ 目录的占用，按一级子目录归类
+//
+// 实现策略：
+//  1. 30s 内存缓存命中即返回（FromCache=true），避免高频全盘扫描；force=true 跳过缓存
+//  2. ReadDir 一级子目录，对每个一级目录 walk 一次累加 size+count
+//  3. 未在 cacheCategoryMeta 中登记的目录归为 "other"（label = 子目录名），cleanable=false
+//  4. 按 size 降序排序
+func (s *PreprocessService) GetCacheUsage(force bool) (*CacheUsage, error) {
+	if !force {
+		cacheUsageMu.Lock()
+		if cacheUsageCached != nil && time.Now().Before(cacheUsageExpire) {
+			// 复制一份，标记 from_cache=true，避免外部修改影响内部缓存
+			cp := *cacheUsageCached
+			cp.FromCache = true
+			cacheUsageMu.Unlock()
+			return &cp, nil
+		}
+		cacheUsageMu.Unlock()
+	}
+
+	start := time.Now()
+	rootDir := s.cfg.Cache.CacheDir
+	usage := &CacheUsage{
+		RootDir:    rootDir,
+		Categories: []CacheCategory{},
+		ScannedAt:  start,
+	}
+
+	entries, err := os.ReadDir(rootDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			usage.ScanDurationMs = time.Since(start).Milliseconds()
+			return usage, nil
+		}
+		return nil, fmt.Errorf("读取 cache 根目录失败: %w", err)
+	}
+
+	cats := make([]CacheCategory, 0, len(entries))
+	for _, e := range entries {
+		if !e.IsDir() {
+			// cache/ 下偶尔会有顶层文件，归到 other
+			fi, ferr := e.Info()
+			if ferr != nil {
+				continue
+			}
+			usage.TotalSize += fi.Size()
+			usage.TotalCount++
+			continue
+		}
+		name := e.Name()
+		dir := filepath.Join(rootDir, name)
+		size, count, werr := dirSizeAndCount(dir)
+		if werr != nil {
+			s.logger.Warnf("统计缓存子目录失败 %s: %v", dir, werr)
+			continue
+		}
+
+		meta, known := cacheCategoryMeta[name]
+		key := name
+		label := name
+		cleanable := false
+		if known {
+			label = meta.Label
+			cleanable = meta.Cleanable
+		} else {
+			key = "other:" + name
+		}
+
+		cats = append(cats, CacheCategory{
+			Key:       key,
+			Label:     label,
+			Path:      dir,
+			Size:      size,
+			Count:     count,
+			Cleanable: cleanable,
+		})
+		usage.TotalSize += size
+		usage.TotalCount += count
+	}
+
+	sort.Slice(cats, func(i, j int) bool { return cats[i].Size > cats[j].Size })
+	usage.Categories = cats
+	usage.ScanDurationMs = time.Since(start).Milliseconds()
+
+	// 写入缓存
+	cacheUsageMu.Lock()
+	cacheUsageCached = usage
+	cacheUsageExpire = time.Now().Add(cacheUsageTTL)
+	cacheUsageMu.Unlock()
+
+	return usage, nil
+}
+
+// dirSizeAndCount 一次遍历同时累加目录字节数与文件数
+func dirSizeAndCount(root string) (int64, int, error) {
+	var total int64
+	var count int
+	err := filepath.Walk(root, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if !info.IsDir() {
+			total += info.Size()
+			count++
+		}
+		return nil
+	})
+	if os.IsNotExist(err) {
+		return 0, 0, nil
+	}
+	return total, count, err
+}
+
+// dirSize 递归统计目录占用字节数；目录不存在返回 0, nil
+func dirSize(root string) (int64, error) {
+	var total int64
+	err := filepath.Walk(root, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			// 容忍单个文件读取失败，不中断整体统计
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if !info.IsDir() {
+			total += info.Size()
+		}
+		return nil
+	})
+	if os.IsNotExist(err) {
+		return 0, nil
+	}
+	return total, err
+}
+
+// GetStorageUsage 统计预处理产物的磁盘占用
+//
+// limit: 返回的明细条目数上限（按 size 降序），0 或负数表示不限制
+//
+// 实现策略：
+//  1. 扫描根目录 {CacheDir}/preprocess/ 下所有一级子目录（每个子目录名 = mediaID）
+//  2. 对每个 mediaID 调用 dirSize 计算占用
+//  3. 与 DB 中的 PreprocessTask 比对：能匹配上的标记 task 状态；匹配不上的标记 is_orphan=true
+//  4. 按 size 降序取前 limit 条
+func (s *PreprocessService) GetStorageUsage(limit int) (*PreprocessStorageUsage, error) {
+	start := time.Now()
+	rootDir := filepath.Join(s.cfg.Cache.CacheDir, "preprocess")
+
+	usage := &PreprocessStorageUsage{
+		RootDir:   rootDir,
+		Items:     []PreprocessStorageItem{},
+		ScannedAt: start,
+	}
+
+	// 根目录可能尚未创建（从未跑过预处理）
+	entries, err := os.ReadDir(rootDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			usage.ScanDurationMs = time.Since(start).Milliseconds()
+			return usage, nil
+		}
+		return nil, fmt.Errorf("读取预处理根目录失败: %w", err)
+	}
+
+	// 一次性把 DB 中的 task 拉出来建索引（按 mediaID -> 最新 task）
+	allTasks, err := s.repo.ListAllForUsage()
+	if err != nil {
+		// DB 出错不阻塞磁盘统计，只是丢失 task 信息
+		s.logger.Warnf("查询预处理任务列表失败: %v", err)
+	}
+	taskByMedia := make(map[string]*model.PreprocessTask, len(allTasks))
+	for i := range allTasks {
+		t := &allTasks[i]
+		// 同一 mediaID 可能有多条记录，保留最新一条（创建时间最大）
+		if cur, ok := taskByMedia[t.MediaID]; !ok || t.CreatedAt.After(cur.CreatedAt) {
+			taskByMedia[t.MediaID] = t
+		}
+	}
+
+	items := make([]PreprocessStorageItem, 0, len(entries))
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		mediaID := e.Name()
+		dir := filepath.Join(rootDir, mediaID)
+		size, err := dirSize(dir)
+		if err != nil {
+			s.logger.Warnf("统计预处理目录占用失败 %s: %v", dir, err)
+			continue
+		}
+		if size == 0 {
+			continue
+		}
+
+		item := PreprocessStorageItem{
+			MediaID:   mediaID,
+			OutputDir: dir,
+			Size:      size,
+		}
+		if t, ok := taskByMedia[mediaID]; ok {
+			item.TaskID = t.ID
+			item.Status = t.Status
+			item.MediaTitle = t.MediaTitle
+		} else {
+			item.IsOrphan = true
+			item.Status = "orphan"
+			usage.OrphanSize += size
+			usage.OrphanCount++
+		}
+		usage.TotalSize += size
+		usage.TotalCount++
+		items = append(items, item)
+	}
+	usage.TaskSize = usage.TotalSize - usage.OrphanSize
+
+	// 按 size 降序
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Size > items[j].Size
+	})
+	if limit > 0 && len(items) > limit {
+		items = items[:limit]
+	}
+	usage.Items = items
+	usage.ScanDurationMs = time.Since(start).Milliseconds()
+	return usage, nil
+}
+
+// CleanOrphanCache 清理所有孤儿预处理目录（DB 中没有对应 task 的）
+// 返回清理的目录数和总释放字节数
+func (s *PreprocessService) CleanOrphanCache() (int, int64, error) {
+	usage, err := s.GetStorageUsage(0) // 0 = 不限条目
+	if err != nil {
+		return 0, 0, err
+	}
+	var freed int64
+	cleaned := 0
+	for _, it := range usage.Items {
+		if !it.IsOrphan {
+			continue
+		}
+		if err := os.RemoveAll(it.OutputDir); err != nil {
+			s.logger.Warnf("清理孤儿目录失败 %s: %v", it.OutputDir, err)
+			continue
+		}
+		freed += it.Size
+		cleaned++
+	}
+	if cleaned > 0 {
+		s.logger.Infof("已清理 %d 个孤儿预处理目录，释放 %d 字节", cleaned, freed)
+		s.invalidateCacheUsage()
+	}
+	return cleaned, freed, nil
+}
+
+// CleanPreprocessAll 清空所有预处理产物（保护正在运行的任务）
+//
+// 行为：
+//   - 遍历 cache/preprocess 下所有子目录
+//   - 跳过对应 task.Status == "running" 的目录（避免删掉 ffmpeg 正在写的文件）
+//   - 其它所有目录（pending/queued/completed/failed/cancelled，以及孤儿）一律 RemoveAll
+//   - 对应 DB 任务（非孤儿且非 running）重置为 pending，清除产物路径，下次播放会重新生成
+//
+// 返回值：cleaned=被删除的目录数，freed=释放字节，skipped=因 running 跳过的目录数
+func (s *PreprocessService) CleanPreprocessAll() (cleaned int, freed int64, skipped int, err error) {
+	usage, err := s.GetStorageUsage(0)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	for _, it := range usage.Items {
+		// 保护正在运行的任务
+		if it.Status == "running" {
+			skipped++
+			continue
+		}
+		if rmErr := os.RemoveAll(it.OutputDir); rmErr != nil {
+			s.logger.Warnf("清理预处理目录失败 %s: %v", it.OutputDir, rmErr)
+			continue
+		}
+		freed += it.Size
+		cleaned++
+		// 非孤儿目录：重置 DB 任务为 pending，清空产物字段
+		if !it.IsOrphan && it.MediaID != "" {
+			if task, fErr := s.repo.FindByMediaID(it.MediaID); fErr == nil && task != nil {
+				task.Status = "pending"
+				task.HLSMasterPath = ""
+				task.Variants = ""
+				task.ThumbnailPath = ""
+				task.KeyframesDir = ""
+				task.Progress = 0
+				task.Phase = ""
+				task.Message = "缓存已清理，等待重新处理"
+				if uErr := s.repo.Update(task); uErr != nil {
+					s.logger.Warnf("重置任务状态失败 media=%s: %v", it.MediaID, uErr)
+				}
+			}
+		}
+	}
+	if cleaned > 0 || skipped > 0 {
+		s.logger.Infof("已清空预处理产物：删除 %d 个目录，释放 %d 字节，跳过 %d 个运行中任务", cleaned, freed, skipped)
+		s.invalidateCacheUsage()
+	}
+	return cleaned, freed, skipped, nil
+}
+
+// ==================== 分类缓存清理 ====================
+
+// CleanCategoryResult 单个分类的清理结果
+type CleanCategoryResult struct {
+	Key         string `json:"key"`          // preprocess / transcode / abr / thumbnails / webdav_download / ...
+	Label       string `json:"label"`        // 中文展示名
+	FreedBytes  int64  `json:"freed_bytes"`  // 释放字节数（实际或估算）
+	FreedCount  int    `json:"freed_count"`  // 删除的目录/文件数（按分类语义不同）
+	Skipped     bool   `json:"skipped"`      // 是否被跳过（不可清理 / 目录不存在）
+	SkippedNote string `json:"skipped_note"` // 跳过原因
+}
+
+// CleanCacheCategory 清空单个分类目录下的所有内容（仅对 cleanable=true 的分类生效）
+//
+// 实现规则：
+//   - preprocess：根据 mode 区分
+//     · mode == "orphan"：只清孤儿（数据库无对应任务记录）
+//     · mode == "all" 或空：清所有非 running 任务的产物（默认行为，真正释放空间）
+//   - 其它 cleanable 分类（transcode / abr / thumbnails / webdav_download 等）：
+//     先统计目录大小，再 RemoveAll 整个一级子目录，最后重建空目录以便后续写入
+//   - 未登记的 "other:*" 分类一律拒绝（cleanable=false）
+//
+// 返回值除报错外，统一通过 CleanCategoryResult 表达"实际释放了多少"。
+func (s *PreprocessService) CleanCacheCategory(key string, mode string) (*CleanCategoryResult, error) {
+	// preprocess：默认走"全清"，mode=orphan 才仅清孤儿
+	if key == "preprocess" {
+		if mode == "orphan" {
+			cleaned, freed, err := s.CleanOrphanCache()
+			if err != nil {
+				return nil, err
+			}
+			return &CleanCategoryResult{
+				Key:        "preprocess",
+				Label:      cacheCategoryMeta["preprocess"].Label,
+				FreedBytes: freed,
+				FreedCount: cleaned,
+			}, nil
+		}
+		cleaned, freed, skipped, err := s.CleanPreprocessAll()
+		if err != nil {
+			return nil, err
+		}
+		note := ""
+		if skipped > 0 {
+			note = fmt.Sprintf("已跳过 %d 个正在运行的任务", skipped)
+		}
+		return &CleanCategoryResult{
+			Key:         "preprocess",
+			Label:       cacheCategoryMeta["preprocess"].Label,
+			FreedBytes:  freed,
+			FreedCount:  cleaned,
+			SkippedNote: note,
+		}, nil
+	}
+
+	meta, known := cacheCategoryMeta[key]
+	if !known {
+		return nil, fmt.Errorf("未知分类: %s", key)
+	}
+	if !meta.Cleanable {
+		return nil, fmt.Errorf("分类 %s 不允许清理", key)
+	}
+
+	dir := filepath.Join(s.cfg.Cache.CacheDir, key)
+	info, err := os.Stat(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &CleanCategoryResult{
+				Key:         key,
+				Label:       meta.Label,
+				Skipped:     true,
+				SkippedNote: "目录不存在",
+			}, nil
+		}
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("%s 不是目录", dir)
+	}
+
+	// 先统计大小（用于返回值）
+	var size int64
+	var count int
+	_ = filepath.Walk(dir, func(_ string, fi os.FileInfo, werr error) error {
+		if werr != nil {
+			return nil
+		}
+		if !fi.IsDir() {
+			size += fi.Size()
+			count++
+		}
+		return nil
+	})
+
+	if err := os.RemoveAll(dir); err != nil {
+		return nil, fmt.Errorf("删除 %s 失败: %w", dir, err)
+	}
+	// 重建空目录，方便后续写入
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		s.logger.Warnf("重建分类目录失败 %s: %v", dir, err)
+	}
+
+	s.logger.Infof("已清空缓存分类 %s（%s），释放 %d 字节，%d 个文件", key, meta.Label, size, count)
+	s.invalidateCacheUsage()
+
+	return &CleanCategoryResult{
+		Key:        key,
+		Label:      meta.Label,
+		FreedBytes: size,
+		FreedCount: count,
+	}, nil
+}
+
+// CleanAllCleanableCache 一键清空所有 cleanable=true 的分类
+//
+// 遍历 cacheCategoryMeta 中所有 Cleanable=true 的 key，逐个调用 CleanCacheCategory；
+// 单个分类失败不影响其它分类继续清理，失败原因写入对应 Result.SkippedNote。
+func (s *PreprocessService) CleanAllCleanableCache() ([]CleanCategoryResult, int64, int, error) {
+	var results []CleanCategoryResult
+	var totalFreed int64
+	var totalCount int
+
+	// 用固定顺序遍历，便于 UI 展示一致
+	order := []string{"preprocess", "transcode", "abr", "thumbnails", "webdav_download"}
+	seen := map[string]bool{}
+	for _, k := range order {
+		if meta, ok := cacheCategoryMeta[k]; ok && meta.Cleanable {
+			seen[k] = true
+			res, err := s.CleanCacheCategory(k, "all")
+			if err != nil {
+				results = append(results, CleanCategoryResult{
+					Key:         k,
+					Label:       meta.Label,
+					Skipped:     true,
+					SkippedNote: err.Error(),
+				})
+				continue
+			}
+			results = append(results, *res)
+			totalFreed += res.FreedBytes
+			totalCount += res.FreedCount
+		}
+	}
+	// 兜底：补漏 cacheCategoryMeta 里其它 cleanable 但不在 order 中的分类
+	for k, meta := range cacheCategoryMeta {
+		if seen[k] || !meta.Cleanable {
+			continue
+		}
+		res, err := s.CleanCacheCategory(k, "all")
+		if err != nil {
+			results = append(results, CleanCategoryResult{
+				Key: k, Label: meta.Label, Skipped: true, SkippedNote: err.Error(),
+			})
+			continue
+		}
+		results = append(results, *res)
+		totalFreed += res.FreedBytes
+		totalCount += res.FreedCount
+	}
+
+	s.logger.Infof("一键清空缓存完成：释放 %d 字节，%d 个文件，涉及 %d 个分类", totalFreed, totalCount, len(results))
+	return results, totalFreed, totalCount, nil
+}
+
+// ==================== 工作协程 ====================
+
+func (s *PreprocessService) worker(id int) {
+	s.logger.Infof("预处理工作协程 #%d 启动", id)
+	for taskID := range s.jobQueue {
+		// 检查是否已取消
+		if _, cancelled := s.cancelJobs.LoadAndDelete(taskID); cancelled {
+			continue
+		}
+		// 检查是否已暂停
+		if _, paused := s.pausedJobs.Load(taskID); paused {
+			continue
+		}
+
+		// 【火力全开】移除原本的动态降速等待循环（原逻辑会 Sleep 5s）。
+		// curWorkers 字段保留仅用于接口展示，不再影响实际调度。
+
+		// 任务优先级检查：在开始处理前，查看是否有更高优先级的任务在等待
+		if s.shouldYieldToHigherPriority(taskID) {
+			select {
+			case s.jobQueue <- taskID:
+			default:
+			}
+			continue
+		}
+
+		atomic.AddInt32(&s.workerCount, 1)
+		s.processTask(taskID)
+		atomic.AddInt32(&s.workerCount, -1)
+
+		// 清理节流缓存
+		s.lastBroadcast.Delete(taskID)
+		s.lastBroadcast.Delete(taskID + "_phase")
+		s.lastDBWrite.Delete(taskID)
+	}
+}
+
+// shouldYieldToHigherPriority 检查是否应该让位给更高优先级的任务
+// 查询数据库中是否有优先级更高的等待任务
+func (s *PreprocessService) shouldYieldToHigherPriority(currentTaskID string) bool {
+	currentTask, err := s.repo.FindByID(currentTaskID)
+	if err != nil {
+		return false
+	}
+
+	// 查询队列中优先级最高的任务
+	pendingTasks, err := s.repo.ListPending(1)
+	if err != nil || len(pendingTasks) == 0 {
+		return false
+	}
+
+	// 如果队列中有优先级更高的任务，当前任务应让位
+	if pendingTasks[0].Priority > currentTask.Priority && pendingTasks[0].ID != currentTaskID {
+		s.logger.Infof("任务优先级调度: %s(优先级=%d) 让位给 %s(优先级=%d)",
+			currentTask.MediaTitle, currentTask.Priority,
+			pendingTasks[0].MediaTitle, pendingTasks[0].Priority)
+		return true
+	}
+
+	return false
+}
+
+func (s *PreprocessService) processTask(taskID string) {
+	task, err := s.repo.FindByID(taskID)
+	if err != nil {
+		s.logger.Warnf("预处理任务不存在: %s", taskID)
+		return
+	}
+
+	// 再次检查状态
+	if task.Status == "cancelled" || task.Status == "completed" {
+		return
+	}
+
+	now := time.Now()
+	task.Status = "running"
+	task.StartedAt = &now
+	task.Message = "开始预处理..."
+	s.repo.Update(task)
+
+	s.broadcastEvent(EventPreprocessStarted, task)
+	s.logger.Infof("开始预处理: %s (%s)", task.MediaTitle, task.MediaID)
+
+	// ========== Phase 1: 探测视频信息 ==========
+	if s.isCancelled(taskID) {
+		return
+	}
+	s.updatePhase(task, "probe", 5, "正在探测视频信息...")
+
+	probeInfo, err := s.probeVideo(task.InputPath)
+	if err != nil {
+		s.failTask(task, fmt.Sprintf("视频探测失败: %v", err))
+		return
+	}
+
+	task.SourceWidth = probeInfo.width
+	task.SourceHeight = probeInfo.height
+	task.SourceCodec = probeInfo.codec
+	task.SourceDuration = probeInfo.duration
+	task.SourceSize = probeInfo.size
+	s.repo.Update(task)
+
+	// ========== Phase 2+3: 封面提取 & 关键帧预览（P2 优化：并行执行） ==========
+	if s.isCancelled(taskID) {
+		return
+	}
+	s.updatePhase(task, "thumbnail_keyframes", 10, "正在并行提取封面和关键帧...")
+
+	var (
+		thumbnailPath string
+		keyframesDir  string
+		spritePath    string
+		vttPath       string
+		thumbnailErr  error
+		keyframesErr  error
+		spriteErr     error
+		phase23Wg     sync.WaitGroup
+	)
+
+	// P2 优化：Phase 2、3、sprite 互不依赖，并行执行
+	phase23Wg.Add(3)
+
+	go func() {
+		defer phase23Wg.Done()
+		thumbnailPath, thumbnailErr = s.extractThumbnail(task)
+	}()
+
+	go func() {
+		defer phase23Wg.Done()
+		keyframesDir, keyframesErr = s.extractKeyframes(task)
+	}()
+
+	go func() {
+		defer phase23Wg.Done()
+		spritePath, vttPath, spriteErr = s.generateSprite(task)
+	}()
+
+	phase23Wg.Wait()
+
+	if thumbnailErr != nil {
+		s.logger.Warnf("封面提取失败（非致命）: %v", thumbnailErr)
+	} else {
+		task.ThumbnailPath = thumbnailPath
+	}
+	if keyframesErr != nil {
+		s.logger.Warnf("关键帧提取失败（非致命）: %v", keyframesErr)
+	} else {
+		task.KeyframesDir = keyframesDir
+	}
+	if spriteErr != nil {
+		s.logger.Warnf("雪碧图生成失败（非致命）: %v", spriteErr)
+	} else {
+		task.SpritePath = spritePath
+		task.SpriteVTTPath = vttPath
+	}
+	s.repo.Update(task)
+
+	// ========== Phase 4: 多码率 HLS 并行转码（P0 优化） ==========
+	if s.isCancelled(taskID) {
+		return
+	}
+
+	// 确定需要生成的变体（不超过源分辨率）
+	variants := s.determineVariants(probeInfo.height)
+	totalVariants := len(variants)
+	completedVariants := []string{}
+
+	// 【方案 1 全速策略】不再限制变体并行度：
+	// 所有档位（1080p/720p/480p 等）同时编码，让 FFmpeg / GPU 自己调度。
+	maxParallel := totalVariants
+	if maxParallel < 1 {
+		maxParallel = 1
+	}
+
+	type variantResult struct {
+		index int
+		name  string
+		err   error
+	}
+
+	resultCh := make(chan variantResult, totalVariants)
+	sem := make(chan struct{}, maxParallel)
+	var transcodeWg sync.WaitGroup
+
+	for i, variant := range variants {
+		if s.isCancelled(taskID) {
+			break
+		}
+		if s.isPaused(taskID) {
+			task.Status = "paused"
+			task.Message = fmt.Sprintf("已暂停（已提交 %d/%d 变体）", i, totalVariants)
+			s.repo.Update(task)
+			s.broadcastEvent(EventPreprocessPaused, task)
+			// 等待已启动的变体完成
+			transcodeWg.Wait()
+			return
+		}
+
+		transcodeWg.Add(1)
+		sem <- struct{}{} // 获取信号量
+
+		go func(idx int, v ABRProfile) {
+			defer transcodeWg.Done()
+			defer func() { <-sem }() // 释放信号量
+
+			// 计算总体进度：20% ~ 95%（转码占 75%）
+			baseProgress := 20.0 + float64(idx)/float64(totalVariants)*75.0
+			phaseName := fmt.Sprintf("transcode_%s", v.Name)
+
+			s.updatePhase(task, phaseName, baseProgress,
+				fmt.Sprintf("正在转码 %s (%d/%d)...", v.Name, idx+1, totalVariants))
+
+			err := s.transcodeVariant(task, v, func(progress float64, speed string) {
+				// 变体内部进度映射到总体进度
+				variantProgress := baseProgress + (progress/100.0)*(75.0/float64(totalVariants))
+				s.updatePhase(task, phaseName, variantProgress,
+					fmt.Sprintf("转码 %s: %.1f%% (速度: %s)", v.Name, progress, speed))
+			})
+
+			resultCh <- variantResult{index: idx, name: v.Name, err: err}
+		}(i, variant)
+	}
+
+	// 等待所有并行转码完成
+	transcodeWg.Wait()
+	close(resultCh)
+
+	// 收集结果
+	for r := range resultCh {
+		if r.err != nil {
+			s.logger.Errorf("转码变体 %s 失败: %v", r.name, r.err)
+			continue
+		}
+		completedVariants = append(completedVariants, r.name)
+	}
+
+	if len(completedVariants) == 0 {
+		s.failTask(task, "所有转码变体均失败")
+		return
+	}
+
+	// ========== Phase 5: 生成 ABR 主播放列表 ==========
+	if s.isCancelled(taskID) {
+		return
+	}
+	s.updatePhase(task, "abr_master", 96, "正在生成自适应码率播放列表...")
+
+	masterPath, err := s.generateMasterPlaylist(task, completedVariants)
+	if err != nil {
+		s.failTask(task, fmt.Sprintf("生成主播放列表失败: %v", err))
+		return
+	}
+
+	// ========== 完成 ==========
+	completedAt := time.Now()
+	elapsed := completedAt.Sub(*task.StartedAt).Seconds()
+
+	variantsJSON, _ := json.Marshal(completedVariants)
+	task.Status = "completed"
+	task.Phase = "done"
+	task.Progress = 100
+	task.HLSMasterPath = masterPath
+	task.Variants = string(variantsJSON)
+	task.CompletedAt = &completedAt
+	task.ElapsedSec = elapsed
+	if probeInfo.duration > 0 {
+		task.SpeedRatio = math.Round(probeInfo.duration/elapsed*100) / 100
+	}
+	task.Message = fmt.Sprintf("预处理完成（%d 个变体，耗时 %.0f 秒）", len(completedVariants), elapsed)
+	s.repo.Update(task)
+
+	s.broadcastEvent(EventPreprocessCompleted, task)
+	s.logger.Infof("预处理完成: %s, 变体: %v, 耗时: %.1fs", task.MediaTitle, completedVariants, elapsed)
+}
+
+// ==================== 内部方法 ====================
+
+type videoProbeInfo struct {
+	width    int
+	height   int
+	codec    string
+	duration float64
+	size     int64
+}
+
+// probeVideo 使用 FFprobe 探测视频信息
+func (s *PreprocessService) probeVideo(inputPath string) (*videoProbeInfo, error) {
+	ffprobeArgs := []string{
+		"-v", "quiet",
+		"-print_format", "json",
+		"-show_format",
+		"-show_streams",
+		"-select_streams", "v:0",
+	}
+	// V2.1: HTTP 输入时注入超时与重连参数
+	if httpArgs := BuildFFmpegInputArgs(inputPath); len(httpArgs) > 0 {
+		ffprobeArgs = append(ffprobeArgs, httpArgs...)
+	}
+	ffprobeArgs = append(ffprobeArgs, inputPath)
+	cmd := exec.Command(s.cfg.App.FFprobePath, ffprobeArgs...)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("FFprobe 执行失败: %w", err)
+	}
+
+	var probeResult struct {
+		Streams []struct {
+			Width     int    `json:"width"`
+			Height    int    `json:"height"`
+			CodecName string `json:"codec_name"`
+		} `json:"streams"`
+		Format struct {
+			Duration string `json:"duration"`
+			Size     string `json:"size"`
+		} `json:"format"`
+	}
+
+	if err := json.Unmarshal(output, &probeResult); err != nil {
+		return nil, fmt.Errorf("解析 FFprobe 输出失败: %w", err)
+	}
+
+	info := &videoProbeInfo{}
+	if len(probeResult.Streams) > 0 {
+		info.width = probeResult.Streams[0].Width
+		info.height = probeResult.Streams[0].Height
+		info.codec = probeResult.Streams[0].CodecName
+	}
+	if d, err := strconv.ParseFloat(probeResult.Format.Duration, 64); err == nil {
+		info.duration = d
+	}
+	if sz, err := strconv.ParseInt(probeResult.Format.Size, 10, 64); err == nil {
+		info.size = sz
+	}
+
+	return info, nil
+}
+
+// extractThumbnail 提取视频封面（取 10% 位置的帧）
+// P2 优化：将 -ss 放在 -i 之前实现 input seeking（快速跳转，避免解码前面所有帧）
+func (s *PreprocessService) extractThumbnail(task *model.PreprocessTask) (string, error) {
+	thumbnailPath := filepath.Join(task.OutputDir, "thumbnail.jpg")
+
+	// 取视频 10% 位置的帧作为封面
+	seekPos := "10"
+	if task.SourceDuration > 0 {
+		seekPos = fmt.Sprintf("%.0f", task.SourceDuration*0.1)
+	}
+
+	// P2 优化：-ss 在 -i 之前 = input seeking（基于关键帧快速跳转）
+	// 比 output seeking（-ss 在 -i 之后）快 10~100x，尤其对长视频
+	ffmpegArgs := []string{
+		"-y",
+		"-ss", seekPos,
+	}
+	// V2.1: HTTP 输入时注入重连与超时参数
+	if httpArgs := BuildFFmpegInputArgs(task.InputPath); len(httpArgs) > 0 {
+		ffmpegArgs = append(ffmpegArgs, httpArgs...)
+	}
+	ffmpegArgs = append(ffmpegArgs,
+		"-i", task.InputPath,
+		"-frames:v", "1",
+		"-q:v", "2",
+		"-vf", "scale='min(1920,iw)':'min(1080,ih)':force_original_aspect_ratio=decrease",
+		thumbnailPath,
+	)
+	cmd := exec.Command(s.cfg.App.FFmpegPath, ffmpegArgs...)
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("封面提取失败: %w", err)
+	}
+
+	return thumbnailPath, nil
+}
+
+// extractKeyframes 提取关键帧预览（每 N 秒一帧，最多 20 帧）
+// P1 优化：使用 -skip_frame nokey 跳过非关键帧解码，大幅减少解码开销
+func (s *PreprocessService) extractKeyframes(task *model.PreprocessTask) (string, error) {
+	keyframesDir := filepath.Join(task.OutputDir, "keyframes")
+	os.MkdirAll(keyframesDir, 0755)
+
+	duration := task.SourceDuration
+	if duration <= 0 {
+		duration = 600 // 默认 10 分钟
+	}
+
+	// 计算间隔：确保最多 20 帧
+	interval := duration / 20
+	if interval < 30 {
+		interval = 30
+	}
+
+	// P1 优化：使用 -skip_frame nokey 让解码器跳过非关键帧，
+	// 配合 fps 滤镜大幅减少解码工作量（对长视频提升 5~10x）
+	kfArgs := []string{
+		"-y",
+		"-skip_frame", "nokey",
+	}
+	if httpArgs := BuildFFmpegInputArgs(task.InputPath); len(httpArgs) > 0 {
+		kfArgs = append(kfArgs, httpArgs...)
+	}
+	kfArgs = append(kfArgs,
+		"-i", task.InputPath,
+		"-vf", fmt.Sprintf("fps=1/%.0f,scale=320:-1", interval),
+		"-vsync", "vfr",
+		"-q:v", "5",
+		"-frames:v", "20",
+		filepath.Join(keyframesDir, "kf_%03d.jpg"),
+	)
+	cmd := exec.Command(s.cfg.App.FFmpegPath, kfArgs...)
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("关键帧提取失败: %w", err)
+	}
+
+	return keyframesDir, nil
+}
+
+// generateSprite 生成进度条预览雪碧图和 WebVTT 索引文件
+// 每 10 秒一帧，拼成一张大图（10 列），同时生成 WebVTT 文件供前端进度条悬停预览
+func (s *PreprocessService) generateSprite(task *model.PreprocessTask) (spritePath string, vttPath string, err error) {
+	spriteDir := filepath.Join(task.OutputDir, "sprite")
+	os.MkdirAll(spriteDir, 0755)
+
+	spritePath = filepath.Join(spriteDir, "sprite.jpg")
+	vttPath = filepath.Join(spriteDir, "sprite.vtt")
+
+	duration := task.SourceDuration
+	if duration <= 0 {
+		duration = 600
+	}
+
+	// 每 10 秒一帧，最多 100 帧（避免雪碧图过大）
+	interval := 10.0
+	if duration > 1000 {
+		interval = math.Ceil(duration / 100)
+	}
+	frameCount := int(math.Ceil(duration / interval))
+	if frameCount < 1 {
+		frameCount = 1
+	}
+	if frameCount > 100 {
+		frameCount = 100
+	}
+
+	// 每帧缩略图尺寸：160x90（16:9）
+	const thumbW, thumbH = 160, 90
+	// 每行 10 帧
+	const cols = 10
+	rows := int(math.Ceil(float64(frameCount) / float64(cols)))
+
+	// 使用 FFmpeg tile 滤镜一次性生成雪碧图
+	// -vf "fps=1/10,scale=160:90,tile=10xN" 高效生成
+	tileFilter := fmt.Sprintf("fps=1/%.0f,scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,tile=%dx%d",
+		interval, thumbW, thumbH, thumbW, thumbH, cols, rows)
+
+	spriteArgs := []string{
+		"-y",
+		"-skip_frame", "nokey",
+	}
+	if httpArgs := BuildFFmpegInputArgs(task.InputPath); len(httpArgs) > 0 {
+		spriteArgs = append(spriteArgs, httpArgs...)
+	}
+	spriteArgs = append(spriteArgs,
+		"-i", task.InputPath,
+		"-vf", tileFilter,
+		"-frames:v", "1",
+		"-q:v", "5",
+		spritePath,
+	)
+
+	cmd := exec.Command(s.cfg.App.FFmpegPath, spriteArgs...)
+	if runErr := cmd.Run(); runErr != nil {
+		return "", "", fmt.Errorf("雪碧图生成失败: %w", runErr)
+	}
+
+	// 生成 WebVTT 文件
+	vttContent := "WEBVTT\n\n"
+	for i := 0; i < frameCount; i++ {
+		startSec := float64(i) * interval
+		endSec := startSec + interval
+		if endSec > duration {
+			endSec = duration
+		}
+
+		col := i % cols
+		row := i / cols
+		xOffset := col * thumbW
+		yOffset := row * thumbH
+
+		// WebVTT 时间格式：HH:MM:SS.mmm
+		vttContent += fmt.Sprintf("%s --> %s\n",
+			formatVTTTime(startSec),
+			formatVTTTime(endSec),
+		)
+		// 使用相对路径，前端通过 /api/preprocess/media/:id/sprite 获取
+		vttContent += fmt.Sprintf("sprite.jpg#xywh=%d,%d,%d,%d\n\n",
+			xOffset, yOffset, thumbW, thumbH)
+	}
+
+	if writeErr := os.WriteFile(vttPath, []byte(vttContent), 0644); writeErr != nil {
+		return "", "", fmt.Errorf("WebVTT 写入失败: %w", writeErr)
+	}
+
+	return spritePath, vttPath, nil
+}
+
+// transcodeVariant 转码单个变体，支持硬件加速失败时回退到软件转码
+func (s *PreprocessService) transcodeVariant(
+	task *model.PreprocessTask,
+	variant ABRProfile,
+	onProgress func(progress float64, speed string),
+) error {
+	variantDir := filepath.Join(task.OutputDir, "hls", variant.Name)
+	os.MkdirAll(variantDir, 0755)
+
+	m3u8Path := filepath.Join(variantDir, "stream.m3u8")
+
+	// 检查是否已有缓存
+	if _, err := os.Stat(m3u8Path); err == nil {
+		onProgress(100, "cached")
+		return nil
+	}
+
+	segmentPath := filepath.Join(variantDir, "seg%04d.ts")
+
+	// HLS 输出参数
+	hlsArgs := []string{
+		"-f", "hls",
+		"-hls_time", "4",
+		"-hls_list_size", "0",
+		"-hls_segment_filename", segmentPath,
+		"-hls_flags", "independent_segments",
+		m3u8Path,
+	}
+
+	audioArgs := []string{"-c:a", "aac", "-b:a", variant.AudioBitrate, "-ac", "2"}
+
+	// V2.1: 尝试硬件加速转码，失败时回退到软件转码；
+	// 如果 InputPath 是 WebDAV HTTP URL 且全部尝试都失败，再降级到"先下载到本地再转码"
+	return s.transcodeVariantWithWebDAVFallback(task, variant, hlsArgs, audioArgs, m3u8Path, segmentPath, onProgress)
+}
+
+// transcodeVariantWithWebDAVFallback 包装 transcodeWithFallback，在 WebDAV 源失败时降级为本地下载再转码。
+//
+// 流程：
+//  1. 第一轮：使用原 InputPath（HTTP URL 直读）执行完整回退链
+//  2. 若失败且 InputPath 是 HTTP 源 → 完整下载到本地缓存
+//  3. 第二轮：用本地路径重跑一次 transcodeWithFallback（此时 BuildFFmpegInputArgs 返回空，走本地文件流）
+//  4. 下载文件在最后通过 defer 清理
+func (s *PreprocessService) transcodeVariantWithWebDAVFallback(
+	task *model.PreprocessTask,
+	variant ABRProfile,
+	hlsArgs, audioArgs []string,
+	m3u8Path, segmentPath string,
+	onProgress func(progress float64, speed string),
+) error {
+	// 第一轮：HTTP 直读尝试
+	err := s.transcodeWithFallback(task, variant, hlsArgs, audioArgs, m3u8Path, segmentPath, onProgress)
+	if err == nil {
+		return nil
+	}
+
+	// 用户取消，不降级
+	if _, cancelled := s.cancelJobs.Load(task.ID); cancelled {
+		return err
+	}
+
+	// 判断是否具备降级条件
+	if !shouldFallbackToLocalDownload(s.cfg, task.InputPath) {
+		return err
+	}
+
+	s.logger.Warnf("WebDAV 源转码失败，尝试降级为本地下载: task=%s, err=%v", task.MediaTitle, err)
+
+	// 下载到本地
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 同时监听取消信号
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(500 * time.Millisecond):
+				if _, cancelled := s.cancelJobs.Load(task.ID); cancelled {
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+
+	localPath, cleanup, dlErr := downloadWebDAVToLocal(ctx, task.InputPath, s.cfg.Cache.CacheDir, task.MediaID, s.logger)
+	if dlErr != nil {
+		return fmt.Errorf("WebDAV 降级下载失败: %w (原转码错误: %v)", dlErr, err)
+	}
+	defer cleanup()
+
+	// 第二轮：用本地路径重跑
+	// 先清理前次失败残留
+	os.Remove(m3u8Path)
+	cleanupDir := filepath.Dir(segmentPath)
+	if entries, err := os.ReadDir(cleanupDir); err == nil {
+		for _, entry := range entries {
+			os.Remove(filepath.Join(cleanupDir, entry.Name()))
+		}
+	}
+	os.MkdirAll(cleanupDir, 0755)
+
+	// 临时替换 InputPath
+	originalInput := task.InputPath
+	task.InputPath = localPath
+	defer func() { task.InputPath = originalInput }()
+
+	s.logger.Infof("WebDAV 降级：使用本地文件重新转码 %s", localPath)
+	return s.transcodeWithFallback(task, variant, hlsArgs, audioArgs, m3u8Path, segmentPath, onProgress)
+}
+
+// transcodeWithFallback 尝试硬件加速转码，失败时自动回退到软件转码。
+//
+// 回退策略：
+//   - NVENC 模式: nvenc → qsv → vaapi → software
+//   - QSV 模式: qsv → vaapi → none(software)
+//   - VAAPI 模式: vaapi → qsv → none(software)
+//   - 其他/none: 仅 software
+//
+// 每次尝试失败后会清理已生成的分片文件（保留目录），确保下次尝试从干净状态开始。
+// 如果任务被用户取消（通过 cancelJobs），会立即返回而不继续尝试。
+//
+// 参数 hlsArgs / audioArgs 为兼容旧签名保留，但内部实际参数由 ffmpeg.BuildHLSArgs 统一生成。
+func (s *PreprocessService) transcodeWithFallback(
+	task *model.PreprocessTask,
+	variant ABRProfile,
+	_hlsArgs, _audioArgs []string,
+	m3u8Path, segmentPath string,
+	onProgress func(progress float64, speed string),
+) error {
+	_ = _hlsArgs
+	_ = _audioArgs
+
+	// V2.1: 为 HTTP 源构造超时/重连前置参数（非 HTTP 返回 nil，不影响本地文件）
+	httpInputArgs := BuildFFmpegInputArgs(task.InputPath)
+
+	// GPU 安全保护：检查是否需要降级为 CPU 编码
+	actualHWAccel := s.hwAccel
+	if s.gpuMonitor != nil && s.hwAccel != "none" {
+		useGPU, accel := s.gpuMonitor.ShouldUseGPU(s.hwAccel)
+		if !useGPU {
+			actualHWAccel = accel // 降级为 "none"（CPU 编码）
+			s.logger.Warnf("GPU 安全保护: 任务 %s 降级为 CPU 编码", task.MediaTitle)
+		}
+	}
+
+	// 根据当前硬件加速模式确定尝试顺序
+	// 修复：Windows 上不存在 QSV/VAAPI 设备，跳过无意义的回退尝试，
+	// 避免每次回退都要启动 FFmpeg、等待超时、清理分片，浪费大量时间
+	var attempts []string
+	switch actualHWAccel {
+	case ffmpeg.HWAccelNVENC:
+		if runtime.GOOS == "windows" {
+			attempts = []string{ffmpeg.HWAccelNVENC, ffmpeg.HWAccelNone}
+		} else {
+			attempts = []string{ffmpeg.HWAccelNVENC, ffmpeg.HWAccelQSV, ffmpeg.HWAccelVAAPI, ffmpeg.HWAccelNone}
+		}
+	case ffmpeg.HWAccelQSV:
+		if runtime.GOOS == "windows" {
+			attempts = []string{ffmpeg.HWAccelQSV, ffmpeg.HWAccelNone}
+		} else {
+			attempts = []string{ffmpeg.HWAccelQSV, ffmpeg.HWAccelVAAPI, ffmpeg.HWAccelNone}
+		}
+	case ffmpeg.HWAccelVAAPI:
+		attempts = []string{ffmpeg.HWAccelVAAPI, ffmpeg.HWAccelQSV, ffmpeg.HWAccelNone}
+	default:
+		attempts = []string{ffmpeg.HWAccelNone}
+	}
+
+	// 提前计算 FFmpeg 线程数（循环内不变，避免重复调用）
+	ffmpegThreads := ffmpeg.CalcThreads(s.cfg)
+
+	// 变体目录即 segmentPath 所在目录（stream.m3u8 也在此）
+	outputDir := filepath.Dir(segmentPath)
+
+	// 尝试不同的转码方式
+	for _, attemptName := range attempts {
+		// 确保输出目录存在（回退清理后需要重建）
+		os.MkdirAll(outputDir, 0755)
+
+		args := ffmpeg.BuildHLSArgs(ffmpeg.BuildOptions{
+			InputPath:  task.InputPath,
+			OutputDir:  outputDir,
+			ExtraInput: httpInputArgs,
+			HWAccel:    attemptName,
+			Profile: ffmpeg.Profile{
+				Width:        variant.Width,
+				Height:       variant.Height,
+				VideoBitrate: variant.VideoBitrate,
+				AudioBitrate: variant.AudioBitrate,
+				MaxBitrate:   variant.MaxBitrate,
+				BufSize:      variant.BufSize,
+			},
+			VAAPIDevice:           s.cfg.App.VAAPIDevice,
+			X264Preset:            "ultrafast",
+			QSVPreset:             "medium",
+			Threads:               ffmpegThreads,
+			QSVAttachOutputFormat: true, // 预处理走全 GPU 管线
+			HLSTime:               4,
+			GOPSize:               48,
+		})
+
+		cmd := exec.Command(s.cfg.App.FFmpegPath, args...)
+
+		// 极低资源模式：设置 FFmpeg 进程为最低优先级（nice 19）
+		// 确保转码进程不会抢占其他系统进程的 CPU 时间
+		setLowPriority(cmd)
+
+		// 解析进度
+		stderrPipe, err := cmd.StderrPipe()
+		if err != nil {
+			s.logger.Warnf("创建 stderr 管道失败: %v", err)
+			continue
+		}
+
+		if err := cmd.Start(); err != nil {
+			s.logger.Warnf("硬件加速 %s 启动失败: %v", attemptName, err)
+			continue // 尝试下一种方式
+		}
+
+		// 存储进程引用用于取消
+		s.runningJobs.Store(task.ID, cmd)
+
+		// 启动进度解析协程，同时收集 stderr 最后几行用于错误诊断
+		type stderrResult struct {
+			lastLines []string
+		}
+		resultCh := make(chan stderrResult, 1)
+		progressDone := make(chan struct{})
+		go func() {
+			defer close(progressDone)
+			defer func() {
+				if r := recover(); r != nil {
+					s.logger.Errorf("进度解析 panic: %v", r)
+				}
+			}()
+			lastLines := s.parseFFmpegProgressWithStderr(stderrPipe, task.SourceDuration, onProgress)
+			resultCh <- stderrResult{lastLines: lastLines}
+		}()
+
+		// 等待命令完成
+		err = cmd.Wait()
+		s.runningJobs.Delete(task.ID)
+		<-progressDone // 等待进度解析完成
+
+		// 收集 stderr 输出
+		var stderrLines []string
+		select {
+		case res := <-resultCh:
+			stderrLines = res.lastLines
+		default:
+		}
+
+		if err != nil {
+			// 检查是否是被取消
+			if _, cancelled := s.cancelJobs.Load(task.ID); cancelled {
+				return fmt.Errorf("任务已取消")
+			}
+
+			// 使用 Warn 级别记录回退信息，确保生产环境可见
+			if len(stderrLines) > 0 {
+				s.logger.Warnf("硬件加速 %s 转码失败: %v\nFFmpeg 输出:\n%s",
+					attemptName, err, strings.Join(stderrLines, "\n"))
+			} else {
+				s.logger.Warnf("硬件加速 %s 转码失败: %v", attemptName, err)
+			}
+
+			// 如果不是最后一次尝试，继续尝试下一种方式
+			if attemptName != attempts[len(attempts)-1] {
+				// 只清理已生成的文件，保留目录结构（避免后续尝试因目录不存在而失败）
+				os.Remove(m3u8Path)
+				cleanupDir := filepath.Dir(segmentPath)
+				if entries, err := os.ReadDir(cleanupDir); err == nil {
+					for _, entry := range entries {
+						os.Remove(filepath.Join(cleanupDir, entry.Name()))
+					}
+				}
+				s.logger.Warnf("回退: %s 失败，尝试下一种方式", attemptName)
+				continue
+			}
+
+			// 所有尝试都失败了
+			return fmt.Errorf("所有转码方式均失败，最后错误: %w", err)
+		}
+
+		// 成功完成转码
+		s.logger.Infof("使用 %s 成功转码变体 %s", attemptName, variant.Name)
+		return nil
+	}
+
+	return fmt.Errorf("所有转码方式均失败")
+}
+
+// parseFFmpegProgressWithStderr 解析 FFmpeg stderr 进度输出，同时收集最后 N 行 stderr 用于错误诊断。
+// 底层解析委托给 ffmpeg.ParseProgress，这里仅负责转接回调。
+// 返回值：stderr 最后 10 行输出（用于转码失败时的错误诊断）
+func (s *PreprocessService) parseFFmpegProgressWithStderr(stderr io.ReadCloser, totalDuration float64, onProgress func(float64, string)) []string {
+	return ffmpeg.ParseProgress(stderr, totalDuration, ffmpeg.ProgressOptions{
+		MinDeltaPct:        0.5,
+		CollectStderrLines: 10,
+	}, func(ev ffmpeg.ProgressEvent) {
+		if onProgress != nil {
+			onProgress(ev.Progress, ev.Speed)
+		}
+	})
+}
+
+// generateMasterPlaylist 生成 ABR 主播放列表
+func (s *PreprocessService) generateMasterPlaylist(task *model.PreprocessTask, variants []string) (string, error) {
+	hlsDir := filepath.Join(task.OutputDir, "hls")
+	masterPath := filepath.Join(hlsDir, "master.m3u8")
+
+	var audioTracks []AudioTrackInfo
+	if media, err := s.mediaRepo.FindByID(task.MediaID); err == nil {
+		audioTracks = probeAudioTracks(media, s.cfg.App.FFprobePath, s.logger)
+	}
+	hasMultiAudio := len(audioTracks) >= 2
+
+	var content strings.Builder
+	content.WriteString("#EXTM3U\n")
+	content.WriteString("#EXT-X-VERSION:3\n")
+	if hasMultiAudio {
+		content.WriteString(buildAudioMediaEntries(task.MediaID, audioTracks))
+	}
+	content.WriteString("\n")
+
+	for _, name := range variants {
+		// 查找对应的 ABR profile
+		var profile *ABRProfile
+		for _, p := range abrProfiles {
+			if p.Name == name {
+				profile = &p
+				break
+			}
+		}
+		if profile == nil {
+			continue
+		}
+
+		bandwidth := parseBitrate(profile.VideoBitrate) + parseBitrate(profile.AudioBitrate)
+		streamInf := fmt.Sprintf(
+			"#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=%dx%d,NAME=\"%s\"",
+			bandwidth, profile.Width, profile.Height, profile.Name,
+		)
+		if hasMultiAudio {
+			streamInf += `,AUDIO="audio"`
+		}
+		content.WriteString(streamInf + "\n")
+		content.WriteString(fmt.Sprintf("%s/stream.m3u8\n\n", profile.Name))
+	}
+
+	if err := os.WriteFile(masterPath, []byte(content.String()), 0644); err != nil {
+		return "", fmt.Errorf("写入主播放列表失败: %w", err)
+	}
+
+	return masterPath, nil
+}
+
+// determineVariants 根据源视频高度确定需要生成的变体
+//
+// 预处理策略：仅生成源分辨率最近的单档（避免伪高清），不再生成多档 ABR 阶梯。
+// 理由：
+//   - 本平台主力场景为家庭/私人 NAS 内网播放，弱网适配收益低
+//   - 多档预处理会显著放大磁盘占用和转码耗时（N 倍代价）
+//   - 如需弱网自适应，可在播放时走实时转码路径（GetMasterPlaylistFiltered）
+func (s *PreprocessService) determineVariants(sourceHeight int) []ABRProfile {
+	// 找出"源档"：≤源高度里最高的那一档（避免伪高清）
+	//   例：源 1080p → 源档=1080p；源 1440p → 源档=2K；源 720p → 源档=720p
+	var source *ABRProfile
+	for i := range abrProfiles {
+		p := abrProfiles[i]
+		if p.Height <= sourceHeight {
+			if source == nil || p.Height > source.Height {
+				source = &p
+			}
+		}
+	}
+	if source == nil {
+		// 源比最低档还低（< 360p 的稀有情况），退回最低档
+		fallback := abrProfiles[0]
+		s.logger.Infof("ABR 变体决策: 源=%dp（过低），使用最低档=%s", sourceHeight, fallback.Name)
+		return []ABRProfile{fallback}
+	}
+
+	s.logger.Infof("ABR 变体决策: 源=%dp, 单档模式, 生成档位=%s", sourceHeight, source.Name)
+	return []ABRProfile{*source}
+}
+
+// ==================== 辅助方法 ====================
+
+func (s *PreprocessService) isCancelled(taskID string) bool {
+	_, cancelled := s.cancelJobs.Load(taskID)
+	return cancelled
+}
+
+func (s *PreprocessService) isPaused(taskID string) bool {
+	_, paused := s.pausedJobs.Load(taskID)
+	return paused
+}
+
+// updatePhase 更新任务阶段和进度
+// P1 优化：数据库写入和 WebSocket 广播分别节流，减少 80% 的数据库写操作
+func (s *PreprocessService) updatePhase(task *model.PreprocessTask, phase string, progress float64, message string) {
+	task.Phase = phase
+	task.Progress = progress
+	task.Message = message
+
+	now := time.Now()
+
+	// P1 优化：数据库写入节流 —— 每 5 秒最多写一次（阶段变化时强制写入）
+	forceDBWrite := false
+	if lastPhase, ok := s.lastBroadcast.Load(task.ID + "_phase"); !ok || lastPhase.(string) != phase {
+		forceDBWrite = true // 阶段变化时强制写入
+		s.lastBroadcast.Store(task.ID+"_phase", phase)
+	}
+
+	if forceDBWrite {
+		s.repo.Update(task)
+		s.lastDBWrite.Store(task.ID, now)
+	} else if lastDB, ok := s.lastDBWrite.Load(task.ID); !ok || now.Sub(lastDB.(time.Time)) >= 5*time.Second {
+		s.repo.Update(task)
+		s.lastDBWrite.Store(task.ID, now)
+	}
+
+	// WebSocket 广播节流：每 2 秒最多广播一次
+	if lastTime, ok := s.lastBroadcast.Load(task.ID); ok {
+		if t, isTime := lastTime.(time.Time); isTime && now.Sub(t) < 2*time.Second {
+			return // 跳过本次广播
+		}
+	}
+	s.lastBroadcast.Store(task.ID, now)
+	s.broadcastEvent(EventPreprocessProgress, task)
+}
+
+func (s *PreprocessService) failTask(task *model.PreprocessTask, errMsg string) {
+	task.Status = "failed"
+	task.Error = errMsg
+	task.Message = errMsg
+	s.repo.Update(task)
+
+	s.broadcastEvent(EventPreprocessFailed, task)
+	s.logger.Warnf("预处理失败: %s - %s", task.MediaTitle, errMsg)
+}
+
+func (s *PreprocessService) broadcastEvent(eventType string, task *model.PreprocessTask) {
+	if s.wsHub == nil {
+		return
+	}
+	s.wsHub.BroadcastEvent(eventType, PreprocessProgressData{
+		TaskID:     task.ID,
+		MediaID:    task.MediaID,
+		MediaTitle: task.MediaTitle,
+		Status:     task.Status,
+		Phase:      task.Phase,
+		Progress:   task.Progress,
+		Message:    task.Message,
+		Error:      task.Error,
+	})
+}
+
+// retryLoop 自动重试失败的任务
+func (s *PreprocessService) retryLoop() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		tasks, err := s.repo.FindNeedRetry(3)
+		if err != nil {
+			continue
+		}
+		for _, task := range tasks {
+			s.logger.Infof("自动重试预处理任务: %s (%s)", task.MediaTitle, task.ID)
+			task.Status = "queued"
+			task.Error = ""
+			task.Message = fmt.Sprintf("自动重试（第 %d 次）...", task.Retries+1)
+			task.Retries++
+			s.repo.Update(&task)
+
+			select {
+			case s.jobQueue <- task.ID:
+			default:
+			}
+		}
+	}
+}
+
+// recoverPendingTasks 恢复服务重启前未完成的任务
+func (s *PreprocessService) recoverPendingTasks() {
+	time.Sleep(5 * time.Second) // 等待服务完全启动
+
+	tasks, err := s.repo.ListPending(50)
+	if err != nil {
+		return
+	}
+
+	// 将之前 running 的任务重置为 queued
+	running, _ := s.repo.ListRunning()
+	for _, task := range running {
+		task.Status = "queued"
+		task.Message = "服务重启后恢复..."
+		s.repo.Update(&task)
+		tasks = append(tasks, task)
+	}
+
+	for _, task := range tasks {
+		select {
+		case s.jobQueue <- task.ID:
+		default:
+		}
+	}
+
+	if len(tasks) > 0 {
+		s.logger.Infof("恢复 %d 个未完成的预处理任务", len(tasks))
+	}
+}
+
+// GetSystemLoad 获取系统负载信息（用于动态调整并发）
+func (s *PreprocessService) GetSystemLoad() map[string]interface{} {
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+
+	// 获取 CPU 使用率
+	cpuPercent := 0.0
+	if percents, err := cpu.Percent(0, false); err == nil && len(percents) > 0 {
+		cpuPercent = percents[0]
+	}
+
+	result := map[string]interface{}{
+		"cpu_count":      runtime.NumCPU(),
+		"cpu_percent":    cpuPercent,
+		"goroutines":     runtime.NumGoroutine(),
+		"mem_alloc_mb":   float64(memStats.Alloc) / 1024 / 1024,
+		"mem_sys_mb":     float64(memStats.Sys) / 1024 / 1024,
+		"active_workers": atomic.LoadInt32(&s.workerCount),
+		"max_workers":    atomic.LoadInt32(&s.maxWorkers),
+		"cur_workers":    atomic.LoadInt32(&s.curWorkers),
+		"queue_size":     len(s.jobQueue),
+		"hw_accel":       s.hwAccel,
+	}
+
+	// 添加 GPU 实时指标
+	if s.gpuMonitor != nil {
+		gpuStatus := s.gpuMonitor.GetSafetyStatus()
+		result["gpu_status"] = gpuStatus
+	}
+
+	return result
+}

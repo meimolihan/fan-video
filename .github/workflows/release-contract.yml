@@ -1,0 +1,114 @@
+name: Release Contract
+
+on:
+  push:
+    branches: [main, refactor/server-lite-v1]
+  pull_request:
+    paths:
+      - 'scripts/release.sh'
+      - 'scripts/release-advanced.sh'
+      - 'scripts/dockerhub-auth-preflight.mjs'
+      - 'scripts/generate-release-notes.mjs'
+      - 'scripts/fpk/**'
+      - '.gitignore'
+      - '.github/workflows/release-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate unified release contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate shell and Node syntax
+        run: |
+          bash -n scripts/release.sh
+          bash -n scripts/release-advanced.sh
+          node --check scripts/dockerhub-auth-preflight.mjs
+          node --check scripts/generate-release-notes.mjs
+          node --check scripts/fpk/build-fpk.mjs
+
+      - name: Validate release announcement generator
+        run: |
+          node scripts/generate-release-notes.mjs \
+            --version 9.9.9 \
+            --no-android \
+            --no-fpk \
+            --output /tmp/nowen-video-release-notes.md
+          grep -Fq 'Nowen Video v9.9.9 发布公告' /tmp/nowen-video-release-notes.md
+          grep -Fq '发布完整性' /tmp/nowen-video-release-notes.md
+
+      - name: Validate fnOS JSON templates
+        run: |
+          python3 -m json.tool scripts/fpk/template/config/privilege >/dev/null
+          python3 -m json.tool scripts/fpk/template/config/resource >/dev/null
+          python3 -m json.tool scripts/fpk/template/app/ui/config >/dev/null
+
+      - name: Validate fnOS release invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d scripts/fpk/template/app
+          test -d scripts/fpk/template/cmd
+          test -d scripts/fpk/template/wizard
+          test -f scripts/fpk/template/manifest
+          test -f scripts/fpk/template/config/privilege
+          test -f scripts/fpk/template/config/resource
+          for hook in \
+            install_init install_callback \
+            upgrade_init upgrade_callback \
+            uninstall_init uninstall_callback \
+            config_init config_callback; do
+            test -f "scripts/fpk/template/cmd/${hook}"
+            grep -Fq 'exit 0' "scripts/fpk/template/cmd/${hook}"
+          done
+          grep -Fq 'version               = {{VERSION}}' scripts/fpk/template/manifest
+          grep -Fq 'image: {{DOCKERHUB_REPO}}:{{IMAGE_TAG}}' scripts/fpk/template/app/docker/docker-compose.yaml
+          grep -Fq 'nowen-video/data:/data' scripts/fpk/template/app/docker/docker-compose.yaml
+          grep -Fq 'nowen-video/cache:/cache' scripts/fpk/template/app/docker/docker-compose.yaml
+          grep -Fq 'nowen-video/media:/media' scripts/fpk/template/app/docker/docker-compose.yaml
+          grep -Fq "FNPACK_TOOL_VERSION = process.env.FNPACK_TOOL_VERSION || '1.2.3'" scripts/fpk/build-fpk.mjs
+          grep -Fq "FNPACK_OFFICIAL_BASE_URL = 'https://static2.fnnas.com/fnpack'" scripts/fpk/build-fpk.mjs
+          grep -Fq "execFileSync(fnpack, ['build', '--directory', work]" scripts/fpk/build-fpk.mjs
+
+      - name: Smoke build fnOS package with official fnpack
+        env:
+          FPK_VERSION: 9.9.9
+          FPK_IMAGE_TAG: v9.9.9
+          FPK_OUT_DIR: /tmp/nowen-video-fpk-smoke
+          DOCKERHUB_REPO: cropflre/nowen-video
+        run: |
+          set -euo pipefail
+          node scripts/fpk/build-fpk.mjs
+          test -s /tmp/nowen-video-fpk-smoke/nowen-video-9.9.9.fpk
+          test -s /tmp/nowen-video-fpk-smoke/SHA256SUMS-fpk.txt
+          cd /tmp/nowen-video-fpk-smoke
+          sha256sum -c SHA256SUMS-fpk.txt
+
+      - name: Validate strict release gating invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'dockerhub-auth-preflight.mjs' scripts/release.sh
+          grep -Fq 'Git remote tag push 权限: PASS (dry-run)' scripts/release.sh
+          grep -Fq 'check_required_workflow "server-ci.yml" "Server CI"' scripts/release.sh
+          grep -Fq 'check_required_workflow "release-contract.yml" "Release Contract"' scripts/release.sh
+          grep -Fq 'Android production signing Secrets: 4/4' scripts/release.sh
+          grep -Fq '任一渠道/门禁失败，整次发版均判定失败' scripts/release.sh
+          grep -Fq 'Nowen Video v${VERSION} 全渠道发版成功' scripts/release.sh
+          grep -Fq 'auth.docker.io/token' scripts/dockerhub-auth-preflight.mjs
+          grep -Fq "actions.includes('push')" scripts/dockerhub-auth-preflight.mjs
+          grep -Fq 'if length == 0 then empty' scripts/release-advanced.sh
+          grep -Fq '当前提交未触发，SKIP（后续正式候选门禁仍会执行）' scripts/release-advanced.sh
+          grep -Fq 'run_id" =~ ^[0-9]+$' scripts/release-advanced.sh
+          grep -Fq 'FPK_IMAGE_TAG="v${VERSION}"' scripts/release.sh
+          grep -Fq 'nowen-video-android-${VERSION}.apk' scripts/release.sh
+          grep -Fq 'nowen-video-${VERSION}.fpk' scripts/release.sh
+          grep -Fq 'dist-fpk/' .gitignore
+          grep -Fq 'dist-release/' .gitignore
