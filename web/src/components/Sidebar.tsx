@@ -57,9 +57,9 @@ export default function Sidebar({ collapsed = false, onCollapsedChange }: Sideba
     <>
       <aside id="main-sidebar" className="nv-rail" aria-label="主导航" data-collapsed={collapsed ? 'true' : 'false'}>
         <div className="nv-rail-brand-row">
-          <div className="nv-rail-brand" aria-hidden="true">N</div>
+          <div className="nv-rail-brand" aria-hidden="true">F</div>
           <div className="nv-rail-brand-copy">
-            <strong>NOWEN VIDEO</strong>
+            <strong>Fan-Video</strong>
             <span>MEDIA LIBRARY</span>
           </div>
           {onCollapsedChange && (

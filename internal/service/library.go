@@ -237,6 +237,14 @@ func (s *LibraryService) clearScanPhaseState(libraryID string) {
 	}
 }
 
+// CleanupResidualData 清理历史残留数据（失效媒体、孤儿关联记录、空剧集/合集壳、缓存产物）
+func (s *LibraryService) CleanupResidualData() *ResidualCleanupResult {
+	if s.scanner == nil {
+		return &ResidualCleanupResult{HasError: true, ErrorMsg: "扫描服务未初始化"}
+	}
+	return s.scanner.CleanupResidualData()
+}
+
 // Scan 触发扫描（异步）- 包含文件扫描和元数据刮削
 func (s *LibraryService) Scan(id string) error {
 	lib, err := s.repo.FindByID(id)

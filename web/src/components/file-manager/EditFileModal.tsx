@@ -135,7 +135,7 @@ export default function EditFileModal({ media, onClose, onSuccess }: EditFileMod
             </label>
 
             <div className="sm:col-span-2 rounded-[var(--nv-radius-control)] border border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)] px-3 py-2.5 text-xs leading-5 text-[var(--nv-text-tertiary)]">
-              此处只更新 Nowen Video 中保存的媒体元数据，不修改磁盘上的视频文件内容。
+              此处只更新 Fan-Video 中保存的媒体元数据，不修改磁盘上的视频文件内容。
             </div>
           </div>
         </ModalBody>

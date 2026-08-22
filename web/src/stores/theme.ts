@@ -24,14 +24,14 @@ export const builtinThemes: ThemeConfig[] = [
     id: 'neon-dark',
     name: '深色',
     author: 'nowen',
-    description: 'Nowen Video 默认深色外观',
+    description: 'Fan-Video 默认深色外观',
     vars: {},
   },
   {
     id: 'pure-light',
     name: '浅色',
     author: 'nowen',
-    description: 'Nowen Video 浅色外观',
+    description: 'Fan-Video 浅色外观',
     vars: {},
   },
 ]

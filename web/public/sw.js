@@ -209,10 +209,10 @@ self.addEventListener('push', (event) => {
       actions: data.actions || [],
       vibrate: [200, 100, 200],
     }
-    event.waitUntil(self.registration.showNotification(data.title || 'Nowen Video', options))
+    event.waitUntil(self.registration.showNotification(data.title || 'Fan-Video', options))
   } catch {
     event.waitUntil(
-      self.registration.showNotification('Nowen Video', {
+      self.registration.showNotification('Fan-Video', {
         body: event.data.text(),
         icon: '/assets/icon-192.png',
       }),

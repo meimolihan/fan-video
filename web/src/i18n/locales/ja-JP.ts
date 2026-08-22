@@ -49,7 +49,7 @@ const jaJP: Record<string, string> = {
   'auth.username': 'ユーザー名',
   'auth.password': 'パスワード',
   'auth.loginTitle': 'おかえりなさい',
-  'auth.loginSubtitle': 'Nowen Video にログイン',
+  'auth.loginSubtitle': 'Fan-Video にログイン',
   'auth.registerTitle': 'アカウント作成',
   'auth.noAccount': 'アカウントをお持ちでない方',
   'auth.hasAccount': 'すでにアカウントをお持ちの方',
@@ -213,6 +213,8 @@ const jaJP: Record<string, string> = {
   'auth.defaultAccount': 'デフォルトアカウント: admin / admin123',
   'auth.firstUserHint': '🚀 初回利用：最初に登録したアカウントが管理者になります',
   'auth.slogan': 'ディープスペースシネマ · フューチャーハブ',
+  'auth.showPassword': 'パスワードを表示',
+  'auth.hidePassword': 'パスワードを非表示',
 
   // ==================== ナビゲーション（V3） ====================
   'nav.pulse': 'Pulse データセンター',

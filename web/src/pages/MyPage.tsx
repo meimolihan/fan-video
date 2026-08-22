@@ -36,7 +36,7 @@ export default function MyPage() {
         : '未知'
 
   const profileDescription = manifest?.profile === 'lite'
-    ? 'Nowen Video 正式服务端，面向 NAS 与家庭影音场景优化，扩展能力按配置启用。'
+    ? 'Fan-Video 正式服务端，面向 NAS 与家庭影音场景优化，扩展能力按配置启用。'
     : manifest?.profile === 'full'
       ? '旧版兼容运行模式，仅用于迁移、回滚或历史能力验证。'
       : '查看服务端能力和管理设置。'
@@ -49,7 +49,7 @@ export default function MyPage() {
         </div>
         <div className="min-w-0">
           <p className="text-[11px] text-[var(--nv-text-tertiary)]">我的影音空间</p>
-          <h1 className="truncate text-lg font-semibold tracking-[-0.015em] text-[var(--nv-text-primary)]">{user?.nickname || user?.username || 'Nowen 用户'}</h1>
+          <h1 className="truncate text-lg font-semibold tracking-[-0.015em] text-[var(--nv-text-primary)]">{user?.nickname || user?.username || 'Fan-Video 用户'}</h1>
         </div>
       </section>
 

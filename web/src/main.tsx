@@ -29,6 +29,7 @@ import './styles/ui-home-mobile-immersive-chrome.css'
 import './styles/ui-topbar-responsive-stability.css'
 import './styles/ui-home-poster-density-final.css'
 import './styles/neo-aurora-responsive.css'
+import './styles/auth-cinema.css'
 
 const SW_DEV_RELOAD_KEY = 'nowen-sw-dev-cleanup-reload'
 const SW_UPDATE_RELOAD_KEY = 'nowen-sw-production-update-reload'

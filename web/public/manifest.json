@@ -1,6 +1,6 @@
 {
-  "name": "Nowen Video",
-  "short_name": "Nowen",
+  "name": "Fan-Video",
+  "short_name": "FanVideo",
   "description": "开源影音媒体管理与流媒体播放系统",
   "start_url": "/",
   "display": "standalone",

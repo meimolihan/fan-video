@@ -49,7 +49,7 @@ const zhCN: Record<string, string> = {
   'auth.username': '用户名',
   'auth.password': '密码',
   'auth.loginTitle': '欢迎回来',
-  'auth.loginSubtitle': '登录到 Nowen Video',
+  'auth.loginSubtitle': '登录到 Fan-Video',
   'auth.registerTitle': '创建账号',
   'auth.noAccount': '没有账号？',
   'auth.hasAccount': '已有账号？',
@@ -213,6 +213,8 @@ const zhCN: Record<string, string> = {
   'auth.defaultAccount': '首次使用默认账号: admin / admin123',
   'auth.firstUserHint': '🚀 首次使用，注册的第一个账号将成为管理员',
   'auth.slogan': '深空影音 · 未来枢纽',
+  'auth.showPassword': '显示密码',
+  'auth.hidePassword': '隐藏密码',
 
   // ==================== V3: 导航 ====================
   'nav.pulse': 'Pulse 数据中心',

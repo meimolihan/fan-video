@@ -172,7 +172,9 @@
 }
 
 @media (max-width: 479px) {
-  button:not(.inline-link),
+  /* 开关（role="switch"）是固定尺寸的滑块控件，
+     强制 44px 最小尺寸会把 24px 高的轨道拉伸变形，旋钮错位 */
+  button:not(.inline-link):not([role='switch']),
   a[role='button'],
   .touch-target {
     min-height: 44px;

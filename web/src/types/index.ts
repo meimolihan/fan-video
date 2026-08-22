@@ -2155,6 +2155,7 @@ export interface SystemLogStats {
 export interface DuplicateItem {
   id: string
   title: string
+  media_type: string
   file_path: string
   file_size: number
   resolution: string

@@ -35,7 +35,7 @@ const SAFE_INLINE_STYLE = {
 
 function resolveTitle(pathname: string) {
   if (pathname === '/') return '首页'
-  return TITLE_BY_PREFIX.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? 'Nowen Video'
+  return TITLE_BY_PREFIX.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? 'Fan-Video'
 }
 
 function readInitialSidebarCollapsed() {

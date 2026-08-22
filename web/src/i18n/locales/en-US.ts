@@ -49,7 +49,7 @@ const enUS: Record<string, string> = {
   'auth.username': 'Username',
   'auth.password': 'Password',
   'auth.loginTitle': 'Welcome Back',
-  'auth.loginSubtitle': 'Sign in to Nowen Video',
+  'auth.loginSubtitle': 'Sign in to Fan-Video',
   'auth.registerTitle': 'Create Account',
   'auth.noAccount': "Don't have an account?",
   'auth.hasAccount': 'Already have an account?',
@@ -213,6 +213,8 @@ const enUS: Record<string, string> = {
   'auth.defaultAccount': 'Default account: admin / admin123',
   'auth.firstUserHint': '🚀 First time? The first registered account becomes admin',
   'auth.slogan': 'Deep Space Cinema · Future Hub',
+  'auth.showPassword': 'Show password',
+  'auth.hidePassword': 'Hide password',
 
   // ==================== Navigation (V3) ====================
   'nav.pulse': 'Pulse Center',

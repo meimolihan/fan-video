@@ -145,5 +145,19 @@ func NewLiteServices(repos *repository.Repositories, cfg *config.Config, logger 
 		logger.Infof("媒体库扫描完成 library_id=%s（未启动预处理 worker）", libraryID)
 	})
 
+	// 启动后台清理一次历史残留数据（联动清理机制上线前删除的视频留下的
+	// 观看历史/收藏/弹幕/空剧集壳/缓存刮削图等），完成后通知前端刷新
+	go func() {
+		if result := scanner.CleanupResidualData(); result != nil &&
+			(result.RemovedMedia > 0 || result.RemovedRelatedRows > 0 ||
+				result.RemovedSeries > 0 || result.RemovedCollections > 0 || result.RemovedCacheDirs > 0) {
+			wsHub.BroadcastEvent(EventLibraryUpdated, &LibraryChangedData{
+				Action: "media_removed",
+				Message: fmt.Sprintf("已清理残留数据: 媒体 %d, 关联记录 %d, 空剧集 %d",
+					result.RemovedMedia, result.RemovedRelatedRows, result.RemovedSeries),
+			})
+		}
+	}()
+
 	return svcs
 }

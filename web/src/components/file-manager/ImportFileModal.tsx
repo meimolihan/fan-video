@@ -130,7 +130,7 @@ export default function ImportFileModal({ libraries, onClose, onSuccess }: Impor
             </div>
 
             <div className="rounded-[var(--nv-radius-control)] border border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)] px-3 py-2.5 text-xs leading-5 text-[var(--nv-text-tertiary)]">
-              文件不会上传到浏览器；这里填写的是 Nowen Video 服务端能够读取的文件路径。
+              文件不会上传到浏览器；这里填写的是 Fan-Video 服务端能够读取的文件路径。
             </div>
           </div>
         </ModalBody>

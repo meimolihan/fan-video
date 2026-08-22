@@ -43,6 +43,26 @@ func (h *AdminHandler) BatchScan(c *gin.Context) {
 	})
 }
 
+// CleanupResidualData 清理历史残留数据：
+// 失效媒体记录（磁盘文件已删除）、孤儿关联数据（观看历史/收藏/弹幕等）、
+// 空剧集/空合集壳、缓存目录中的刮削图与预处理产物
+func (h *AdminHandler) CleanupResidualData(c *gin.Context) {
+	result := h.libraryService.CleanupResidualData()
+	if result.HasError {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "清理残留数据失败: " + result.ErrorMsg,
+			"data":  result,
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("清理完成: 媒体 %d, 关联数据 %d, 空剧集 %d, 空合集 %d, 缓存目录 %d",
+			result.RemovedMedia, result.RemovedRelatedRows, result.RemovedSeries,
+			result.RemovedCollections, result.RemovedCacheDirs),
+		"data": result,
+	})
+}
+
 // BatchScrapeRequest 批量刮削请求
 type BatchScrapeRequest struct {
 	MediaIDs []string `json:"media_ids" binding:"required"`

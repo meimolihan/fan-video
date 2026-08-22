@@ -22,6 +22,7 @@ import type { Library, SystemInfo, SystemSettings, User } from '@/types'
 import type { ScanPhaseData, ScanProgressData, ScrapeProgressData, TranscodeProgressData } from '@/hooks/useWebSocket'
 import LibraryManager from '@/components/LibraryManager'
 import DashboardTab from '@/components/admin/DashboardTab'
+import DuplicatesPanel from '@/components/admin/DuplicatesPanel'
 import StorageTab from '@/components/admin/StorageTab'
 import UsersTab from '@/components/admin/UsersTab'
 import { AdminPageHeader, AdminStatus } from '@/components/admin/AdminPrimitives'
@@ -524,6 +525,7 @@ export default function AdminPage() {
               scrapeProgress={scrapeProgress}
               scanPhase={scanPhase}
             />
+            <DuplicatesPanel libraries={libraries} />
           </div>
         )}
 

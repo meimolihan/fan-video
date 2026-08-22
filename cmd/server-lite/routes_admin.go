@@ -71,6 +71,7 @@ func registerAdminAPI(r *gin.Engine, cfg *config.Config, handlers *handler.Handl
 	admin.PUT("/storage/s3", handlers.Storage.UpdateS3Config)
 	admin.POST("/storage/s3/test", handlers.Storage.TestS3Connection)
 	admin.POST("/system/clear-data", handlers.Admin.ClearAllData)
+	admin.POST("/system/cleanup-residuals", handlers.Admin.CleanupResidualData)
 
 	admin.GET("/stats/:userId", handlers.Stats.GetUserStatsAdmin)
 

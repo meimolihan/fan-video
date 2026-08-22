@@ -26,7 +26,7 @@ import { adminApi } from '@/api'
 import { AdminPanel, AdminStatus } from '@/components/admin/AdminPrimitives'
 import { Button, Input, Modal, ModalBody, ModalFooter, ModalHeader, Tag } from '@/components/design-system'
 
-const webAppVersion = import.meta.env.VITE_APP_VERSION || '0.1.0'
+const webAppVersion = import.meta.env.VITE_APP_VERSION || '1.0.0'
 
 interface DashboardTabProps {
   systemInfo: SystemInfo | null

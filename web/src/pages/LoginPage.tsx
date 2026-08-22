@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, LogIn, UserPlus } from 'lucide-react'
+import { Eye, EyeOff, Loader2, LogIn, UserPlus } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api'
 import { useTranslation } from '@/i18n'
@@ -21,6 +21,7 @@ export default function LoginPage() {
   const [initialized, setInitialized] = useState(true)
   const [inviteRequired, setInviteRequired] = useState(false)
   const [registrationOpen, setRegistrationOpen] = useState(true)
+  const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
     authApi.getStatus().then((res) => {
@@ -73,7 +74,7 @@ export default function LoginPage() {
 
   return (
     <AuthShell
-      title="NOWEN"
+      title="Fan-Video"
       eyebrow={isRegister ? t('auth.registerTitle') : t('auth.loginTitle')}
       description={t('auth.slogan')}
       footer={footer}
@@ -106,16 +107,28 @@ export default function LoginPage() {
           <label htmlFor="auth-password" className="block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--nv-text-secondary)]">
             {t('auth.password')}
           </label>
-          <Input
-            id="auth-password"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder={t('auth.passwordPlaceholder')}
-            required
-            minLength={6}
-            autoComplete={isRegister ? 'new-password' : 'current-password'}
-          />
+          <div className="relative">
+            <Input
+              id="auth-password"
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder={t('auth.passwordPlaceholder')}
+              required
+              minLength={6}
+              autoComplete={isRegister ? 'new-password' : 'current-password'}
+              style={{ paddingRight: '42px' }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
+              aria-pressed={showPassword}
+              className="absolute right-1 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-[var(--nv-text-tertiary)] transition-colors hover:bg-[var(--nv-fill-hover)] hover:text-[var(--nv-text-secondary)] focus:outline-none focus-visible:shadow-[var(--nv-shadow-focus)]"
+            >
+              {showPassword ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
+            </button>
+          </div>
         </div>
 
         {isRegister && initialized && inviteRequired && (

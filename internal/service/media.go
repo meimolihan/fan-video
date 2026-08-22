@@ -568,9 +568,15 @@ func (s *MediaService) DeleteHistory(userID, mediaID string) error {
 	return s.historyRepo.DeleteHistory(userID, mediaID)
 }
 
-// DeleteMedia 删除单个媒体记录
+// DeleteMedia 删除单个媒体记录（含关联数据与缓存产物联动清理）
 func (s *MediaService) DeleteMedia(id string) error {
-	return s.mediaRepo.DeleteByID(id)
+	media, err := s.mediaRepo.FindByID(id)
+	if err != nil || media == nil {
+		// 记录不存在时直接清理可能残留的关联数据，保证幂等
+		s.mediaRepo.DeleteRelatedDataByMediaIDs([]string{id})
+		return s.mediaRepo.DeleteByID(id)
+	}
+	return PurgeMediaCompletely(s.mediaRepo, s.cfg.Cache.CacheDir, s.logger, media, "手动删除")
 }
 
 // UpdateMedia 更新媒体元数据

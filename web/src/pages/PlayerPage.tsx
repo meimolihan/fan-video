@@ -59,7 +59,7 @@ export default function PlayerPage() {
   useEffect(() => () => { usePlayerStore.getState().setPlaying(false) }, [])
 
   // 播放时在浏览器标签页/地址栏显示当前时间，方便移动端全屏观看时查看
-  useTitleClock(media?.title ? `${media.title} · Nowen Video` : 'Nowen Video', isPlaying)
+  useTitleClock(media?.title ? `${media.title} · Fan-Video` : 'Fan-Video', isPlaying)
 
   useEffect(() => {
     if (!highlightMode || !clipEnd) return

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { KeyRound, Loader2, LogOut } from 'lucide-react'
+import { Eye, EyeOff, KeyRound, Loader2, LogOut } from 'lucide-react'
 import { authApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import AuthShell from '@/components/auth/AuthShell'
@@ -118,21 +118,34 @@ function PasswordField({
   autoFocus?: boolean
   minLength?: number
 }) {
+  const [visible, setVisible] = useState(false)
   return (
     <div className="space-y-1.5">
       <label htmlFor={id} className="block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--nv-text-secondary)]">{label}</label>
-      <Input
-        id={id}
-        name={id}
-        type="password"
-        autoComplete={autoComplete}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        required
-        minLength={minLength}
-        maxLength={64}
-        autoFocus={autoFocus}
-      />
+      <div className="relative">
+        <Input
+          id={id}
+          name={id}
+          type={visible ? 'text' : 'password'}
+          autoComplete={autoComplete}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          required
+          minLength={minLength}
+          maxLength={64}
+          autoFocus={autoFocus}
+          style={{ paddingRight: '42px' }}
+        />
+        <button
+          type="button"
+          onClick={() => setVisible((v) => !v)}
+          aria-label={visible ? '隐藏密码' : '显示密码'}
+          aria-pressed={visible}
+          className="absolute right-1 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-[var(--nv-text-tertiary)] transition-colors hover:bg-[var(--nv-fill-hover)] hover:text-[var(--nv-text-secondary)] focus:outline-none focus-visible:shadow-[var(--nv-shadow-focus)]"
+        >
+          {visible ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
+        </button>
+      </div>
     </div>
   )
 }

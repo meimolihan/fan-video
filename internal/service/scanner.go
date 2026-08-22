@@ -1067,12 +1067,11 @@ func (s *ScannerService) scanMovieLibrary(library *model.Library) (int, error) {
 				continue
 			}
 			if m, findErr := s.mediaRepo.FindByFilePath(stalePath); findErr == nil && m != nil {
-				if delErr := s.mediaRepo.DeleteByID(m.ID); delErr != nil {
-					s.logger.Warnf("删除失效媒体记录失败: %s, 错误: %v", stalePath, delErr)
+				if delErr := PurgeMediaCompletely(s.mediaRepo, s.cfg.Cache.CacheDir, s.logger, m, "扫描清理"); delErr != nil {
 					continue
 				}
 				staleRemoved++
-				s.logger.Infof("清理失效媒体记录（磁盘已不存在）: %s", stalePath)
+				s.logger.Infof("清理失效媒体记录及其关联数据（磁盘已不存在）: %s", stalePath)
 			}
 		}
 	}
@@ -1461,17 +1460,17 @@ func (s *ScannerService) scanMixedLibrary(library *model.Library) (int, error) {
 		for dbPath := range dbPathSet {
 			if _, statErr := s.statLibraryPath(dbPath); os.IsNotExist(statErr) {
 				if m, findErr := s.mediaRepo.FindByFilePath(dbPath); findErr == nil && m != nil {
-					if delErr := s.mediaRepo.DeleteByID(m.ID); delErr != nil {
-						s.logger.Warnf("删除失效媒体记录失败: %s, 错误: %v", dbPath, delErr)
+					if delErr := PurgeMediaCompletely(s.mediaRepo, s.cfg.Cache.CacheDir, s.logger, m, "扫描清理"); delErr != nil {
 						continue
 					}
 					staleRemoved++
-					s.logger.Infof("清理失效媒体记录（磁盘已不存在）: %s", dbPath)
+					s.logger.Infof("清理失效媒体记录及其关联数据（磁盘已不存在）: %s", dbPath)
 				}
 			}
 		}
 		if staleRemoved > 0 {
 			s.logger.Infof("混合库 %s 清理失效媒体记录: %d 条", library.Name, staleRemoved)
+			PurgeEmptySeriesInLibrary(s.seriesRepo, s.mediaRepo, s.cfg.Cache.CacheDir, s.logger, library.ID)
 		}
 	}
 
@@ -1907,17 +1906,17 @@ func (s *ScannerService) scanTVShowLibrary(library *model.Library) (int, error) 
 		for dbPath := range dbPathSet {
 			if _, statErr := s.statLibraryPath(dbPath); os.IsNotExist(statErr) {
 				if m, findErr := s.mediaRepo.FindByFilePath(dbPath); findErr == nil && m != nil {
-					if delErr := s.mediaRepo.DeleteByID(m.ID); delErr != nil {
-						s.logger.Warnf("删除失效媒体记录失败: %s, 错误: %v", dbPath, delErr)
+					if delErr := PurgeMediaCompletely(s.mediaRepo, s.cfg.Cache.CacheDir, s.logger, m, "扫描清理"); delErr != nil {
 						continue
 					}
 					staleRemoved++
-					s.logger.Infof("清理失效媒体记录（磁盘已不存在）: %s", dbPath)
+					s.logger.Infof("清理失效媒体记录及其关联数据（磁盘已不存在）: %s", dbPath)
 				}
 			}
 		}
 		if staleRemoved > 0 {
 			s.logger.Infof("剧集库 %s 清理失效媒体记录: %d 条", library.Name, staleRemoved)
+			PurgeEmptySeriesInLibrary(s.seriesRepo, s.mediaRepo, s.cfg.Cache.CacheDir, s.logger, library.ID)
 		}
 	}
 
@@ -3727,6 +3726,7 @@ type DuplicateGroup struct {
 type DuplicateItem struct {
 	ID         string  `json:"id"`
 	Title      string  `json:"title"`
+	MediaType  string  `json:"media_type"`
 	FilePath   string  `json:"file_path"`
 	FileSize   int64   `json:"file_size"`
 	Resolution string  `json:"resolution"`
@@ -3738,59 +3738,42 @@ type DuplicateItem struct {
 }
 
 // DetectDuplicates 检测媒体库中的重复媒体
-// 检测策略：
-// 1. 基于标题+年份的精确匹配
-// 2. 基于文件大小+时长的近似匹配
-// 3. 基于 TMDb ID 的精确匹配
+// 检测策略（按优先级）：
+// 1. TMDb ID 精确匹配（仅电影）
+// 2. 标题匹配 + 年份容错：一方被刮削过（有年份）、另一方仍是文件名标题
+//    （无年份）时同样合并，避免列表出现两张相同海报（仅电影）
+// 3. 归一化路径完全一致 —— 同一物理文件以不同大小写/分隔符拼写被重复索引
+//    （全部媒体类型；剧集列表查询不过滤副本，因此不影响剧集页展示）
+// 4. 归一化文件名 + 文件大小一致 —— 同一文件换目录后的重复索引（全部媒体类型）
 func (s *ScannerService) DetectDuplicates(libraryID string) ([]DuplicateGroup, error) {
-	var media []model.Media
-	query := s.mediaRepo.DB().Where("media_type = ? AND deleted_at IS NULL", "movie")
-	if libraryID != "" {
-		query = query.Where("library_id = ?", libraryID)
-	}
-	if err := query.Find(&media).Error; err != nil {
-		return nil, fmt.Errorf("查询媒体列表失败: %w", err)
-	}
-
-	// 按标题+年份分组
-	titleYearGroups := make(map[string][]model.Media)
-	// 按 TMDb ID 分组
-	tmdbGroups := make(map[int][]model.Media)
-
-	for _, m := range media {
-		// 标题+年份分组
-		normalizedTitle := strings.ToLower(strings.TrimSpace(m.Title))
-		key := fmt.Sprintf("%s|%d", normalizedTitle, m.Year)
-		titleYearGroups[key] = append(titleYearGroups[key], m)
-
-		// TMDb ID 分组
-		if m.TMDbID > 0 {
-			tmdbGroups[m.TMDbID] = append(tmdbGroups[m.TMDbID], m)
+	loadMedia := func(onlyMovies bool) ([]model.Media, error) {
+		var rows []model.Media
+		query := s.mediaRepo.DB().Where("deleted_at IS NULL")
+		if onlyMovies {
+			query = query.Where("media_type = ?", "movie")
 		}
+		if libraryID != "" {
+			query = query.Where("library_id = ?", libraryID)
+		}
+		if err := query.Find(&rows).Error; err != nil {
+			return nil, fmt.Errorf("查询媒体列表失败: %w", err)
+		}
+		return rows, nil
 	}
 
-	// 合并检测结果（去重）
-	seen := make(map[string]bool) // 已处理的媒体 ID
+	movies, err := loadMedia(true)
+	if err != nil {
+		return nil, err
+	}
+	allMedia, err := loadMedia(false)
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]bool) // 已归组的媒体 ID
 	var groups []DuplicateGroup
 
-	// 优先使用 TMDb ID 匹配（最精确）
-	for tmdbID, mediaList := range tmdbGroups {
-		if len(mediaList) < 2 {
-			continue
-		}
-		group := s.buildDuplicateGroup(mediaList, fmt.Sprintf("tmdb:%d", tmdbID))
-		groups = append(groups, group)
-		for _, m := range mediaList {
-			seen[m.ID] = true
-		}
-	}
-
-	// 标题+年份匹配（排除已被 TMDb ID 匹配的）
-	for key, mediaList := range titleYearGroups {
-		if len(mediaList) < 2 {
-			continue
-		}
-		// 过滤已处理的
+	addGroup := func(mediaList []model.Media, key string) {
 		var filtered []model.Media
 		for _, m := range mediaList {
 			if !seen[m.ID] {
@@ -3798,10 +3781,53 @@ func (s *ScannerService) DetectDuplicates(libraryID string) ([]DuplicateGroup, e
 			}
 		}
 		if len(filtered) < 2 {
+			return
+		}
+		groups = append(groups, s.buildDuplicateGroup(filtered, key))
+		for _, m := range filtered {
+			seen[m.ID] = true
+		}
+	}
+
+	// === 1) TMDb ID 匹配（最精确，仅电影）===
+	tmdbGroups := make(map[int][]model.Media)
+	for _, m := range movies {
+		if m.TMDbID > 0 {
+			tmdbGroups[m.TMDbID] = append(tmdbGroups[m.TMDbID], m)
+		}
+	}
+	for _, tmdbID := range sortedIntKeys(tmdbGroups) {
+		addGroup(tmdbGroups[tmdbID], fmt.Sprintf("tmdb:%d", tmdbID))
+	}
+
+	// === 2) 标题匹配（年份容错，仅电影）===
+	for _, cluster := range collectTitleDuplicateClusters(movies) {
+		addGroup(cluster.members, cluster.key)
+	}
+
+	// === 3) 归一化路径一致（全部类型）===
+	pathGroups := make(map[string][]model.Media)
+	for _, m := range allMedia {
+		if key := normalizeMediaPathKey(m.FilePath); key != "" {
+			pathGroups[key] = append(pathGroups[key], m)
+		}
+	}
+	for _, key := range sortedStringKeys(pathGroups) {
+		addGroup(pathGroups[key], "path:"+key)
+	}
+
+	// === 4) 归一化文件名 + 文件大小一致（全部类型）===
+	fileGroups := make(map[string][]model.Media)
+	for _, m := range allMedia {
+		base := normalizeDupFileName(m.FilePath)
+		if base == "" || m.FileSize <= 0 {
 			continue
 		}
-		group := s.buildDuplicateGroup(filtered, key)
-		groups = append(groups, group)
+		key := base + "|" + strconv.FormatInt(m.FileSize, 10)
+		fileGroups[key] = append(fileGroups[key], m)
+	}
+	for _, key := range sortedStringKeys(fileGroups) {
+		addGroup(fileGroups[key], "file:"+key)
 	}
 
 	// 按重复数量降序排列
@@ -3811,6 +3837,123 @@ func (s *ScannerService) DetectDuplicates(libraryID string) ([]DuplicateGroup, e
 
 	s.logger.Infof("重复媒体检测完成: 发现 %d 组重复", len(groups))
 	return groups, nil
+}
+
+// titleDuplicateCluster 标题聚类产生的重复组候选
+type titleDuplicateCluster struct {
+	key     string
+	members []model.Media
+}
+
+// collectTitleDuplicateClusters 按标题聚类电影并容忍年份缺失：
+// - 双方年份都已知且不同 -> 不合并（避免错误合并重拍版）
+// - 只有一个已知年份 -> 该年份组与所有未知年份行合并
+// - 无已知年份 / 多个已知年份 -> 未知年份行单独成组，各年份组独立成组
+func collectTitleDuplicateClusters(movies []model.Media) []titleDuplicateCluster {
+	titleGroups := make(map[string][]model.Media)
+	for _, m := range movies {
+		norm := normalizeDupTitle(m.Title)
+		if norm == "" {
+			continue
+		}
+		titleGroups[norm] = append(titleGroups[norm], m)
+	}
+
+	var clusters []titleDuplicateCluster
+	for _, title := range sortedStringKeys(titleGroups) {
+		rows := titleGroups[title]
+		if len(rows) < 2 {
+			continue
+		}
+
+		byYear := make(map[int][]model.Media)
+		var unknown []model.Media
+		for _, m := range rows {
+			if m.Year > 0 {
+				byYear[m.Year] = append(byYear[m.Year], m)
+			} else {
+				unknown = append(unknown, m)
+			}
+		}
+		years := sortedIntKeys(byYear)
+
+		switch len(years) {
+		case 0:
+			if len(unknown) >= 2 {
+				clusters = append(clusters, titleDuplicateCluster{
+					key:     "titlenoyear:" + title,
+					members: unknown,
+				})
+			}
+		case 1:
+			members := append(append([]model.Media{}, byYear[years[0]]...), unknown...)
+			if len(members) >= 2 {
+				clusters = append(clusters, titleDuplicateCluster{
+					key:     fmt.Sprintf("title:%s|%d", title, years[0]),
+					members: members,
+				})
+			}
+		default:
+			if len(unknown) >= 2 {
+				clusters = append(clusters, titleDuplicateCluster{
+					key:     "titlenoyear:" + title,
+					members: unknown,
+				})
+			}
+			for _, year := range years {
+				if len(byYear[year]) >= 2 {
+					clusters = append(clusters, titleDuplicateCluster{
+						key:     fmt.Sprintf("title:%s|%d", title, year),
+						members: byYear[year],
+					})
+				}
+			}
+		}
+	}
+	return clusters
+}
+
+// normalizeDupTitle 归一化用于重复检测的标题：小写、压缩连续空白。
+func normalizeDupTitle(title string) string {
+	return strings.Join(strings.Fields(strings.ToLower(title)), " ")
+}
+
+// normalizeMediaPathKey 归一化文件路径用于重复检测：
+// 统一分隔符、小写、合并连续斜杠并去掉尾随斜杠，
+// 使同一物理文件的不同路径拼写映射到同一个键。
+func normalizeMediaPathKey(p string) string {
+	key := strings.ToLower(strings.TrimSpace(filepath.ToSlash(p)))
+	for strings.Contains(key, "//") {
+		key = strings.ReplaceAll(key, "//", "/")
+	}
+	return strings.TrimSuffix(key, "/")
+}
+
+// normalizeDupFileName 取归一化的去扩展名文件名用于重复检测。
+func normalizeDupFileName(filePath string) string {
+	base := filepath.Base(filePath)
+	base = strings.TrimSuffix(base, filepath.Ext(base))
+	return strings.Join(strings.Fields(strings.ToLower(base)), " ")
+}
+
+// sortedIntKeys 返回 map[int] 切片的有序键，保证检测结果稳定。
+func sortedIntKeys[V any](m map[int]V) []int {
+	keys := make([]int, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Ints(keys)
+	return keys
+}
+
+// sortedStringKeys 返回 map[string] 切片的有序键，保证检测结果稳定。
+func sortedStringKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // buildDuplicateGroup 构建重复组信息
@@ -3842,6 +3985,7 @@ func (s *ScannerService) buildDuplicateGroup(mediaList []model.Media, groupKey s
 		item := DuplicateItem{
 			ID:         m.ID,
 			Title:      m.Title,
+			MediaType:  m.MediaType,
 			FilePath:   m.FilePath,
 			FileSize:   m.FileSize,
 			Resolution: m.Resolution,
@@ -3870,7 +4014,20 @@ func (s *ScannerService) buildDuplicateGroup(mediaList []model.Media, groupKey s
 }
 
 // MarkDuplicates 标记重复媒体（在扫描完成后调用）
+// 每次执行前先清空范围内的旧标记，保证结果可修正、可幂等：
+// 之前被错误折叠、或因元数据更新而不再重复的记录会被恢复显示。
 func (s *ScannerService) MarkDuplicates(libraryID string) (int, error) {
+	resetScope := s.mediaRepo.DB().Model(&model.Media{}).Where("deleted_at IS NULL")
+	if libraryID != "" {
+		resetScope = resetScope.Where("library_id = ?", libraryID)
+	}
+	if err := resetScope.UpdateColumns(map[string]interface{}{
+		"duplicate_group": "",
+		"duplicate_of":    "",
+	}).Error; err != nil {
+		return 0, fmt.Errorf("重置重复标记失败: %w", err)
+	}
+
 	groups, err := s.DetectDuplicates(libraryID)
 	if err != nil {
 		return 0, err

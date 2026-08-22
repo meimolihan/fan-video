@@ -308,10 +308,10 @@ func (fw *FileWatcherService) handleEvent(event fsnotify.Event) {
 	// 避免等防抖 3 秒扫描时 UI 仍显示已不存在的文件（幽灵记录）。
 	if isVideo && event.Op&(fsnotify.Remove|fsnotify.Rename) != 0 {
 		if m, err := fw.mediaRepo.FindByFilePath(event.Name); err == nil && m != nil {
-			if delErr := fw.mediaRepo.DeleteByID(m.ID); delErr != nil {
+			if delErr := PurgeMediaCompletely(fw.mediaRepo, fw.cfg.Cache.CacheDir, fw.logger, m, "文件监听"); delErr != nil {
 				fw.logger.Warnf("即时删除失效媒体记录失败: %s, 错误: %v", event.Name, delErr)
 			} else {
-				fw.logger.Infof("即时删除失效媒体记录（文件已移除/重命名）: %s", event.Name)
+				fw.logger.Infof("即时删除失效媒体记录及其关联数据（文件已移除/重命名）: %s", event.Name)
 				// 通知前端立即刷新
 				if fw.wsHub != nil {
 					fw.wsHub.BroadcastEvent(EventLibraryUpdated, &LibraryChangedData{

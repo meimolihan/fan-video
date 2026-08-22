@@ -795,3 +795,54 @@ func (r *MediaRepo) ListNeedScrape(libraryID string, skipRecentFailedDays int) (
 	err := query.Order("created_at DESC").Find(&media).Error
 	return media, err
 }
+
+// DeleteRelatedDataByMediaIDs 批量删除引用指定媒体 ID 的所有关联数据。
+// 在媒体记录被删除（扫描发现磁盘文件已移除 / 手动删除 / 文件监听即时删除）时调用，
+// 同步清除观看历史、收藏、弹幕、评论、播放统计、章节、精彩片段等衍生信息，
+// 避免"视频文件已删但刮削/播放痕迹仍在"的残留问题。
+// 可选模块的表在 Lite 档可能未创建（弹幕/转码/预处理等），会自动跳过。
+func (r *MediaRepo) DeleteRelatedDataByMediaIDs(mediaIDs []string) (int64, error) {
+	if len(mediaIDs) == 0 {
+		return 0, nil
+	}
+
+	// 必清理的核心表（Lite 档保证存在）
+	coreTables := []any{
+		&model.WatchHistory{},
+		&model.Favorite{},
+		&model.PlaylistItem{},
+		&model.Bookmark{},
+		&model.Comment{},
+		&model.ContentRating{},
+		&model.PlaybackStats{},
+		&model.MediaPerson{},
+		&model.VideoChapter{},
+		&model.VideoHighlight{},
+		&model.AIAnalysisTask{},
+		&model.CoverCandidate{},
+	}
+	// 可选模块表（不存在时跳过）
+	optionalTables := []any{
+		&model.DanmakuComment{},
+		&model.TranscodeTask{},
+		&model.PreprocessTask{},
+		&model.SubtitlePreprocessTask{},
+	}
+
+	var total int64
+	var firstErr error
+	for _, table := range append(coreTables, optionalTables...) {
+		if !r.db.Migrator().HasTable(table) {
+			continue
+		}
+		result := r.db.Unscoped().Where("media_id IN ?", mediaIDs).Delete(table)
+		if result.Error != nil {
+			if firstErr == nil {
+				firstErr = result.Error
+			}
+			continue
+		}
+		total += result.RowsAffected
+	}
+	return total, firstErr
+}
