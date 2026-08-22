@@ -1,6 +1,8 @@
 package service
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -8,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/fan-video/fan-video/internal/config"
 	"github.com/fan-video/fan-video/internal/model"
@@ -432,7 +435,7 @@ func (s *NFOService) FindLocalImagesForMedia(mediaFilePath string) (poster, back
 	// 仅对本地文件生效（不支持 webdav:// 等远程路径）
 	// 注意：此阶段在阶段3之后执行，确保优先使用通用封面
 	if poster == "" && !IsWebDAVPath(mediaFilePath) {
-		if firstFrame, err := s.extractFirstFrame(mediaFilePath); err == nil && firstFrame != "" {
+		if firstFrame, err := s.EnsureFirstFramePoster(mediaFilePath); err == nil && firstFrame != "" {
 			poster = firstFrame
 			s.logger.Debugf("本地海报未找到，提取视频第一帧: %s -> %s", mediaFilePath, poster)
 		}
@@ -471,62 +474,108 @@ func (s *NFOService) FindNFOForMedia(mediaFilePath string) string {
 
 // ==================== 视频第一帧提取 ====================
 
-// extractFirstFrame 提取视频文件的第一帧作为海报图
-// 返回保存后的图片路径，失败返回空字符串
-func (s *NFOService) extractFirstFrame(videoPath string) (string, error) {
-	// 跳过 webdav 等远程路径
+// firstFrameMu 串行化首帧提取，避免并发请求对同一视频重复 spawn ffmpeg
+var firstFrameMu sync.Mutex
+
+// EnsureFirstFramePoster 提取视频第一帧作为封面海报（带持久化缓存）。
+//
+// 缓存键 = 文件绝对路径 + 大小 + 修改时间：
+//   - 不同目录下的同名视频互不影响（修复旧实现仅按文件名缓存导致的串图问题）；
+//   - 视频文件被替换后自动重新提取（旧实现永远返回过期缓存）；
+//
+// 缓存持久化在 cfg.Cache.CacheDir/covers/frames 下（旧实现放在易失的系统临时目录，
+// 重启后全部丢失且数据库仍指向失效路径）。提取失败时自动从「第1秒处」回退到
+// 「真正的第一帧」，兼容时长不足 1 秒的视频。
+func (s *NFOService) EnsureFirstFramePoster(videoPath string) (string, error) {
+	// 跳过 webdav 等远程路径与 strm 文本文件
 	if IsWebDAVPath(videoPath) {
 		return "", fmt.Errorf("不支持远程路径")
 	}
-
-	// 检查 ffmpeg 是否可用
-	ffmpegPath := "ffmpeg" // 使用系统 PATH 中的 ffmpeg
-	if s.cfg != nil && s.cfg.App.FFmpegPath != "" {
-		ffmpegPath = s.cfg.App.FFmpegPath
+	if strings.EqualFold(filepath.Ext(videoPath), ".strm") {
+		return "", fmt.Errorf("strm 文件不支持提取首帧")
 	}
 
-	// 检查视频文件是否存在
-	if _, err := os.Stat(videoPath); err != nil {
+	info, err := os.Stat(videoPath)
+	if err != nil {
 		return "", fmt.Errorf("视频文件不存在: %w", err)
 	}
 
-	// 创建缓存目录
-	cacheDir := filepath.Join(os.TempDir(), "fan-video", "frames")
+	cacheDir := s.firstFrameCacheDir()
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		return "", fmt.Errorf("创建缓存目录失败: %w", err)
 	}
 
-	// 生成输出文件名：使用视频文件名（去扩展名）
-	baseName := strings.TrimSuffix(filepath.Base(videoPath), filepath.Ext(videoPath))
-	outputPath := filepath.Join(cacheDir, baseName+"_poster.jpg")
+	key := firstFrameCacheKey(videoPath, info)
+	outputPath := filepath.Join(cacheDir, key+".jpg")
 
-	// 如果已经提取过，直接返回缓存
-	if _, err := os.Stat(outputPath); err == nil {
+	// 命中有效缓存直接返回
+	if st, statErr := os.Stat(outputPath); statErr == nil && st.Size() > 0 {
 		return outputPath, nil
 	}
 
-	// FFmpeg 命令：提取第一帧
-	// -ss 放在 -i 前面实现快速 seek
-	// -vframes 1 只提取一帧
-	// -q:v 2 高质量 JPEG
-	args := []string{
-		"-ss", "00:00:01", // 从第1秒开始（避免黑帧）
-		"-i", videoPath,
-		"-vframes", "1",
-		"-q:v", "2",
-		"-y", // 覆盖输出文件
-		outputPath,
+	firstFrameMu.Lock()
+	defer firstFrameMu.Unlock()
+
+	// 双重检查：并发场景下可能已被其他请求生成
+	if st, statErr := os.Stat(outputPath); statErr == nil && st.Size() > 0 {
+		return outputPath, nil
 	}
 
-	cmd := exec.Command(ffmpegPath, args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		s.logger.Debugf("提取视频第一帧失败: %s - %v\n%s", videoPath, err, string(output))
-		return "", fmt.Errorf("ffmpeg 执行失败: %w", err)
+	tmpPath := filepath.Join(cacheDir, "."+key+".tmp.jpg")
+	defer os.Remove(tmpPath)
+
+	// FFmpeg 提取单帧：-ss 放在 -i 前 = input seeking（快）；
+	// 先试第1秒处（避开片头黑帧），输出无效再回退到真正的第一帧
+	for _, seekPos := range []string{"00:00:01", "0"} {
+		args := []string{
+			"-y",
+			"-ss", seekPos,
+			"-i", videoPath,
+			"-frames:v", "1",
+			"-q:v", "2",
+			tmpPath,
+		}
+		cmd := exec.Command(s.ffmpegPath(), args...)
+		output, cmdErr := cmd.CombinedOutput()
+
+		if st, statErr := os.Stat(tmpPath); statErr == nil && st.Size() > 0 {
+			if renameErr := os.Rename(tmpPath, outputPath); renameErr != nil {
+				return "", fmt.Errorf("保存封面失败: %w", renameErr)
+			}
+			s.logger.Debugf("提取视频首帧成功(seek=%s): %s -> %s", seekPos, videoPath, outputPath)
+			return outputPath, nil
+		}
+		s.logger.Debugf("提取视频首帧失败(seek=%s): %s - %v\n%s", seekPos, videoPath, cmdErr, string(output))
 	}
 
-	s.logger.Infof("视频第一帧提取成功: %s", outputPath)
-	return outputPath, nil
+	return "", fmt.Errorf("无法从视频提取首帧: %s", videoPath)
+}
+
+// firstFrameCacheDir 首帧封面缓存目录：优先使用应用缓存目录（随容器卷持久化）
+func (s *NFOService) firstFrameCacheDir() string {
+	if s.cfg != nil && strings.TrimSpace(s.cfg.Cache.CacheDir) != "" {
+		return filepath.Join(s.cfg.Cache.CacheDir, "covers", "frames")
+	}
+	return filepath.Join(os.TempDir(), "fan-video", "frames")
+}
+
+// firstFrameCacheKey 生成防碰撞、随文件内容变化自动失效的缓存键
+func firstFrameCacheKey(videoPath string, info os.FileInfo) string {
+	absPath := videoPath
+	if abs, err := filepath.Abs(videoPath); err == nil {
+		absPath = abs
+	}
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%d",
+		absPath, info.Size(), info.ModTime().UnixNano())))
+	return hex.EncodeToString(h[:])[:20]
+}
+
+// ffmpegPath 解析可用的 ffmpeg 可执行文件路径
+func (s *NFOService) ffmpegPath() string {
+	if s.cfg != nil && s.cfg.App.FFmpegPath != "" {
+		return s.cfg.App.FFmpegPath
+	}
+	return "ffmpeg"
 }
 
 // ==================== 应用 NFO 数据 ====================

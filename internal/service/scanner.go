@@ -991,6 +991,22 @@ func (s *ScannerService) scanMovieLibrary(library *model.Library) (int, error) {
 	if len(updateList) > 0 {
 		for _, pm := range updateList {
 			s.scanExternalSubtitles(pm.media)
+
+			// 回填缺失的海报/背景图：老库或此前匹配失败的记录，
+			// 在重新扫描时补跑本地图片匹配（含视频首帧兜底）
+			if pm.media.PosterPath == "" || pm.media.BackdropPath == "" {
+				if poster, backdrop := s.nfoService.FindLocalImagesForMedia(pm.path); poster != "" || backdrop != "" {
+					if poster != "" && pm.media.PosterPath == "" {
+						pm.media.PosterPath = poster
+						s.logger.Debugf("回填本地海报: %s -> %s", pm.path, poster)
+					}
+					if backdrop != "" && pm.media.BackdropPath == "" {
+						pm.media.BackdropPath = backdrop
+						s.logger.Debugf("回填本地背景图: %s -> %s", pm.path, backdrop)
+					}
+				}
+			}
+
 			if err := s.mediaRepo.Update(pm.media); err != nil {
 				s.logger.Warnf("更新媒体失败: %s, 错误: %v", pm.path, err)
 				continue
@@ -1392,6 +1408,23 @@ func (s *ScannerService) scanMixedLibrary(library *model.Library) (int, error) {
 			}
 			s.probeMediaInfo(media)
 			s.scanExternalSubtitles(media)
+
+			// 识别本地 NFO 元数据与海报封面图片（与电影库逻辑一致，
+			// 本地海报未命中时自动提取视频第一帧兜底）
+			if nfoPath := s.nfoService.FindNFOForMedia(path); nfoPath != "" {
+				if err := s.nfoService.ParseMovieNFO(nfoPath, media); err != nil {
+					s.logger.Debugf("解析NFO失败: %s, 错误: %v", nfoPath, err)
+				}
+			}
+			if poster, backdrop := s.nfoService.FindLocalImagesForMedia(path); poster != "" || backdrop != "" {
+				if poster != "" {
+					media.PosterPath = poster
+				}
+				if backdrop != "" {
+					media.BackdropPath = backdrop
+				}
+			}
+
 			if err := s.mediaRepo.Create(media); err != nil {
 				s.logger.Warnf("保存媒体失败: %s, 错误: %v", path, err)
 				return nil
@@ -1436,6 +1469,23 @@ func (s *ScannerService) scanMixedLibrary(library *model.Library) (int, error) {
 		}
 		s.probeMediaInfo(media)
 		s.scanExternalSubtitles(media)
+
+		// 识别本地 NFO 元数据与海报封面图片（与电影库逻辑一致，
+		// 本地海报未命中时自动提取视频第一帧兜底）
+		if nfoPath := s.nfoService.FindNFOForMedia(filePath); nfoPath != "" {
+			if err := s.nfoService.ParseMovieNFO(nfoPath, media); err != nil {
+				s.logger.Debugf("解析NFO失败: %s, 错误: %v", nfoPath, err)
+			}
+		}
+		if poster, backdrop := s.nfoService.FindLocalImagesForMedia(filePath); poster != "" || backdrop != "" {
+			if poster != "" {
+				media.PosterPath = poster
+			}
+			if backdrop != "" {
+				media.BackdropPath = backdrop
+			}
+		}
+
 		if err := s.mediaRepo.Create(media); err != nil {
 			s.logger.Warnf("保存媒体失败: %s, 错误: %v", filePath, err)
 			continue

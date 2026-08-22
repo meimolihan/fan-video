@@ -105,6 +105,7 @@ func NewLiteServices(repos *repository.Repositories, cfg *config.Config, logger 
 	streamService := NewStreamService(repos.Media, repos.Series, mediaExecution, cfg, logger)
 	streamService.SetSettingRepo(repos.SystemSetting)
 	streamService.SetVFSManager(vfsManager)
+	streamService.SetNFOService(nfoService)
 
 	svcs := &Services{
 		User:                NewUserService(repos.User, repos.AuditLog, cfg, logger),

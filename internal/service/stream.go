@@ -95,6 +95,7 @@ type StreamService struct {
 	cfg         *config.Config
 	logger      *zap.SugaredLogger
 	vfsMgr      *VFSManager // V2.1: VFS 管理器，支持 webdav:// 路径
+	nfoService  *NFOService // 本地海报匹配 + 视频首帧兜底（可选注入）
 }
 
 func NewStreamService(
@@ -116,6 +117,11 @@ func NewStreamService(
 // SetVFSManager 设置 VFS 管理器（V2.1）
 func (s *StreamService) SetVFSManager(vfsMgr *VFSManager) {
 	s.vfsMgr = vfsMgr
+}
+
+// SetNFOService 注入 NFO 服务（用于本地海报缺失时的视频首帧兜底）
+func (s *StreamService) SetNFOService(nfo *NFOService) {
+	s.nfoService = nfo
 }
 
 // statMediaFile 返回文件判断：同时支持本地路径和 webdav:// 路径
@@ -482,7 +488,45 @@ func (s *StreamService) GetPosterPath(mediaID string) (string, error) {
 		}
 	}
 
+	// Fallback：本地海报完全缺失时，提取视频第一帧作为封面（带持久化缓存）。
+	// 同时回写数据库，让列表页的 poster_path 直接生效，后续请求零开销。
+	if generated, ok := s.generateFirstFrameCover(media); ok {
+		return generated, nil
+	}
+
 	return "", nil
+}
+
+// generateFirstFrameCover 为本地视频生成首帧封面并持久化到数据库。
+// 仅处理本地普通视频文件（STRM / webdav 等远程路径跳过）。
+func (s *StreamService) generateFirstFrameCover(media *model.Media) (string, bool) {
+	if s.nfoService == nil || media == nil {
+		return "", false
+	}
+	// STRM 远程流没有可提取的本地视频
+	if media.StreamURL != "" || IsWebDAVPath(media.FilePath) {
+		return "", false
+	}
+	ext := strings.ToLower(filepath.Ext(media.FilePath))
+	if ext == "" || ext == ".strm" {
+		return "", false
+	}
+	generated, err := s.nfoService.EnsureFirstFramePoster(media.FilePath)
+	if err != nil {
+		s.logger.Debugf("首帧封面兜底失败 media=%s: %v", media.ID, err)
+		return "", false
+	}
+	if media.PosterPath != generated {
+		if updateErr := s.mediaRepo.UpdateFields(media.ID, map[string]interface{}{
+			"poster_path": generated,
+		}); updateErr != nil {
+			s.logger.Warnf("首帧封面回写失败 media=%s: %v", media.ID, updateErr)
+		} else {
+			media.PosterPath = generated
+		}
+	}
+	s.logger.Debugf("使用视频首帧作为封面 media=%s: %s", media.ID, generated)
+	return generated, true
 }
 
 // ==================== STRM 远程流代理 ====================
