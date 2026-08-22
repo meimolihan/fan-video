@@ -8,13 +8,12 @@ import { Button, Tag } from '@/components/design-system'
 interface CollectionDetailHeroProps {
   data: CollectionWithMedia
   movieCount: number
-  fileCount: number
   onBack: () => void
 }
 
 const COLLAPSED_GENRE_COUNT = 8
 
-export default function CollectionDetailHero({ data, movieCount, fileCount, onBack }: CollectionDetailHeroProps) {
+export default function CollectionDetailHero({ data, movieCount, onBack }: CollectionDetailHeroProps) {
   const { collection, media } = data
   const [genresExpanded, setGenresExpanded] = useState(false)
 
@@ -81,7 +80,6 @@ export default function CollectionDetailHero({ data, movieCount, fileCount, onBa
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <Tag tone="brand">系列合集</Tag>
               <Tag>{movieCount} 部电影</Tag>
-              {fileCount > movieCount && <Tag>{fileCount} 个文件</Tag>}
               {stats.yearRange && <Tag><Calendar size={11} />{stats.yearRange}</Tag>}
               {stats.averageRating > 0 && <Tag tone="rating"><Star size={11} fill="currentColor" />均分 {stats.averageRating.toFixed(1)}</Tag>}
             </div>

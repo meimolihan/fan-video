@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/fan-video/fan-video/internal/model"
 	"github.com/fan-video/fan-video/internal/repository"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 

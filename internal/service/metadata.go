@@ -217,7 +217,8 @@ func (s *MetadataService) ScrapeSeries(seriesID string) error {
 
 	poster, backdrop := "", ""
 	if s.nfoService != nil {
-		poster, backdrop = s.nfoService.FindLocalImages(series.FolderPath)
+		// Deep 版本额外覆盖封面子目录（如 剧名/xxx_封面/01.jpg）
+		poster, backdrop = s.nfoService.FindLocalImagesDeep(series.FolderPath)
 	}
 
 	now := time.Now()

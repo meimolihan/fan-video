@@ -2102,10 +2102,7 @@ export interface CollectionMediaItem {
   overview: string
   genres: string
   is_current: boolean
-  /** TMDB ID（用于前端折叠同片多版本） */
   tmdb_id?: number
-  /** 同一部电影的不同版本共享此 ID */
-  version_group?: string
   /** 版本标识："4K"/"Director's Cut" 等 */
   version_tag?: string
   /** 文件大小（字节） */
@@ -2149,29 +2146,5 @@ export interface SystemLogStats {
   today_errors: number
   type_counts: Record<string, number>
   level_counts: Record<string, number>
-}
-
-// ==================== 重复媒体检测 ====================
-export interface DuplicateItem {
-  id: string
-  title: string
-  media_type: string
-  file_path: string
-  file_size: number
-  resolution: string
-  video_codec: string
-  audio_codec: string
-  duration: number
-  library_id: string
-  is_primary: boolean
-}
-
-export interface DuplicateGroup {
-  group_key: string
-  title: string
-  year: number
-  media_count: number
-  media: DuplicateItem[]
-  suggestion: string
 }
 

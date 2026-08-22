@@ -183,11 +183,17 @@ export default function PlayerPage() {
 
   const effectiveBrowserMode = runtimeMode || (mode === 'webcodecs' ? null : mode)
   const browserPlaybackResetKey = `${id}:${isPreprocessed ? playInfo.preprocessed_url : 'planned'}:${webcodecsFailed ? 'wc-fallback' : 'initial'}:${highlightMode ? `${clipStart}-${clipEnd}` : 'full'}`
+  // 个人影视库：分集标题已是真实文件名，直接展示「剧名 - 文件名」，
+  // 不再叠加 SxxEyy 编号前缀（编号仅在后端无标题时兜底显示）
   const playerTitle = media.media_type === 'episode'
-    ? `${media.series?.title || media.title} S${String(media.season_num).padStart(2, '0')}E${String(media.episode_num).padStart(2, '0')}${media.episode_title ? ` - ${media.episode_title}` : ''}`
+    ? (media.episode_title
+        ? `${media.series?.title || ''}${media.series?.title && media.episode_title ? ' - ' : ''}${media.episode_title}`
+        : `${media.series?.title || media.title} S${String(media.season_num).padStart(2, '0')}E${String(media.episode_num).padStart(2, '0')}`)
     : media.title
   const nextTitle = nextEpisode
-    ? `S${String(nextEpisode.season_num).padStart(2, '0')}E${String(nextEpisode.episode_num).padStart(2, '0')}${nextEpisode.episode_title ? ` ${nextEpisode.episode_title}` : ''}`
+    ? (nextEpisode.episode_title
+        ? `${nextEpisode.series?.title ? `${nextEpisode.series.title} - ` : ''}${nextEpisode.episode_title}`
+        : `S${String(nextEpisode.season_num).padStart(2, '0')}E${String(nextEpisode.episode_num).padStart(2, '0')}`)
     : undefined
 
   const handleBack = () => {

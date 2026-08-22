@@ -96,7 +96,6 @@ func registerCoreAPI(
 	api.GET("/media/continue", handlers.Media.Continue)
 	api.GET("/media/:id", guardByMediaID, handlers.Media.Detail)
 	api.GET("/media/:id/enhanced", guardByMediaID, handlers.Media.DetailEnhanced)
-	api.GET("/media/:id/versions", guardByMediaID, handlers.Media.Versions)
 	api.POST("/media/:id/scrape", guardByMediaID, middleware.AdminOnly(), handlers.Metadata.ScrapeMedia)
 
 	// 精彩片段由服务端统一调度与持久化。默认 auto 模式优先交给合格客户端，

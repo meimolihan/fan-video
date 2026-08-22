@@ -3,10 +3,10 @@ package service
 import (
 	"testing"
 
-	"github.com/glebarez/sqlite"
 	"github.com/fan-video/fan-video/internal/config"
 	"github.com/fan-video/fan-video/internal/model"
 	"github.com/fan-video/fan-video/internal/repository"
+	"github.com/glebarez/sqlite"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )

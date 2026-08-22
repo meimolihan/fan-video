@@ -299,6 +299,85 @@ func (s *NFOService) FindLocalImages(dir string) (poster, backdrop string) {
 	return poster, backdrop
 }
 
+// FindLocalImagesDeep 在目录及其一层子目录中查找海报/背景图。
+// 相比 FindLocalImages 额外覆盖「封面位于子目录」的个人收藏常见结构
+// （如 剧名/M痴女_封面/011921.jpg、図鉴_封面/メイリン.JPG）：
+// 优先匹配封面命名子目录（封面图/封面/cover/poster/img 等，前缀或包含均可），
+// 未命中再回退任意子目录中的第一张图片。
+func (s *NFOService) FindLocalImagesDeep(dir string) (poster, backdrop string) {
+	poster, backdrop = s.FindLocalImages(dir)
+	if poster != "" && backdrop != "" {
+		return poster, backdrop
+	}
+
+	entries, err := s.readDir(dir)
+	if err != nil {
+		return poster, backdrop
+	}
+	imageExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".webp": true}
+	firstImageIn := func(subDir string) string {
+		subEntries, err := s.readDir(subDir)
+		if err != nil {
+			return ""
+		}
+		for _, entry := range subEntries {
+			if entry.IsDir() {
+				continue
+			}
+			if imageExts[strings.ToLower(filepath.Ext(entry.Name()))] {
+				return s.joinPath(subDir, entry.Name())
+			}
+		}
+		return ""
+	}
+
+	// 封面命名的子目录优先（前缀或包含关键词，如 M痴女_封面、cover_2）
+	allSubs := subDirsFromEntries(entries)
+	isCoverNamed := func(name string) bool {
+		lower := strings.ToLower(name)
+		for _, known := range localCoverSubDirs {
+			if strings.HasPrefix(lower, known) || strings.Contains(lower, known) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, sub := range allSubs {
+		if !isCoverNamed(sub) {
+			continue
+		}
+		if p := firstImageIn(s.joinPath(dir, sub)); p != "" {
+			if poster == "" {
+				poster = p
+				if backdrop != "" {
+					break
+				}
+			} else if backdrop == "" {
+				backdrop = p
+				break
+			}
+		}
+	}
+	// 任意子目录兜底
+	for _, sub := range allSubs {
+		if isCoverNamed(sub) {
+			continue
+		}
+		if p := firstImageIn(s.joinPath(dir, sub)); p != "" {
+			if poster == "" {
+				poster = p
+				if backdrop != "" {
+					break
+				}
+			} else if backdrop == "" {
+				backdrop = p
+				break
+			}
+		}
+	}
+	return poster, backdrop
+}
+
 // FindLocalImagesForMedia 根据媒体文件路径查找对应的本地图片
 // 方案 C：优先匹配与视频同名的图片，当目录下只有一个视频文件时才使用通用封面
 // 解决多部影片在同一目录下共用同一张封面的问题
@@ -557,6 +636,24 @@ func (s *NFOService) firstFrameCacheDir() string {
 		return filepath.Join(s.cfg.Cache.CacheDir, "covers", "frames")
 	}
 	return filepath.Join(os.TempDir(), "fan-video", "frames")
+}
+
+// IsFirstFrameCachePath 判断给定路径是否位于首帧封面缓存目录内。
+// 用于识别"剧集海报"是真实 artwork（本地图片/刮削图）还是从某个分集首帧借用的封面：
+// 借用的封面不应被分集的海报回退链再次继承，否则同一剧集的所有分集都会显示同一张图。
+func (s *NFOService) IsFirstFrameCachePath(path string) bool {
+	if s == nil || strings.TrimSpace(path) == "" {
+		return false
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		abs = path
+	}
+	cacheRoot := s.firstFrameCacheDir()
+	if absRoot, err := filepath.Abs(cacheRoot); err == nil {
+		cacheRoot = absRoot
+	}
+	return strings.HasPrefix(abs, cacheRoot+string(filepath.Separator))
 }
 
 // firstFrameCacheKey 生成防碰撞、随文件内容变化自动失效的缓存键

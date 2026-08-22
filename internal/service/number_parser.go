@@ -545,10 +545,10 @@ func sanitizeFilename(name string) string {
 
 // 简单番号识别正则（ParseCode 使用）
 var (
-	stdCodeRegex     = regexp.MustCompile(`(?i)\b([A-Z]{2,10})-?(\d{3,8})\b`)
-	fc2CodeRegex     = regexp.MustCompile(`(?i)\bFC2-?PPV-?(\d{5,8})\b`)
-	uncensoredRegex  = regexp.MustCompile(`(?i)\b(\d{6})[-_](\d{3,4})\b`)
-	heyzoRegex       = regexp.MustCompile(`(?i)\bHEYZO-?(\d{4})\b`)
+	stdCodeRegex    = regexp.MustCompile(`(?i)\b([A-Z]{2,10})-?(\d{3,8})\b`)
+	fc2CodeRegex    = regexp.MustCompile(`(?i)\bFC2-?PPV-?(\d{5,8})\b`)
+	uncensoredRegex = regexp.MustCompile(`(?i)\b(\d{6})[-_](\d{3,4})\b`)
+	heyzoRegex      = regexp.MustCompile(`(?i)\bHEYZO-?(\d{4})\b`)
 )
 
 // ParseCode 从文件名/标题中识别番号

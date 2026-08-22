@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Calendar, ChevronDown, Clock, Copy, Film, Grid3X3, LayoutList, Play, Star } from 'lucide-react'
+import { Calendar, Clock, Film, Grid3X3, LayoutList, Play, Star } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { streamApi } from '@/api'
 import type { CollectionMediaItem } from '@/types'
-import { groupByMovie, versionLabel, type GroupedMovieItem } from '@/utils/collectionGroup'
 import { Button, Select, Tag } from '@/components/design-system'
 import { MediaArtwork, MediaGrid } from '@/ui'
 import Pagination from '@/components/Pagination'
@@ -29,11 +28,8 @@ export default function CollectionMovieBrowser({ media }: CollectionMovieBrowser
   const pagination = usePagination({ initialSize: 24, syncToUrl: true })
 
   const sortedMedia = useMemo(() => {
-    const grouped = groupByMovie(media)
-    const sorted = [...grouped]
-    const byPremiered = (direction: 'asc' | 'desc') => (left: GroupedMovieItem, right: GroupedMovieItem) => {
-      const a = left.primary
-      const b = right.primary
+    const sorted = [...media]
+    const byPremiered = (direction: 'asc' | 'desc') => (a: CollectionMediaItem, b: CollectionMediaItem) => {
       const dateA = a.premiered || ''
       const dateB = b.premiered || ''
       if (dateA && dateB) {
@@ -50,8 +46,8 @@ export default function CollectionMovieBrowser({ media }: CollectionMovieBrowser
 
     if (sortOption === 'premiered_asc') sorted.sort(byPremiered('asc'))
     if (sortOption === 'premiered_desc') sorted.sort(byPremiered('desc'))
-    if (sortOption === 'title_asc') sorted.sort((a, b) => a.primary.title.localeCompare(b.primary.title))
-    if (sortOption === 'rating_desc') sorted.sort((a, b) => b.primary.rating - a.primary.rating || a.primary.title.localeCompare(b.primary.title))
+    if (sortOption === 'title_asc') sorted.sort((a, b) => a.title.localeCompare(b.title))
+    if (sortOption === 'rating_desc') sorted.sort((a, b) => b.rating - a.rating || a.title.localeCompare(b.title))
     return sorted
   }, [media, sortOption])
 
@@ -80,7 +76,7 @@ export default function CollectionMovieBrowser({ media }: CollectionMovieBrowser
       <div className="flex flex-col gap-3 border-b border-[var(--nv-border-subtle)] pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-display text-lg font-semibold tracking-tight text-[var(--nv-text-primary)]">系列电影</h2>
-          <p className="mt-1 text-xs text-[var(--nv-text-tertiary)]">{sortedMedia.length} 部电影 · 自动折叠同片多版本</p>
+          <p className="mt-1 text-xs text-[var(--nv-text-tertiary)]">{sortedMedia.length} 部电影</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -96,14 +92,14 @@ export default function CollectionMovieBrowser({ media }: CollectionMovieBrowser
 
       {viewMode === 'grid' ? (
         <MediaGrid>
-          {pagedMedia.map((group, index) => (
-            <MovieGridCard key={group.primary.id} group={group} index={(pagination.page - 1) * pagination.size + index + 1} />
+          {pagedMedia.map((item, index) => (
+            <MovieGridCard key={item.id} item={item} index={(pagination.page - 1) * pagination.size + index + 1} />
           ))}
         </MediaGrid>
       ) : (
         <div className="divide-y divide-[var(--nv-border-subtle)] border-y border-[var(--nv-border-subtle)]">
-          {pagedMedia.map((group, index) => (
-            <MovieListCard key={group.primary.id} group={group} index={(pagination.page - 1) * pagination.size + index + 1} />
+          {pagedMedia.map((item, index) => (
+            <MovieListCard key={item.id} item={item} index={(pagination.page - 1) * pagination.size + index + 1} />
           ))}
         </div>
       )}
@@ -158,11 +154,8 @@ function ExpandableGenreTags({ genres }: { genres: string[] }) {
   )
 }
 
-function MovieGridCard({ group, index }: { group: GroupedMovieItem; index: number }) {
-  const item = group.primary
+function MovieGridCard({ item, index }: { item: CollectionMediaItem; index: number }) {
   const navigate = useNavigate()
-  const [versionsOpen, setVersionsOpen] = useState(false)
-  const versions = group.versions
   const genres = (item.genres || '').split(',').map((genre) => genre.trim()).filter(Boolean)
 
   return (
@@ -197,17 +190,8 @@ function MovieGridCard({ group, index }: { group: GroupedMovieItem; index: numbe
         </div>
 
         <Tag className="nv-media-card-badge absolute left-2 top-2 z-30">#{index}</Tag>
-        {versions.length > 1 && (
-          <Tag tone="quality" className="nv-media-card-badge absolute right-2 top-2 z-30"><Copy size={10} aria-hidden="true" />{versions.length} 版</Tag>
-        )}
         {item.rating > 0 && (
           <Tag tone="rating" className="nv-media-card-badge absolute bottom-2 left-2 z-30"><Star size={10} fill="currentColor" aria-hidden="true" />{item.rating.toFixed(1)}</Tag>
-        )}
-
-        {versions.length > 1 && (
-          <Button type="button" variant={versionsOpen ? 'primary' : 'secondary'} size="sm" iconOnly onClick={() => setVersionsOpen((open) => !open)} className="absolute bottom-2 right-2 z-40" aria-label={versionsOpen ? '收起版本' : '查看所有版本'} title={versionsOpen ? '收起版本' : '查看所有版本'} aria-expanded={versionsOpen}>
-            <ChevronDown size={13} className={versionsOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
-          </Button>
         )}
       </MediaArtwork>
 
@@ -224,17 +208,12 @@ function MovieGridCard({ group, index }: { group: GroupedMovieItem; index: numbe
         </div>
         <ExpandableGenreTags genres={genres} />
       </div>
-
-      {versions.length > 1 && versionsOpen && <VersionMenu versions={versions} currentId={item.id} />}
     </article>
   )
 }
 
-function MovieListCard({ group, index }: { group: GroupedMovieItem; index: number }) {
-  const item = group.primary
+function MovieListCard({ item, index }: { item: CollectionMediaItem; index: number }) {
   const navigate = useNavigate()
-  const [versionsOpen, setVersionsOpen] = useState(false)
-  const versions = group.versions
   const genres = (item.genres || '').split(',').map((genre) => genre.trim()).filter(Boolean)
 
   return (
@@ -254,7 +233,6 @@ function MovieListCard({ group, index }: { group: GroupedMovieItem; index: numbe
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <Link to={`/media/${item.id}`} className="min-w-0 truncate text-xs font-medium text-[var(--nv-text-primary)]">{item.title}</Link>
-            {versions.length > 1 && <Tag tone="brand"><Copy size={10} aria-hidden="true" />{versions.length} 个版本</Tag>}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] text-[var(--nv-text-tertiary)]">
             {item.year > 0 && <span>{item.year}</span>}
@@ -264,11 +242,6 @@ function MovieListCard({ group, index }: { group: GroupedMovieItem; index: numbe
         </div>
 
         {item.rating > 0 && <Tag tone="rating" className="shrink-0"><Star size={10} fill="currentColor" aria-hidden="true" />{item.rating.toFixed(1)}</Tag>}
-        {versions.length > 1 && (
-          <Button type="button" variant="ghost" size="sm" iconOnly onClick={() => setVersionsOpen((open) => !open)} aria-label={versionsOpen ? '收起版本' : '展开版本'} title={versionsOpen ? '收起版本' : '展开版本'} aria-expanded={versionsOpen}>
-            <ChevronDown size={14} className={versionsOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
-          </Button>
-        )}
         <Button
           variant="primary"
           size="sm"
@@ -281,32 +254,7 @@ function MovieListCard({ group, index }: { group: GroupedMovieItem; index: numbe
           <Play size={13} fill="currentColor" aria-hidden="true" />
         </Button>
       </div>
-
-      {versions.length > 1 && versionsOpen && (
-        <div className="border-t border-dashed border-[var(--nv-border-subtle)] px-1 py-2">
-          <div className="space-y-1">{versions.map((version) => <VersionRow key={version.id} version={version} currentId={item.id} />)}</div>
-        </div>
-      )}
     </article>
-  )
-}
-
-function VersionMenu({ versions, currentId }: { versions: CollectionMediaItem[]; currentId: string }) {
-  return (
-    <div className="absolute left-0 right-0 top-full z-[var(--nv-z-dropdown)] mt-1 rounded-[var(--nv-radius-card)] border border-[var(--nv-border-default)] bg-[var(--nv-bg-elevated)] p-2 shadow-[var(--nv-shadow-elevated)]">
-      <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--nv-text-tertiary)]">{versions.length} 个版本</div>
-      <div className="space-y-1">{versions.map((version) => <VersionRow key={version.id} version={version} currentId={currentId} />)}</div>
-    </div>
-  )
-}
-
-function VersionRow({ version, currentId }: { version: CollectionMediaItem; currentId: string }) {
-  const current = version.id === currentId
-  return (
-    <Link to={`/media/${version.id}`} className={`flex items-center justify-between gap-2 rounded-[var(--nv-radius-control)] px-2.5 py-2 text-xs transition-colors ${current ? 'bg-[var(--nv-bg-active)] text-[var(--nv-action-primary)]' : 'text-[var(--nv-text-secondary)] hover:bg-[var(--nv-bg-hover)] hover:text-[var(--nv-text-primary)]'}`}>
-      <span className="truncate">{versionLabel(version) || version.title || '默认版本'}</span>
-      {current && <Tag tone="brand">当前</Tag>}
-    </Link>
   )
 }
 

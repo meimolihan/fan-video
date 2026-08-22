@@ -105,9 +105,6 @@ func registerAdminAPI(r *gin.Engine, cfg *config.Config, handlers *handler.Handl
 	admin.POST("/import/data", handlers.BatchMetadata.ImportFromExportData)
 
 	admin.POST("/media/batch-move", handlers.Library.BatchMoveMedia)
-	admin.GET("/duplicates", handlers.Library.DetectAllDuplicates)
-	admin.GET("/libraries/:id/duplicates", handlers.Library.DetectDuplicates)
-	admin.POST("/libraries/:id/mark-duplicates", handlers.Library.MarkDuplicates)
 
 	admin.POST("/collections", handlers.Collection.CreateCollection)
 	admin.POST("/collections/auto-match", handlers.Collection.AutoMatch)

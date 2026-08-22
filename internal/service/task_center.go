@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	TaskKindScan = "scan"
+	TaskKindScan                      = "scan"
 	TaskKindLegacyArtifactMigration   = "legacy_artifact_migration"
 	TaskKindLegacyProjectionMigration = "legacy_projection_migration"
 	TaskKindArtifactCleanup           = "artifact_cleanup"

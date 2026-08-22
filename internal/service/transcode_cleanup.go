@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/fan-video/fan-video/internal/model"
+	"github.com/google/uuid"
 )
 
 func (s *ArtifactMaintenanceService) CleanupStaleCache(doneRetainDays, failedRetainDays int) (int, int, error) {

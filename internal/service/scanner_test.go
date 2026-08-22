@@ -85,6 +85,52 @@ func TestParseEpisodeInfo(t *testing.T) {
 			desc:           "720P 不应影响[05]的正确匹配",
 		},
 
+		// === 尾部括号编号（个人收藏常见） ===
+		{
+			filename:       "Short (01).mp4",
+			wantSeasonNum:  0,
+			wantEpisodeNum: 1,
+			desc:           "尾部括号编号 Short (01)",
+		},
+		{
+			filename:       "ゆうき美羽 (3).mp4",
+			wantSeasonNum:  0,
+			wantEpisodeNum: 3,
+			desc:           "日文名+尾部括号编号",
+		},
+		{
+			filename:       "松本メイ(1).mp4",
+			wantSeasonNum:  0,
+			wantEpisodeNum: 1,
+			desc:           "无空格尾部括号编号",
+		},
+		{
+			filename:       "电影 (2019).mp4",
+			wantSeasonNum:  0,
+			wantEpisodeNum: 0,
+			desc:           "括号年份不应被误识别为集号",
+		},
+
+		// === MMDDYY 纯数字日期命名 ===
+		{
+			filename:       "011921.mp4",
+			wantSeasonNum:  21, // 年份编码季号，collectEpisodes 阶段会归一化
+			wantEpisodeNum: 119,
+			desc:           "MMDDYY 日期解析 011921→2021-01-19",
+		},
+		{
+			filename:       "123456.mp4",
+			wantSeasonNum:  0,
+			wantEpisodeNum: 0,
+			desc:           "非法月份的6位数字不应被当作日期",
+		},
+		{
+			filename:       "Saved_003.mp4",
+			wantSeasonNum:  0,
+			wantEpisodeNum: 3,
+			desc:           "带前缀下划线的编号优先按集号处理",
+		},
+
 		// === SP 特别篇 ===
 		{
 			filename:       "[字幕组][一拳超人][SP01][1080P].mkv",

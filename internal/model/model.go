@@ -321,20 +321,16 @@ type Media struct {
 	Tags         string `json:"tags" gorm:"type:text"`            // 用户标签（逗号分隔），取自 NFO <tag>，与 genres 并列
 	Website      string `json:"website" gorm:"type:text"`         // 官方网站，取自 NFO <website>
 	ReleaseDate  string `json:"release_date" gorm:"type:text"`    // 发行日期（可独立于首映日期），取自 NFO <releasedate>
-	// 多CD堆叠 & 多版本聚合（P2）
-	StackGroup   string `json:"stack_group" gorm:"index;type:text"`   // 堆叠组 ID（cd1/cd2 共享同一组 ID）
-	StackOrder   int    `json:"stack_order"`                          // 堆叠顺序（1=cd1, 2=cd2...）
-	VersionTag   string `json:"version_tag" gorm:"type:text"`         // 版本标识（"4K", "Director's Cut" 等）
-	VersionGroup string `json:"version_group" gorm:"index;type:text"` // 同一内容的不同版本共享此 ID
+	// 多CD堆叠 & 版本标识（P2）
+	StackGroup string `json:"stack_group" gorm:"index;type:text"` // 堆叠组 ID（cd1/cd2 共享同一组 ID）
+	StackOrder int    `json:"stack_order"`                        // 堆叠顺序（1=cd1, 2=cd2...）
+	VersionTag string `json:"version_tag" gorm:"type:text"`       // 版本标识（"4K", "Director's Cut" 等）
 	// 刮削状态追踪（P3）
 	ScrapeStatus   string     `json:"scrape_status" gorm:"type:text;default:pending"` // pending / scraped / failed / manual
 	ScrapeAttempts int        `json:"scrape_attempts"`                                // 刮削尝试次数
 	LastScrapeAt   *time.Time `json:"last_scrape_at"`                                 // 最后一次刮削时间
 	// 电影系列合集
 	CollectionID string `json:"collection_id" gorm:"index;type:text"` // 所属电影合集 ID
-	// 重复媒体检测
-	DuplicateOf    string `json:"duplicate_of" gorm:"index;type:text"`    // 重复的原始媒体 ID（为空表示非重复）
-	DuplicateGroup string `json:"duplicate_group" gorm:"index;type:text"` // 重复组标识（相同标题+年份的媒体共享此标识）
 	// 剧集专属字段
 	SeriesID     string `json:"series_id" gorm:"index;type:text"`
 	SeasonNum    int    `json:"season_num"`
@@ -920,7 +916,6 @@ func ensureSQLiteColumns(db *gorm.DB) {
 			{Column: "stack_group", DDL: "ALTER TABLE `media` ADD COLUMN `stack_group` text DEFAULT ''"},
 			{Column: "stack_order", DDL: "ALTER TABLE `media` ADD COLUMN `stack_order` integer DEFAULT 0"},
 			{Column: "version_tag", DDL: "ALTER TABLE `media` ADD COLUMN `version_tag` text DEFAULT ''"},
-			{Column: "version_group", DDL: "ALTER TABLE `media` ADD COLUMN `version_group` text DEFAULT ''"},
 			{Column: "scrape_status", DDL: "ALTER TABLE `media` ADD COLUMN `scrape_status` text DEFAULT 'pending'"},
 			{Column: "scrape_attempts", DDL: "ALTER TABLE `media` ADD COLUMN `scrape_attempts` integer DEFAULT 0"},
 			{Column: "last_scrape_at", DDL: "ALTER TABLE `media` ADD COLUMN `last_scrape_at` datetime"},

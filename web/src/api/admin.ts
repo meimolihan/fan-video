@@ -192,15 +192,6 @@ export const adminApi = {
       series: { id: string; title: string; season_count: number; episode_count: number; poster_path: string }[]
     }[]; total: number }>('/admin/series/merge-candidates'),
 
-  // 重复媒体检测
-  detectDuplicates: (libraryId?: string) =>
-    libraryId
-      ? api.get<{ data: import('@/types').DuplicateGroup[]; total: number }>(`/admin/libraries/${libraryId}/duplicates`)
-      : api.get<{ data: import('@/types').DuplicateGroup[]; total: number }>('/admin/duplicates'),
-
-  markDuplicates: (libraryId: string) =>
-    api.post<{ message: string; marked: number }>(`/admin/libraries/${libraryId}/mark-duplicates`),
-
   // 手动预处理单个媒体（用户显式意图，带 force=true 以绕过"可直接播放则跳过"的自动判定）
   submitPreprocess: (mediaId: string) =>
     api.post<{ message: string }>('/admin/preprocess/submit', { media_id: mediaId, force: true }),

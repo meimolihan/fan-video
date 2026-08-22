@@ -155,10 +155,12 @@ export default function SeriesEpisodeBrowser({ seasons, seriesTitle, historyMap,
           )}
 
           <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-base font-semibold text-[var(--nv-text-primary)]">{seasonLabel(activeSeason)}</h2>
-              <p className="mt-0.5 text-xs text-[var(--nv-text-tertiary)]">共 {activeSeasonData?.episode_count || 0} 集</p>
-            </div>
+            {seasons.length > 1 && (
+              <div>
+                <h2 className="text-base font-semibold text-[var(--nv-text-primary)]">{seasonLabel(activeSeason)}</h2>
+                <p className="mt-0.5 text-xs text-[var(--nv-text-tertiary)]">共 {activeSeasonData?.episode_count || 0} 集</p>
+              </div>
+            )}
           </div>
 
           {displayMode === 'slide' ? (
@@ -192,10 +194,12 @@ export default function SeriesEpisodeBrowser({ seasons, seriesTitle, historyMap,
         <div className="space-y-8">
           {allEpisodeGroups.map(({ seasonNum, episodes: groupEpisodes }) => (
             <section key={`${seasonNum}-${allPagination.page}`} className="space-y-3">
-              <div className="flex items-baseline gap-2">
-                <h2 className="text-base font-semibold text-[var(--nv-text-primary)]">{seasonLabel(seasonNum)}</h2>
-                <span className="text-xs text-[var(--nv-text-tertiary)]">本页 {groupEpisodes.length} 集</span>
-              </div>
+              {allEpisodeGroups.length > 1 && (
+                <div className="flex items-baseline gap-2">
+                  <h2 className="text-base font-semibold text-[var(--nv-text-primary)]">{seasonLabel(seasonNum)}</h2>
+                  <span className="text-xs text-[var(--nv-text-tertiary)]">本页 {groupEpisodes.length} 集</span>
+                </div>
+              )}
               <div className="space-y-2">
                 {groupEpisodes.map((episode) => (
                   <EpisodeListCard key={episode.id} episode={episode} seriesTitle={seriesTitle} historyRecord={historyMap[episode.id]} posterVersion={posterVersion} />
@@ -352,7 +356,9 @@ function EpisodeThumb({
 }) {
   return (
     <MediaArtwork
-      src={episode.poster_path ? streamApi.getPosterUrl(episode.id, posterVersion) : null}
+      // 不以 poster_path 为前提：后端会在请求时懒提取首帧并回写，
+      // 这样没有本地封面的分集也能获得海报
+      src={streamApi.getPosterUrl(episode.id, posterVersion)}
       alt={episode.title}
       ratio="landscape"
       className={`nv-episode-thumb shrink-0 ${className}`}

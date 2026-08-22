@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/fan-video/fan-video/internal/model"
 	"github.com/fan-video/fan-video/internal/repository"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -109,14 +109,14 @@ type MediaAnalysisWorkerFailure struct {
 }
 
 type mediaAnalysisRemoteTask struct {
-	TaskID       string
-	MediaID      string
-	Fingerprint  string
-	CreatedAt    time.Time
-	ClaimedBy    string
-	ClaimToken   string
-	WorkerKind   string
-	LeaseUntil   time.Time
+	TaskID      string
+	MediaID     string
+	Fingerprint string
+	CreatedAt   time.Time
+	ClaimedBy   string
+	ClaimToken  string
+	WorkerKind  string
+	LeaseUntil  time.Time
 }
 
 type mediaAnalysisWorkerState struct {

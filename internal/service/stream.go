@@ -467,8 +467,10 @@ func (s *StreamService) GetPosterPath(mediaID string) (string, error) {
 	if media.SeriesID != "" && s.seriesRepo != nil {
 		series, err := s.seriesRepo.FindByIDOnly(media.SeriesID)
 		if err == nil {
-			// 检查 Series 数据库中的海报路径
-			if series.PosterPath != "" {
+			// 检查 Series 数据库中的海报路径。
+			// [同目录归组] 若该路径只是从某个分集首帧借用的缓存封面，
+			// 则跳过继承，让每个分集走自己的首帧提取，保持各集封面独立。
+			if series.PosterPath != "" && !s.nfoService.IsFirstFrameCachePath(series.PosterPath) {
 				if _, err := s.statMediaFile(series.PosterPath); err == nil {
 					return series.PosterPath, nil
 				}

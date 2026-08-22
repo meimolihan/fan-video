@@ -137,6 +137,7 @@ func NewLiteServices(repos *repository.Repositories, cfg *config.Config, logger 
 	}
 
 	svcs.Series.SetMediaPersonRepo(repos.MediaPerson)
+	svcs.Series.SetStreamService(streamService)
 	svcs.Library.SetSeriesService(svcs.Series)
 	svcs.Library.SetCollectionService(collectionService)
 

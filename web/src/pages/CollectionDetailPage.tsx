@@ -1,10 +1,8 @@
-import { useMemo } from 'react'
 import { Layers } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { collectionApi } from '@/api'
 import { usePageCache } from '@/hooks/usePageCache'
 import type { CollectionWithMedia } from '@/types'
-import { groupByMovie } from '@/utils/collectionGroup'
 import CollectionDetailHero from '@/components/media/CollectionDetailHero'
 import CollectionMovieBrowser from '@/components/media/CollectionMovieBrowser'
 import { Button, EmptyState, Surface } from '@/components/design-system'
@@ -23,8 +21,7 @@ export default function CollectionDetailPage() {
     { ttl: 60_000 },
   )
 
-  const movieCount = useMemo(() => groupByMovie(data?.media || []).length, [data?.media])
-  const fileCount = data?.media?.length || 0
+  const movieCount = data?.media?.length || 0
 
   if (loading && !data) {
     return (
@@ -57,7 +54,6 @@ export default function CollectionDetailPage() {
       <CollectionDetailHero
         data={data}
         movieCount={movieCount}
-        fileCount={fileCount}
         onBack={() => {
           if (window.history.length > 1) navigate(-1)
           else navigate('/collections')

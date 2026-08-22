@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"hash/fnv"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -18,6 +19,7 @@ type SeriesService struct {
 	seriesRepo      *repository.SeriesRepo
 	mediaRepo       *repository.MediaRepo
 	mediaPersonRepo *repository.MediaPersonRepo
+	stream          *StreamService // 用于封面回退：无海报时借用分集海报（可选注入）
 	logger          *zap.SugaredLogger
 }
 
@@ -32,6 +34,11 @@ func NewSeriesService(seriesRepo *repository.SeriesRepo, mediaRepo *repository.M
 // SetMediaPersonRepo 延迟注入 MediaPersonRepo（避免循环依赖）
 func (s *SeriesService) SetMediaPersonRepo(repo *repository.MediaPersonRepo) {
 	s.mediaPersonRepo = repo
+}
+
+// SetStreamService 延迟注入 StreamService（用于剧集封面的分集海报回退）
+func (s *SeriesService) SetStreamService(stream *StreamService) {
+	s.stream = stream
 }
 
 // ListSeries 获取剧集合集列表（分页）
@@ -139,7 +146,37 @@ func (s *SeriesService) GetSeriesPosterPath(id string) (string, error) {
 		}
 	}
 
+	// [同目录归组] 无任何本地海报时，随机取目录下一集的海报作为剧集封面。
+	// 分集海报走完整的媒体解析链（同名图片 / NFO / 视频首帧提取），
+	// 结果回写 series.PosterPath，列表接口的 poster_path 字段随之生效；
+	// 首次解析可能触发首帧提取，之后命中缓存零开销。
+	if s.stream != nil && series.ID != "" {
+		if episodes, err := s.mediaRepo.ListBySeriesID(series.ID); err == nil && len(episodes) > 0 {
+			pick := episodes[pickEpisodeIndex(series.ID, len(episodes))]
+			if posterPath, err := s.stream.GetPosterPath(pick.ID); err == nil && posterPath != "" {
+				if series.PosterPath == "" {
+					series.PosterPath = posterPath
+					s.seriesRepo.Update(series)
+					s.logger.Debugf("剧集封面借用分集海报: %s -> %s (来自 %s)", series.Title, posterPath, pick.Title)
+				}
+				return posterPath, nil
+			}
+		}
+	}
+
 	return "", nil
+}
+
+// pickEpisodeIndex 为剧集封面回退挑选分集下标：
+// 以 (剧集ID, 分集数) 做稳定散列——对同一剧集多次请求结果一致（封面不闪烁），
+// 不同剧集之间分布随机，分集数变化时自动重选。
+func pickEpisodeIndex(seriesID string, count int) int {
+	if count <= 1 {
+		return 0
+	}
+	h := fnv.New32a()
+	fmt.Fprintf(h, "%s#%d", seriesID, count)
+	return int(h.Sum32() % uint32(count))
 }
 
 // SeasonInfo 季信息

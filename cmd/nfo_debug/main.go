@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"go.uber.org/zap"
 )
 
 func main() {

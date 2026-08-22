@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/fan-video/fan-video/internal/config"
 	"github.com/fan-video/fan-video/internal/model"
 	"github.com/fan-video/fan-video/internal/repository"
 	transcodeartifactstore "github.com/fan-video/fan-video/internal/transcode/artifactstore"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 

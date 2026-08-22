@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   ChevronDown,
@@ -6,7 +6,6 @@ import {
   ChevronRight,
   ChevronUp,
   Clock,
-  Copy,
   Film,
   Layers,
   Play,
@@ -15,7 +14,6 @@ import {
 import { collectionApi, streamApi } from '@/api'
 import { Button, Surface, Tag } from '@/components/design-system'
 import type { CollectionMediaItem, CollectionWithMedia } from '@/types'
-import { groupByMovie, versionLabel, type GroupedMovieItem } from '@/utils/collectionGroup'
 
 interface CollectionCarouselProps {
   mediaId: string
@@ -54,18 +52,12 @@ export default function CollectionCarousel({ mediaId }: CollectionCarouselProps)
     element.scrollBy({ left: direction === 'left' ? -320 : 320, behavior: 'smooth' })
   }
 
-  // 同片多版本先折叠，避免一个合集里重复铺满相同电影。
-  const groupedMovies = useMemo(() => {
-    if (!data?.media) return []
-    return groupByMovie(data.media)
-  }, [data?.media])
+  if (loading || !data || data.media.length <= 1) return null
 
-  if (loading || !data || groupedMovies.length <= 1) return null
-
-  const { collection, media } = data
-  const currentIndex = groupedMovies.findIndex((group) => group.versions.some((version) => version.is_current))
-  const movieCount = groupedMovies.length
-  const fileCount = media.length
+  const { collection } = data
+  const movies = data.media
+  const currentIndex = movies.findIndex((item) => item.is_current)
+  const movieCount = movies.length
 
   return (
     <section className="mt-6" aria-labelledby="collection-carousel-title">
@@ -82,7 +74,6 @@ export default function CollectionCarousel({ mediaId }: CollectionCarouselProps)
             title="查看合集详情"
           >
             <span className="truncate">{collection.name} · {movieCount}部</span>
-            {fileCount > movieCount && <span className="shrink-0 text-[var(--nv-text-tertiary)]">/{fileCount}个文件</span>}
             <ChevronRight size={11} className="shrink-0" aria-hidden="true" />
           </Link>
 
@@ -125,32 +116,27 @@ export default function CollectionCarousel({ mediaId }: CollectionCarouselProps)
           role="list"
           aria-label="系列合集电影列表"
         >
-          {groupedMovies.map((group) => {
-            const item = group.primary
-            const isCurrent = group.versions.some((version) => version.is_current)
-            return (
-              <CollectionCard
-                key={item.id}
-                item={item}
-                versionCount={group.versions.length}
-                isCurrent={isCurrent}
-                onClick={() => {
-                  if (!isCurrent) navigate(`/media/${item.id}`)
-                }}
-              />
-            )
-          })}
+          {movies.map((item) => (
+            <CollectionCard
+              key={item.id}
+              item={item}
+              isCurrent={item.is_current}
+              onClick={() => {
+                if (!item.is_current) navigate(`/media/${item.id}`)
+              }}
+            />
+          ))}
         </div>
       )}
 
       {expanded && (
         <div className="space-y-2" role="list" aria-label="系列合集电影列表">
-          {groupedMovies.map((group, index) => (
+          {movies.map((item, index) => (
             <CollectionListItem
-              key={group.primary.id}
-              group={group}
+              key={item.id}
+              item={item}
               index={index + 1}
-              isCurrent={group.versions.some((version) => version.is_current)}
+              isCurrent={item.is_current}
             />
           ))}
         </div>
@@ -161,17 +147,13 @@ export default function CollectionCarousel({ mediaId }: CollectionCarouselProps)
 
 function CollectionCard({
   item,
-  versionCount,
   isCurrent,
   onClick,
 }: {
   item: CollectionMediaItem
-  versionCount: number
   isCurrent: boolean
   onClick: () => void
 }) {
-  const hasMultipleVersions = versionCount > 1
-
   return (
     <Surface
       as="article"
@@ -204,13 +186,6 @@ function CollectionCard({
           </Tag>
         )}
 
-        {hasMultipleVersions && (
-          <Tag tone="neutral" className="absolute right-1.5 top-1.5 z-30" title={`共有 ${versionCount} 个版本`}>
-            <Copy size={9} aria-hidden="true" />
-            {versionCount}版
-          </Tag>
-        )}
-
         {!isCurrent && (
           <div className="nv-collection-carousel-play pointer-events-none absolute bottom-2 left-2 z-30 flex h-8 w-8 items-center justify-center rounded-full">
             <Play size={14} className="ml-0.5" fill="currentColor" aria-hidden="true" />
@@ -240,18 +215,14 @@ function CollectionCard({
 }
 
 function CollectionListItem({
-  group,
+  item,
   index,
   isCurrent,
 }: {
-  group: GroupedMovieItem
+  item: CollectionMediaItem
   index: number
   isCurrent: boolean
 }) {
-  const item = group.primary
-  const hasMultipleVersions = group.versions.length > 1
-  const [showVersions, setShowVersions] = useState(false)
-
   return (
     <Surface
       role="listitem"
@@ -294,12 +265,6 @@ function CollectionListItem({
               {item.title}
             </h4>
             {isCurrent && <Tag tone="brand">当前</Tag>}
-            {hasMultipleVersions && (
-              <Tag tone="neutral" title={`共有 ${group.versions.length} 个版本`}>
-                <Copy size={9} aria-hidden="true" />
-                {group.versions.length}版
-              </Tag>
-            )}
           </div>
 
           <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-[var(--nv-text-tertiary)]">
@@ -325,61 +290,12 @@ function CollectionListItem({
           )}
         </div>
 
-        {hasMultipleVersions && (
-          <Button
-            type="button"
-            variant={showVersions ? 'secondary' : 'ghost'}
-            size="sm"
-            iconOnly
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              setShowVersions((value) => !value)
-            }}
-            className={showVersions ? 'text-[var(--nv-action-primary)]' : undefined}
-            title={showVersions ? '收起版本' : '展开版本'}
-            aria-label={showVersions ? '收起版本' : '展开版本'}
-            aria-expanded={showVersions}
-          >
-            <ChevronDown size={13} className={`transition-transform ${showVersions ? 'rotate-180' : ''}`} aria-hidden="true" />
-          </Button>
-        )}
-
         {!isCurrent && (
           <div className="nv-collection-carousel-play pointer-events-none flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full">
             <Play size={12} className="ml-0.5" fill="currentColor" aria-hidden="true" />
           </div>
         )}
       </Link>
-
-      {hasMultipleVersions && showVersions && (
-        <div className="border-t border-dashed border-[var(--nv-border-default)] px-3 pb-3">
-          <div className="mt-2 space-y-1">
-            {group.versions.map((version) => {
-              const label = versionLabel(version) || '默认版本'
-              const versionIsCurrent = version.is_current
-
-              return (
-                <Link
-                  key={version.id}
-                  to={versionIsCurrent ? '#' : `/media/${version.id}`}
-                  onClick={(event) => {
-                    if (versionIsCurrent) event.preventDefault()
-                  }}
-                  className={`flex items-center justify-between gap-2 rounded-[var(--nv-radius-control)] px-3 py-2 text-xs transition-colors ${
-                    versionIsCurrent
-                      ? 'bg-[var(--nv-bg-active)] text-[var(--nv-action-primary)]'
-                      : 'bg-[var(--nv-bg-surface-soft)] text-[var(--nv-text-secondary)] hover:bg-[var(--nv-bg-hover)] hover:text-[var(--nv-text-primary)]'
-                  }`}
-                >
-                  <span className="truncate">{label}</span>
-                  {versionIsCurrent && <Tag tone="brand">当前</Tag>}
-                </Link>
-              )
-            })}
-          </div>
-        </div>
-      )}
     </Surface>
   )
 }

@@ -417,14 +417,6 @@ func (s *LibraryService) Scan(id string) error {
 			} else if collCount > 0 {
 				s.logger.Infof("媒体库 %s 自动创建 %d 个电影系列合集", lib.Name, collCount)
 			}
-
-			// 同片多版本折叠：将同一部电影的不同版本标记为 duplicate_of，
-			// 让前端列表默认只展示主版本，避免同一部片占据 N 张卡片。
-			if marked, err := s.scanner.MarkDuplicates(id); err != nil {
-				s.logger.Warnf("媒体库 %s 标记重复版本失败: %v", lib.Name, err)
-			} else if marked > 0 {
-				s.logger.Infof("媒体库 %s 标记 %d 个同片副本（列表默认隐藏）", lib.Name, marked)
-			}
 		}
 
 		// 广播全部完成事件
@@ -915,13 +907,6 @@ func (s *LibraryService) Reindex(id string) error {
 			} else if collCount > 0 {
 				s.logger.Infof("媒体库 %s 重建索引后自动创建 %d 个电影系列合集", lib.Name, collCount)
 			}
-
-			// 同片多版本折叠：同 Scan 流程一致
-			if marked, err := s.scanner.MarkDuplicates(id); err != nil {
-				s.logger.Warnf("媒体库 %s 重建索引后标记重复版本失败: %v", lib.Name, err)
-			} else if marked > 0 {
-				s.logger.Infof("媒体库 %s 重建索引后标记 %d 个同片副本（列表默认隐藏）", lib.Name, marked)
-			}
 		}
 
 		// 广播全部完成事件
@@ -947,18 +932,6 @@ func (s *LibraryService) Reindex(id string) error {
 	}()
 
 	return nil
-}
-
-// ==================== 重复媒体检测 ====================
-
-// DetectDuplicates 检测媒体库中的重复媒体
-func (s *LibraryService) DetectDuplicates(libraryID string) ([]DuplicateGroup, error) {
-	return s.scanner.DetectDuplicates(libraryID)
-}
-
-// MarkDuplicates 标记重复媒体
-func (s *LibraryService) MarkDuplicates(libraryID string) (int, error) {
-	return s.scanner.MarkDuplicates(libraryID)
 }
 
 // cleanScrapedCacheFiles 清理指定媒体/合集在磁盘上的刮削缓存文件

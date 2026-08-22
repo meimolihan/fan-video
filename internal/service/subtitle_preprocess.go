@@ -40,12 +40,12 @@ type SubPreProgressData struct {
 
 // SubtitlePreprocessService 字幕预处理服务
 type SubtitlePreprocessService struct {
-	cfg        *config.Config
-	repo       *repository.SubtitlePreprocessRepo
-	mediaRepo  *repository.MediaRepo
-	scanner    *ScannerService
-	logger     *zap.SugaredLogger
-	wsHub      *WSHub
+	cfg       *config.Config
+	repo      *repository.SubtitlePreprocessRepo
+	mediaRepo *repository.MediaRepo
+	scanner   *ScannerService
+	logger    *zap.SugaredLogger
+	wsHub     *WSHub
 
 	// 工作协程控制
 	workerCount int32

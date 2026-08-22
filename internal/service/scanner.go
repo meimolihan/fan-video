@@ -488,9 +488,28 @@ func vfsJoin(base, name string) string {
 //   - 如果没有任何分类目录命中，直接返回 [root]（完全向后兼容）。
 //
 // kind 仅影响日志打印，不影响展开规则。
+// expandedMediaRoot 展开后的真实媒体根目录及其来源深度
+type expandedMediaRoot struct {
+	Path string // 完整路径
+	// Depth 为穿透深度：0 表示用户配置的库根自身；>0 表示由分类目录穿透展开而来。
+	// 穿透而来的内容目录（depth>0）语义上更接近"真实内容文件夹"，
+	// 可用于更激进的归类策略（如同目录多视频归组为一部剧集）。
+	Depth int
+}
+
 func (s *ScannerService) collectMediaRoots(root string, kind string) []string {
+	infos := s.collectMediaRootInfos(root, kind)
+	paths := make([]string, len(infos))
+	for i := range infos {
+		paths[i] = infos[i].Path
+	}
+	return paths
+}
+
+// collectMediaRootInfos 与 collectMediaRoots 相同，但额外返回每个媒体根的穿透深度
+func (s *ScannerService) collectMediaRootInfos(root string, kind string) []expandedMediaRoot {
 	const maxDepth = 4
-	var results []string
+	var results []expandedMediaRoot
 	seen := make(map[string]bool)
 	tvOnly := kind == "tvshow"
 
@@ -518,7 +537,7 @@ func (s *ScannerService) collectMediaRoots(root string, kind string) []string {
 		entries, err := s.readDirLibraryPath(path)
 		if err != nil {
 			// 无法读取的目录保守当做普通媒体根加入
-			results = append(results, path)
+			results = append(results, expandedMediaRoot{Path: path, Depth: depth})
 			return
 		}
 
@@ -542,7 +561,7 @@ func (s *ScannerService) collectMediaRoots(root string, kind string) []string {
 
 		// 已是真实媒体目录 —— 不再下钻
 		if hasVideoFile {
-			results = append(results, path)
+			results = append(results, expandedMediaRoot{Path: path, Depth: depth})
 			return
 		}
 
@@ -580,7 +599,7 @@ func (s *ScannerService) collectMediaRoots(root string, kind string) []string {
 					childPath := vfsJoin(path, sd.Name())
 					if s.looksLikeSeriesFolder(childPath) {
 						s.logger.Infof("[xiaoya][tvshow] 检测到 %s 是标准剧集库根（子目录 %s 含季号/视频/NFO），不下钻", path, sd.Name())
-						results = append(results, path)
+						results = append(results, expandedMediaRoot{Path: path, Depth: depth})
 						return
 					}
 				}
@@ -595,8 +614,18 @@ func (s *ScannerService) collectMediaRoots(root string, kind string) []string {
 			}
 		}
 
+		// [嵌套单视频包装层] 目录自身无视频、且各内容子目录各自只含一个视频
+		// （如 MD/Nina/Nina-01/Nina-01.mp4）。这不是分类层——继续下钻会把每个叶子
+		// 拆成散落的独立电影；应把当前目录整体作为一个媒体根，
+		// 由扫描阶段的同目录归组逻辑收编为一部剧集。
+		if !hasVideoFile && depth > 0 && len(subDirs) >= 2 && s.isNestedSingleVideoCollection(path, subDirs) {
+			s.logger.Debugf("[xiaoya] %s 为嵌套单视频集合，不再下钻", path)
+			results = append(results, expandedMediaRoot{Path: path, Depth: depth})
+			return
+		}
+
 		if !shouldExpand || depth >= maxDepth {
-			results = append(results, path)
+			results = append(results, expandedMediaRoot{Path: path, Depth: depth})
 			return
 		}
 
@@ -621,20 +650,20 @@ func (s *ScannerService) collectMediaRoots(root string, kind string) []string {
 
 		// 如果穿透后一个结果都没有（极端情况），保底把当前目录加入
 		if expandedCount == 0 {
-			results = append(results, path)
+			results = append(results, expandedMediaRoot{Path: path, Depth: depth})
 		}
 	}
 
 	walk(root, 0)
 
 	// 去重并保持顺序
-	uniq := make([]string, 0, len(results))
+	uniq := make([]expandedMediaRoot, 0, len(results))
 	dedup := make(map[string]bool)
 	for _, r := range results {
-		if dedup[r] {
+		if dedup[r.Path] {
 			continue
 		}
-		dedup[r] = true
+		dedup[r.Path] = true
 		uniq = append(uniq, r)
 	}
 
@@ -1016,23 +1045,6 @@ func (s *ScannerService) scanMovieLibrary(library *model.Library) (int, error) {
 	}
 
 	if len(pendingList) > 0 {
-		// P2: 堆叠分组 — 为同一 StackGroup 的文件分配相同的 VersionGroup
-		stackGroups := make(map[string][]*pendingMedia)
-		for i := range pendingList {
-			if pendingList[i].media.StackGroup != "" {
-				stackGroups[pendingList[i].media.StackGroup] = append(stackGroups[pendingList[i].media.StackGroup], &pendingList[i])
-			}
-		}
-		for _, group := range stackGroups {
-			if len(group) > 1 {
-				// 使用第一个文件的标题作为组标识
-				groupID := group[0].media.Title
-				for _, pm := range group {
-					pm.media.VersionGroup = groupID
-				}
-			}
-		}
-
 		// 逐个入库（保留 NFO/图片扫描逻辑 + 事件广播）
 		for _, pm := range pendingList {
 			s.scanExternalSubtitles(pm.media)
@@ -1241,10 +1253,10 @@ func (s *ScannerService) scanMixedLibrary(library *model.Library) (int, error) {
 	allPaths := library.AllPaths()
 	s.logger.Infof("混合媒体库扫描: %s (路径数: %d)", library.Name, len(allPaths))
 
-	// [xiaoya 适配] 将所有媒体库根展开为平铺的真实媒体根集合
-	var mediaRoots []string
+	// [xiaoya 适配] 将所有媒体库根展开为平铺的真实媒体根集合（保留穿透深度）
+	var mediaRoots []expandedMediaRoot
 	for _, p := range allPaths {
-		mediaRoots = append(mediaRoots, s.collectMediaRoots(p, "mixed")...)
+		mediaRoots = append(mediaRoots, s.collectMediaRootInfos(p, "mixed")...)
 	}
 
 	var totalCount int
@@ -1261,7 +1273,8 @@ func (s *ScannerService) scanMixedLibrary(library *model.Library) (int, error) {
 	var movieDirs []movieDirEntry    // 被判定为电影的目录
 	var looseVideoFiles []looseEntry // 根目录散落的视频文件
 
-	for _, root := range mediaRoots {
+	for _, mr := range mediaRoots {
+		root := mr.Path
 		entries, err := s.readDirLibraryPath(root)
 		if err != nil {
 			s.logger.Warnf("读取混合库根目录失败: %s, 错误: %v", root, err)
@@ -1290,7 +1303,73 @@ func (s *ScannerService) scanMixedLibrary(library *model.Library) (int, error) {
 			rootIsSeriesFolder = true
 		}
 
-		if rootIsSeriesFolder || s.isTVShowFolder(root) {
+		// [同目录归组] 穿透而来的内容根（depth>0）若包含多个视频，整体归组为一部剧集；
+		// 库根自身（depth==0）的散落视频保持独立电影，避免整堆电影被误归为一部剧
+
+		// [关键修正] isTVShowFolder 内部的 collectSeriesEvidence 会深入一层子目录统计视频，
+		// 若直接用于库根，「影视库/剧名/SxxExx.mp4」这类经典结构会把整个媒体根误判为
+		// 一部以库根目录名命名的剧集，所有剧的分集全部折叠进同一条记录。
+		// 因此：
+		//   - depth>0（穿透到剧集目录内部）：保留 isTVShowFolder 判定；
+		//   - depth==0（用户配置的库根）：只有根目录【直属】视频命中剧集命名时才整体视为一部剧，
+		//     子目录中的分集证据交给下方逐目录分类逻辑处理。
+		rootHasSeriesEvidence := false
+		if mr.Depth > 0 {
+			rootHasSeriesEvidence = s.isTVShowFolder(root)
+		} else {
+			// depth==0：只有当根目录【没有】正常内容子目录、且直属视频命中剧集命名时，
+			// 才整体视为一部剧（用户把库路径直接指向某部剧目录的情况）。
+			// 否则哪怕存在一个日期命名的散落文件，也会把整库误折叠成一部剧。
+			hasNormalSubDir := false
+			for _, e := range entries {
+				if !e.IsDir() {
+					continue
+				}
+				name := e.Name()
+				if isSeasonOnlyDirName(name) || isXiaoyaSkipDir(name) || extrasExcludeDirs[strings.ToLower(name)] {
+					continue
+				}
+				hasNormalSubDir = true
+				break
+			}
+			if !hasNormalSubDir {
+				for _, e := range entries {
+					if !e.IsDir() && supportedExts[strings.ToLower(filepath.Ext(e.Name()))] && s.parseEpisodeInfo(e.Name()).EpisodeNum > 0 {
+						rootHasSeriesEvidence = true
+						break
+					}
+				}
+			}
+		}
+		// [分类层保护] 媒体根自身有直属视频、且某个内容子目录的视频数量【超过】根直属视频数时
+		// （如分类目录下既有少量散落电影又有大型剧集文件夹），不能把整根折叠成一部剧——
+		// 否则子剧集的身份会被吞掉。此时改为逐子目录归类，直属视频按独立电影处理。
+		// 注意：子目录视频数不超过直属视频数时不触发（如 剧名/压缩/ 变体目录应随主目录归组）；
+		// 无直属视频的包装层（嵌套单视频集合）与季目录结构分别由其他分支处理，不受此保护影响。
+		directVideoCount := 0
+		for _, e := range entries {
+			if !e.IsDir() && supportedExts[strings.ToLower(filepath.Ext(e.Name()))] {
+				directVideoCount++
+			}
+		}
+		hasDominantContentSubdir := false
+		if directVideoCount > 0 {
+			for _, e := range entries {
+				if !e.IsDir() || isXiaoyaSkipDir(e.Name()) || extrasExcludeDirs[strings.ToLower(e.Name())] {
+					continue
+				}
+				subVideos, _ := s.collectSeriesEvidence(vfsJoin(root, e.Name()))
+				if len(subVideos) > directVideoCount {
+					hasDominantContentSubdir = true
+					break
+				}
+			}
+		}
+
+		sameDirGrouped := mr.Depth > 0 && !rootIsSeriesFolder && !rootHasSeriesEvidence &&
+			!hasDominantContentSubdir && (s.isSameDirVideoGroup(root) || s.hasDatedVideo(root))
+
+		if rootIsSeriesFolder || rootHasSeriesEvidence || sameDirGrouped {
 			rootBase := filepath.Base(root)
 			normalizedName := s.normalizeSeriesName(rootBase)
 			if normalizedName == "" {
@@ -1298,7 +1377,9 @@ func (s *ScannerService) scanMixedLibrary(library *model.Library) (int, error) {
 				normalizedName = "__series_" + rootBase
 			}
 			seasonNum := s.extractSeasonFromDirName(rootBase)
-			if rootIsSeriesFolder {
+			if sameDirGrouped {
+				s.logger.Infof("[mixed] 媒体根 %s 为穿透内容目录且含多个视频，按同目录归组为剧集，序列名=%s", root, normalizedName)
+			} else if rootIsSeriesFolder {
 				s.logger.Infof("[mixed] 媒体根 %s 自身识别为剧集目录（%d 个季子目录），序列名=%s", root, seasonChildCount, normalizedName)
 			} else {
 				s.logger.Infof("[mixed] 媒体根 %s 自身识别为剧集目录（视频文件命中剧集命名），序列名=%s", root, normalizedName)
@@ -1331,8 +1412,10 @@ func (s *ScannerService) scanMixedLibrary(library *model.Library) (int, error) {
 			folderPath := vfsJoin(root, dirName)
 
 			// 智能判断：该目录是电视剧还是电影
-			if s.isTVShowFolder(folderPath) {
-				// 电视剧目录：按标准化系列名分组（支持多季合并）
+			// 归类优先级：明确剧集证据（季号/Season子目录/剧集命名）> 同目录多视频归组 > 日期命名（个人视频）> 电影。
+			// 同一目录下的多个视频视为一部剧集的分集，即使文件名没有剧集命名特征；
+			// 人名目录下仅有一个日期命名的视频也应归组为合集（个人视频场景）。
+			if s.isTVShowFolder(folderPath) || s.isSameDirVideoGroup(folderPath) || s.hasDatedVideo(folderPath) {
 				normalizedName := s.normalizeSeriesName(dirName)
 				if normalizedName == "" {
 					// 防御：纯季号目录名（如 "Season 01"）出现在分类目录下属于异常结构，
@@ -1533,7 +1616,10 @@ func (s *ScannerService) scanMixedLibrary(library *model.Library) (int, error) {
 // 1. 目录名包含季号标识（如 S1、Season 1、第一季）
 // 2. 目录内包含 Season 子目录
 // 3. 目录内有多个视频文件且文件名匹配剧集命名模式（S01E01、EP01、第N集等）
-// 4. 目录内有多个视频文件且文件名包含连续编号
+//
+// 注意：本函数用于媒体根目录的严格判定（根下散落的大量电影不能因数量多被
+// 归组为剧集）。内容子目录级别的「同目录视频归组为剧集」由 isSameDirVideoGroup
+// 负责，两者配合使用。
 func (s *ScannerService) isTVShowFolder(folderPath string) bool {
 	dirName := filepath.Base(folderPath)
 
@@ -1542,39 +1628,11 @@ func (s *ScannerService) isTVShowFolder(folderPath string) bool {
 		return true
 	}
 
-	// 读取目录内容
-	entries, err := s.readDirLibraryPath(folderPath)
-	if err != nil {
-		return false
-	}
+	videoFiles, hasSeasonSubdir := s.collectSeriesEvidence(folderPath)
 
 	// 规则2: 包含 Season 子目录
-	var videoFiles []string
-	for _, entry := range entries {
-		if entry.IsDir() {
-			for _, pattern := range seasonDirPatterns {
-				if pattern.MatchString(entry.Name()) {
-					return true
-				}
-			}
-			// 递归检查子目录中的视频文件（只深入一层）
-			subEntries, err := s.readDirLibraryPath(vfsJoin(folderPath, entry.Name()))
-			if err == nil {
-				for _, subEntry := range subEntries {
-					if !subEntry.IsDir() {
-						ext := strings.ToLower(filepath.Ext(subEntry.Name()))
-						if supportedExts[ext] {
-							videoFiles = append(videoFiles, subEntry.Name())
-						}
-					}
-				}
-			}
-		} else {
-			ext := strings.ToLower(filepath.Ext(entry.Name()))
-			if supportedExts[ext] {
-				videoFiles = append(videoFiles, entry.Name())
-			}
-		}
+	if hasSeasonSubdir {
+		return true
 	}
 
 	// 只有0或1个视频文件 → 大概率是电影
@@ -1596,9 +1654,156 @@ func (s *ScannerService) isTVShowFolder(folderPath string) bool {
 		return true
 	}
 
-	// 不再仅凭“3 个及以上视频文件”判定为剧集。
-	// 电影合集/系列电影目录也经常包含多个视频，必须有明确剧集命名证据才归为电视剧。
 	return false
+}
+
+// isSameDirVideoGroup 判断目录下的多个视频是否应归组为一部剧集。
+//
+// 归类规则（产品决策）：同一个目录下的多个视频文件视为同一部剧集的分集，
+// 即使文件名没有任何剧集命名特征（如纯数字名、下载站原始名）。
+// 剧集标题取目录名，集号由 collectEpisodes 自动解析/编号。
+// 特典目录（extras/trailers 等）与样片文件不参与计数，避免
+// 「单电影 + 花絮」被误判为剧集。
+func (s *ScannerService) isSameDirVideoGroup(folderPath string) bool {
+	videoFiles, _ := s.collectSeriesEvidence(folderPath)
+	return len(videoFiles) >= 2
+}
+
+// isNestedSingleVideoCollection 判断目录的各内容子目录是否各自只含一个视频。
+// 这种「包装层」结构（如 Nina/Nina-01/Nina-01.mp4）不应被当作分类层继续下钻。
+// 返回 true 表示：至少有 2 个子目录各含恰好 1 个视频，且不存在含多个视频的子目录
+// （存在多视频子目录说明那是分类层，应继续下钻让各子目录独立归组）。
+func (s *ScannerService) isNestedSingleVideoCollection(path string, subDirs []os.DirEntry) bool {
+	singleCount := 0
+	for _, sd := range subDirs {
+		if isXiaoyaSkipDir(sd.Name()) || extrasExcludeDirs[strings.ToLower(sd.Name())] {
+			continue
+		}
+		entries, err := s.readDirLibraryPath(vfsJoin(path, sd.Name()))
+		if err != nil {
+			return false
+		}
+		videoCount := 0
+		for _, e := range entries {
+			if e.IsDir() {
+				// 含更深层级：不是简单包装层，保守放行下钻
+				return false
+			}
+			ext := strings.ToLower(filepath.Ext(e.Name()))
+			if !supportedExts[ext] || isExtrasFile(e.Name()) {
+				continue
+			}
+			baseName := strings.ToLower(strings.TrimSuffix(e.Name(), filepath.Ext(e.Name())))
+			if junkVideoNames[baseName] {
+				continue
+			}
+			videoCount++
+			if videoCount > 1 {
+				return false
+			}
+		}
+		if videoCount == 1 {
+			singleCount++
+		}
+	}
+	return singleCount >= 2
+}
+
+// hasDatedVideo 判断目录内（含一层非特典子目录）是否存在日期命名的视频。
+// [个人视频场景] 人名目录下即使只有一个日期命名的视频（如 小红/VID_20240501_xxx.mp4），
+// 也应归组为该人的剧集合集，而不是散落成独立电影。
+func (s *ScannerService) hasDatedVideo(folderPath string) bool {
+	entries, err := s.readDirLibraryPath(folderPath)
+	if err != nil {
+		return false
+	}
+	check := func(name string) bool {
+		ext := strings.ToLower(filepath.Ext(name))
+		if !supportedExts[ext] || isExtrasFile(name) {
+			return false
+		}
+		baseName := strings.ToLower(strings.TrimSuffix(name, filepath.Ext(name)))
+		if junkVideoNames[baseName] {
+			return false
+		}
+		_, _, _, _, ok := matchDateEpisode(name)
+		return ok
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			if extrasExcludeDirs[strings.ToLower(e.Name())] {
+				continue
+			}
+			subEntries, err := s.readDirLibraryPath(vfsJoin(folderPath, e.Name()))
+			if err == nil {
+				for _, subEntry := range subEntries {
+					if !subEntry.IsDir() && check(subEntry.Name()) {
+						return true
+					}
+				}
+			}
+		} else if check(e.Name()) {
+			return true
+		}
+	}
+	return false
+}
+
+// junkVideoNames 目录内常见的垃圾/样片视频文件名（去扩展名后小写比对）
+var junkVideoNames = map[string]bool{
+	"sample": true, "trailer": true, "promo": true, "menu": true,
+}
+
+// collectSeriesEvidence 收集目录内的候选剧集视频证据。
+// 返回值：
+//   - videoFiles：正片候选视频文件名（直接位于目录内，或位于一层非特典子目录中；
+//     已排除特典文件后缀、特典目录与样片命名）
+//   - hasSeasonSubdir：是否存在 Season/Sxx/第N季/Specials 等标准季目录
+func (s *ScannerService) collectSeriesEvidence(folderPath string) (videoFiles []string, hasSeasonSubdir bool) {
+	entries, err := s.readDirLibraryPath(folderPath)
+	if err != nil {
+		return nil, false
+	}
+
+	collectVideo := func(name string) {
+		ext := strings.ToLower(filepath.Ext(name))
+		if !supportedExts[ext] || isExtrasFile(name) {
+			return
+		}
+		baseName := strings.ToLower(strings.TrimSuffix(name, filepath.Ext(name)))
+		if junkVideoNames[baseName] {
+			return
+		}
+		videoFiles = append(videoFiles, name)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			for _, pattern := range seasonDirPatterns {
+				if pattern.MatchString(entry.Name()) {
+					hasSeasonSubdir = true
+					break
+				}
+			}
+			// 特典/花絮目录中的视频不算正片证据，且无需深入
+			if extrasExcludeDirs[strings.ToLower(entry.Name())] {
+				continue
+			}
+			// 递归检查子目录中的视频文件（只深入一层）
+			subEntries, err := s.readDirLibraryPath(vfsJoin(folderPath, entry.Name()))
+			if err == nil {
+				for _, subEntry := range subEntries {
+					if !subEntry.IsDir() {
+						collectVideo(subEntry.Name())
+					}
+				}
+			}
+		} else {
+			collectVideo(entry.Name())
+		}
+	}
+
+	return videoFiles, hasSeasonSubdir
 }
 
 // ==================== 剧集扫描逻辑 ====================
@@ -1642,6 +1847,10 @@ var episodePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`[\-\.\s](\d{2,4})[\]\-\.\s]`),
 }
 
+// trailingUnderscoreEpPattern 下划线尾号：Saved_003、NANA_001（个人收藏常见命名）。
+// 作为模式 10 在其他模式之后尝试，仅匹配文件名末尾的下划线编号。
+var trailingUnderscoreEpPattern = regexp.MustCompile(`_(\d{1,4})$`)
+
 // multiEpPatterns 多集连播文件正则（优先于单集模式匹配）
 var multiEpPatterns = []*regexp.Regexp{
 	// S01E02-E03 / S01E02-E05 / S01E02-e03
@@ -1652,7 +1861,53 @@ var multiEpPatterns = []*regexp.Regexp{
 
 // dateEpisodePattern 日期格式集号正则（用于脱口秀/日播剧等）
 // 匹配: 2024.01.15 / 2024-01-15 / 2024_01_15
-var dateEpisodePattern = regexp.MustCompile(`((?:19|20)\d{2})[\.\-_](\d{2})[\.\-_](\d{2})`)
+var (
+	dateEpisodePattern = regexp.MustCompile(`((?:19|20)\d{2})[\.\-_](\d{2})[\.\-_](\d{2})`)
+	// 紧凑格式：20240115（手机导出视频常见，如 VID_20240115_223045.mp4）
+	dateEpisodeCompactPattern = regexp.MustCompile(`(?:^|[^\d])((?:19|20)\d{2})(\d{2})(\d{2})(?:[^\d]|$)`)
+	// 中文格式：2024年1月15日
+	dateEpisodeCJKPattern = regexp.MustCompile(`((?:19|20)\d{2})年(\d{1,2})月(\d{1,2})日`)
+	// 美式紧凑日期：011921（月日年 6 位纯数字，个人收藏常见命名）
+	dateEpisodeMMDDYYPattern = regexp.MustCompile(`^(\d{2})(\d{2})(\d{2})$`)
+)
+
+// trailingParenEpPattern 尾部括号编号：(01)、(3) 等（个人收藏常见命名）
+var trailingParenEpPattern = regexp.MustCompile(`\(\s*(\d{1,4})\s*\)\s*$`)
+
+// matchDateEpisode 从文件名中识别日期型集号。
+// 返回年/月/日与命中的原始文本；由调用方负责数值合理性校验。
+func matchDateEpisode(filename string) (year, month, day int, matched string, ok bool) {
+	if m := dateEpisodePattern.FindStringSubmatch(filename); len(m) >= 4 {
+		year, _ = strconv.Atoi(m[1])
+		month, _ = strconv.Atoi(m[2])
+		day, _ = strconv.Atoi(m[3])
+		return year, month, day, m[0], true
+	}
+	if m := dateEpisodeCJKPattern.FindStringSubmatch(filename); len(m) >= 4 {
+		year, _ = strconv.Atoi(m[1])
+		month, _ = strconv.Atoi(m[2])
+		day, _ = strconv.Atoi(m[3])
+		return year, month, day, m[0], true
+	}
+	if m := dateEpisodeCompactPattern.FindStringSubmatch(filename); len(m) >= 4 {
+		year, _ = strconv.Atoi(m[1])
+		month, _ = strconv.Atoi(m[2])
+		day, _ = strconv.Atoi(m[3])
+		return year, month, day, m[1], true
+	}
+	// [个人视频] 纯 6 位数字文件名按美式 月日年(MMDDYY) 解析，如 011921 → 2021-01-19。
+	// 仅当去掉扩展名后整体恰为 6 位数字时生效，避免误伤其他编号。
+	base := strings.TrimSuffix(filename, filepath.Ext(filename))
+	if m := dateEpisodeMMDDYYPattern.FindStringSubmatch(base); len(m) >= 4 {
+		month, _ := strconv.Atoi(m[1])
+		day, _ := strconv.Atoi(m[2])
+		yy, _ := strconv.Atoi(m[3])
+		if month >= 1 && month <= 12 && day >= 1 && day <= 31 && yy <= 38 {
+			return 2000 + yy, month, day, base, true
+		}
+	}
+	return 0, 0, 0, "", false
+}
 
 // 独立季号正则：从文件名中提取 S2、Season 2 等季号（不依赖集号）
 var seasonInFilenamePatterns = []*regexp.Regexp{
@@ -1738,7 +1993,11 @@ func (s *ScannerService) scanTVShowLibrary(library *model.Library) (int, error) 
 					}
 					if existing, err := s.mediaRepo.FindByFilePath(filePath); err == nil {
 						s.deleteSourceDuplicateIfOrganized(library, existing, filePath, info)
-						continue // 已存在
+						// 已归属某剧集的文件不再重复处理；
+						// 无归属的旧行（旧版本按散落记录导入）仍参与下方智能归类，补挂到虚拟合集
+						if existing.SeriesID != "" {
+							continue // 已存在且已归属
+						}
 					}
 					if _, represented := s.findOrganizedHardlinkRecord(library, filePath, info); represented {
 						continue
@@ -1852,6 +2111,10 @@ func (s *ScannerService) scanTVShowLibrary(library *model.Library) (int, error) 
 			// 彻底无法识别系列名的文件，独立入库（保底）
 			for _, f := range files {
 				filePath := vfsJoin(f.rootPath, f.entry.Name())
+				// 已在库中的记录（含无归属旧行）保持原状，避免重复插入
+				if _, err := s.mediaRepo.FindByFilePath(filePath); err == nil {
+					continue
+				}
 				title := s.extractTitle(f.entry.Name())
 				media := &model.Media{
 					LibraryID: library.ID,
@@ -1903,6 +2166,21 @@ func (s *ScannerService) scanTVShowLibrary(library *model.Library) (int, error) 
 			ep := s.parseEpisodeInfo(f.entry.Name())
 			if ep.SeasonNum == 0 {
 				ep.SeasonNum = 1
+			}
+
+			// 历史无归属记录：补挂到当前虚拟合集，而不是重复入库
+			if existing, err := s.mediaRepo.FindByFilePath(filePath); err == nil {
+				seasonSet[ep.SeasonNum] = true
+				if existing.SeriesID != series.ID {
+					existing.SeriesID = series.ID
+					existing.MediaType = "episode"
+					existing.Title = actualSeriesName
+					existing.SeasonNum = ep.SeasonNum
+					existing.EpisodeNum = ep.EpisodeNum
+					s.mediaRepo.Update(existing)
+					s.logger.Infof("历史散落媒体补挂到合集: %s -> %s", f.entry.Name(), actualSeriesName)
+				}
+				continue
 			}
 
 			media := &model.Media{
@@ -2109,9 +2387,9 @@ func (s *ScannerService) scanMultiSeasonSeries(library *model.Library, seriesTit
 		}
 	}
 
-	// 识别本地海报封面图片（从各季目录中查找）
+	// 识别本地海报封面图片（从各季目录中查找；含封面子目录）
 	for _, f := range folders {
-		if poster, backdrop := s.nfoService.FindLocalImages(f.path); poster != "" || backdrop != "" {
+		if poster, backdrop := s.nfoService.FindLocalImagesDeep(f.path); poster != "" || backdrop != "" {
 			if poster != "" && series.PosterPath == "" {
 				series.PosterPath = poster
 				s.logger.Debugf("发现多季合集本地海报: %s", poster)
@@ -2225,8 +2503,21 @@ func (s *ScannerService) scanMultiSeasonSeries(library *model.Library, seriesTit
 				}
 				seasonSet[seasonNum] = true
 				needUpdate := false
-				if existing.EpisodeTitle != ep.EpisodeTitle {
-					existing.EpisodeTitle = ep.EpisodeTitle
+				// [历史数据修复] 同 scanSeriesFolder：无剧集归属的旧行补挂到本合集，
+				// 避免重扫后合集集数为 0、前端剧集列表为空。
+				if existing.SeriesID == "" {
+					existing.SeriesID = series.ID
+					existing.MediaType = "episode"
+					needUpdate = true
+					s.logger.Infof("历史媒体记录补挂到多季合集: %s -> %s", filepath.Base(ep.FilePath), seriesTitle)
+				}
+				// [个人影视库] 分集名称与标题使用真实文件名（去扩展名）
+				if displayTitle := strings.TrimSuffix(filepath.Base(ep.FilePath), filepath.Ext(ep.FilePath)); existing.Title != displayTitle {
+					existing.Title = displayTitle
+					needUpdate = true
+				}
+				if displayTitle := strings.TrimSuffix(filepath.Base(ep.FilePath), filepath.Ext(ep.FilePath)); existing.EpisodeTitle != displayTitle {
+					existing.EpisodeTitle = displayTitle
 					needUpdate = true
 				}
 				if existing.SeasonNum != seasonNum {
@@ -2236,6 +2527,18 @@ func (s *ScannerService) scanMultiSeasonSeries(library *model.Library, seriesTit
 				if existing.EpisodeNum != ep.EpisodeNum {
 					existing.EpisodeNum = ep.EpisodeNum
 					needUpdate = true
+				}
+				// [海报回填] 同 scanSeriesFolder：旧数据缺本地封面时重扫补齐。
+				if existing.PosterPath == "" || existing.BackdropPath == "" {
+					poster, backdrop := s.nfoService.FindLocalImagesForMedia(ep.FilePath)
+					if poster != "" && existing.PosterPath == "" {
+						existing.PosterPath = poster
+						needUpdate = true
+					}
+					if backdrop != "" && existing.BackdropPath == "" {
+						existing.BackdropPath = backdrop
+						needUpdate = true
+					}
 				}
 				if needUpdate {
 					s.mediaRepo.Update(existing)
@@ -2250,16 +2553,17 @@ func (s *ScannerService) scanMultiSeasonSeries(library *model.Library, seriesTit
 			media := &model.Media{
 				LibraryID:    library.ID,
 				SeriesID:     series.ID,
-				Title:        seriesTitle,
+				Title:        strings.TrimSuffix(filepath.Base(ep.FilePath), filepath.Ext(ep.FilePath)),
 				FilePath:     ep.FilePath,
 				FileSize:     ep.FileInfo.Size(),
 				MediaType:    "episode",
 				SeasonNum:    seasonNum,
 				EpisodeNum:   ep.EpisodeNum,
-				EpisodeTitle: ep.EpisodeTitle,
+				EpisodeTitle: strings.TrimSuffix(filepath.Base(ep.FilePath), filepath.Ext(ep.FilePath)),
 			}
 
 			s.probeMediaInfo(media)
+			s.attachLocalEpisodeArt(media)
 			s.scanExternalSubtitles(media)
 
 			if err := s.mediaRepo.Create(media); err != nil {
@@ -2296,6 +2600,19 @@ func (s *ScannerService) scanMultiSeasonSeries(library *model.Library, seriesTit
 	return totalNewCount, nil
 }
 
+// attachLocalEpisodeArt 为分集挂载本地图片：与视频同名的图片、
+// 封面子目录中的同名图（如 011921.mp4 + M痴女_封面/011921.jpg），
+// 以及单视频目录下的通用封面。与电影库导入逻辑保持一致。
+func (s *ScannerService) attachLocalEpisodeArt(media *model.Media) {
+	poster, backdrop := s.nfoService.FindLocalImagesForMedia(media.FilePath)
+	if poster != "" && media.PosterPath == "" {
+		media.PosterPath = poster
+	}
+	if backdrop != "" && media.BackdropPath == "" {
+		media.BackdropPath = backdrop
+	}
+}
+
 // scanSeriesFolder 扫描单个剧集文件夹
 func (s *ScannerService) scanSeriesFolder(library *model.Library, folderPath, seriesTitle string) (int, error) {
 	s.logger.Infof("扫描剧集: %s (%s)", seriesTitle, folderPath)
@@ -2328,8 +2645,8 @@ func (s *ScannerService) scanSeriesFolder(library *model.Library, folderPath, se
 		}
 	}
 
-	// 识别本地海报封面图片
-	if poster, backdrop := s.nfoService.FindLocalImages(folderPath); poster != "" || backdrop != "" {
+	// 识别本地海报封面图片（含封面子目录，如 剧名/xxx_封面/01.jpg）
+	if poster, backdrop := s.nfoService.FindLocalImagesDeep(folderPath); poster != "" || backdrop != "" {
 		if poster != "" && series.PosterPath == "" {
 			series.PosterPath = poster
 			s.logger.Debugf("发现剧集本地海报: %s", poster)
@@ -2370,8 +2687,25 @@ func (s *ScannerService) scanSeriesFolder(library *model.Library, folderPath, se
 			}
 			seasonSet[ep.SeasonNum] = true
 			needUpdate := false
-			if existing.EpisodeTitle != ep.EpisodeTitle {
-				existing.EpisodeTitle = ep.EpisodeTitle
+			// [历史数据修复] 该文件此前可能被当作独立电影/未归类分集入库（无剧集归属）。
+			// 现在目录结构明确其属于本剧，补挂 SeriesID 并修正类型；否则剧集会一直
+			// 因 episode_count=0 被列表过滤，表现为「剧集页没有内容」。
+			if existing.SeriesID == "" {
+				existing.SeriesID = series.ID
+				existing.MediaType = "episode"
+				needUpdate = true
+				s.logger.Infof("历史媒体记录补挂到剧集: %s -> %s", filepath.Base(ep.FilePath), seriesTitle)
+			}
+			// [个人影视库] 分集标题与名称一律使用真实文件名（去扩展名），
+			// 不展示「第N集」这类通用命名；重扫时同步修正旧数据。
+			if displayTitle := strings.TrimSuffix(filepath.Base(ep.FilePath), filepath.Ext(ep.FilePath)); existing.Title != displayTitle {
+				existing.Title = displayTitle
+				needUpdate = true
+			}
+			// [个人影视库] 分集标题一律使用真实文件名（去扩展名），
+			// 不展示「第N集」或日期等派生命名；重扫时同步修正旧数据。
+			if displayTitle := strings.TrimSuffix(filepath.Base(ep.FilePath), filepath.Ext(ep.FilePath)); existing.EpisodeTitle != displayTitle {
+				existing.EpisodeTitle = displayTitle
 				needUpdate = true
 			}
 			if existing.SeasonNum != ep.SeasonNum {
@@ -2381,6 +2715,19 @@ func (s *ScannerService) scanSeriesFolder(library *model.Library, folderPath, se
 			if existing.EpisodeNum != ep.EpisodeNum {
 				existing.EpisodeNum = ep.EpisodeNum
 				needUpdate = true
+			}
+			// [海报回填] 旧数据可能没有挂本地封面图，重扫时补齐，
+			// 避免用户必须清库重扫才能看到海报。
+			if existing.PosterPath == "" || existing.BackdropPath == "" {
+				poster, backdrop := s.nfoService.FindLocalImagesForMedia(ep.FilePath)
+				if poster != "" && existing.PosterPath == "" {
+					existing.PosterPath = poster
+					needUpdate = true
+				}
+				if backdrop != "" && existing.BackdropPath == "" {
+					existing.BackdropPath = backdrop
+					needUpdate = true
+				}
 			}
 			if needUpdate {
 				s.mediaRepo.Update(existing)
@@ -2392,19 +2739,23 @@ func (s *ScannerService) scanSeriesFolder(library *model.Library, folderPath, se
 			continue
 		}
 
+		// [个人影视库] 分集名称与标题使用真实文件名（去扩展名）
+		displayTitle := strings.TrimSuffix(filepath.Base(ep.FilePath), filepath.Ext(ep.FilePath))
+
 		media := &model.Media{
 			LibraryID:    library.ID,
 			SeriesID:     series.ID,
-			Title:        seriesTitle,
+			Title:        displayTitle,
 			FilePath:     ep.FilePath,
 			FileSize:     ep.FileInfo.Size(),
 			MediaType:    "episode",
 			SeasonNum:    ep.SeasonNum,
 			EpisodeNum:   ep.EpisodeNum,
-			EpisodeTitle: ep.EpisodeTitle,
+			EpisodeTitle: displayTitle,
 		}
 
 		s.probeMediaInfo(media)
+		s.attachLocalEpisodeArt(media)
 		s.scanExternalSubtitles(media)
 
 		if err := s.mediaRepo.Create(media); err != nil {
@@ -2481,6 +2832,46 @@ func (s *ScannerService) collectEpisodes(folderPath string) []EpisodeInfo {
 		return episodes[i].EpisodeNum < episodes[j].EpisodeNum
 	})
 
+	// [个人视频场景] 目录内文件以日期命名为主（如人名目录下的 2024-01-15.mp4、
+	// VID_20240115_223045.mp4）时，改为时间顺序编号：
+	// 全部归入第 1 季、顺序集号、日期写入分集标题，
+	// 避免「第 24 季 第 115 集」这类对个人视频无意义的年份/月日编码。
+	// 允许少量非日期杂项文件（如 000000-000.mp4 占位、封面误入等）：
+	// 当日期文件占比过半且未出现显式季集编号（S01E02 / 第3集）时，仍按时间顺序归一化，
+	// 未标注日期的文件按名称排在末尾。
+	datedCount := 0
+	hasExplicitNumbering := false
+	for _, ep := range episodes {
+		if ep.AirDate != "" {
+			datedCount++
+		} else if episodePatterns[0].MatchString(filepath.Base(ep.FilePath)) ||
+			episodePatterns[3].MatchString(filepath.Base(ep.FilePath)) {
+			// 未标日期但带显式季集编号（S01E02 / 第3集）：这是真正的剧集结构，不做时间归一化
+			hasExplicitNumbering = true
+		}
+	}
+	majorityDated := len(episodes) > 0 && datedCount*2 >= len(episodes) && !hasExplicitNumbering
+	if majorityDated {
+		sort.SliceStable(episodes, func(i, j int) bool {
+			di, dj := episodes[i].AirDate != "", episodes[j].AirDate != ""
+			if di != dj {
+				return di // 有日期的在前，无日期的排末尾
+			}
+			if episodes[i].AirDate != episodes[j].AirDate {
+				return episodes[i].AirDate < episodes[j].AirDate
+			}
+			return episodes[i].FilePath < episodes[j].FilePath
+		})
+		for i := range episodes {
+			episodes[i].SeasonNum = 1
+			episodes[i].EpisodeNum = i + 1
+			if episodes[i].AirDate != "" {
+				episodes[i].EpisodeTitle = episodes[i].AirDate
+			}
+		}
+		return episodes
+	}
+
 	// 如果所有集号都是0，按文件名排序后自动编号
 	allZero := true
 	for _, ep := range episodes {
@@ -2495,6 +2886,38 @@ func (s *ScannerService) collectEpisodes(folderPath string) []EpisodeInfo {
 		})
 		for i := range episodes {
 			episodes[i].EpisodeNum = i + 1
+		}
+		return episodes
+	}
+
+	// 部分文件没有解析到集号（如「花絮」「未命名」混在正常命名的分集中）：
+	// 按文件路径顺序排在已解析的最大集号之后继续编号，避免出现「第0集」
+	hasUnnumbered := false
+	for i := range episodes {
+		if episodes[i].EpisodeNum <= 0 {
+			hasUnnumbered = true
+			break
+		}
+	}
+	if hasUnnumbered {
+		maxNum := 0
+		for i := range episodes {
+			if episodes[i].EpisodeNum > maxNum {
+				maxNum = episodes[i].EpisodeNum
+			}
+			if episodes[i].EpisodeNumEnd > maxNum {
+				maxNum = episodes[i].EpisodeNumEnd
+			}
+		}
+		sort.Slice(episodes, func(i, j int) bool {
+			return episodes[i].FilePath < episodes[j].FilePath
+		})
+		next := maxNum
+		for i := range episodes {
+			if episodes[i].EpisodeNum <= 0 {
+				next++
+				episodes[i].EpisodeNum = next
+			}
 		}
 	}
 
@@ -2543,11 +2966,8 @@ func (s *ScannerService) parseEpisodeInfo(filename string) EpisodeInfo {
 		}
 	}
 
-	// === 阶段零-B：日期格式集号检测（日播剧/脱口秀） ===
-	if m := dateEpisodePattern.FindStringSubmatch(filename); len(m) >= 4 {
-		year, _ := strconv.Atoi(m[1])
-		month, _ := strconv.Atoi(m[2])
-		day, _ := strconv.Atoi(m[3])
+	// === 阶段零-B：日期格式集号检测（日播剧/脱口秀/个人视频） ===
+	if year, month, day, matched, ok := matchDateEpisode(filename); ok {
 		// 验证日期合理性
 		if year >= 1990 && year <= 2099 && month >= 1 && month <= 12 && day >= 1 && day <= 31 {
 			// 不与 SxxExx 冲突：如果同时有 S01E01 格式，优先使用 SxxExx
@@ -2556,7 +2976,7 @@ func (s *ScannerService) parseEpisodeInfo(filename string) EpisodeInfo {
 				// 将日期编码为集号: MMDD (方便排序)
 				ep.EpisodeNum = month*100 + day
 				ep.SeasonNum = year - 2000 // 年份作为季号标识（如 2024 → 24）
-				ep.EpisodeTitle = s.extractEpisodeTitle(nameWithoutExt, m[0])
+				ep.EpisodeTitle = s.extractEpisodeTitle(nameWithoutExt, matched)
 				return ep
 			}
 		}
@@ -2658,6 +3078,28 @@ func (s *ScannerService) parseEpisodeInfo(filename string) EpisodeInfo {
 			ep.EpisodeNum = num
 			ep.SeasonNum = s.extractSeasonFromFilename(filename)
 			ep.EpisodeTitle = s.extractEpisodeTitle(nameWithoutExt, filename[m[0]:m[1]])
+			return ep
+		}
+	}
+
+	// 模式 9: 尾部括号编号 Short (01) / ゆうき美羽 (3) / 松本メイ(1)（个人收藏常见命名）
+	if m := trailingParenEpPattern.FindStringSubmatch(nameWithoutExt); len(m) >= 2 {
+		num, _ := strconv.Atoi(m[1])
+		if num > 0 && num < 1900 && !resolutionNums[num] {
+			ep.EpisodeNum = num
+			ep.SeasonNum = s.extractSeasonFromFilename(filename)
+			ep.EpisodeTitle = s.extractEpisodeTitle(nameWithoutExt, m[0])
+			return ep
+		}
+	}
+
+	// 模式 10: 下划线尾号 Saved_003 / NANA_001（个人收藏常见命名）
+	if m := trailingUnderscoreEpPattern.FindStringSubmatch(nameWithoutExt); len(m) >= 2 {
+		num, _ := strconv.Atoi(m[1])
+		if num > 0 && num < 1900 && !resolutionNums[num] {
+			ep.EpisodeNum = num
+			ep.SeasonNum = s.extractSeasonFromFilename(filename)
+			ep.EpisodeTitle = s.extractEpisodeTitle(nameWithoutExt, m[0])
 			return ep
 		}
 	}
@@ -2811,6 +3253,12 @@ func (s *ScannerService) extractSeriesNameFromFile(filename string) string {
 		`(?i)S\d{1,2}\.\s*E\d{1,4}`,
 		`(?i)\d{1,2}x\d{1,4}`,
 		`第\s*\d{1,4}\s*集`,
+		// 中文常见的期/话/回计数（综艺、脱口秀、动漫）
+		`第\s*\d{1,4}\s*期`,
+		`第\s*\d{1,4}\s*[話话]`,
+		`第\s*\d{1,4}\s*回`,
+		// 日播/日期型集号：20240115、2024.01.15、2024-01-15（要求完整 8 位日期，避免误伤年份）
+		`\b(19|20)\d{2}\s*[.\-_]?\s*\d{2}\s*[.\-_]?\s*\d{2}\b`,
 		`(?i)(?:EP|Episode)\s*\.?\s*\d{1,4}`,
 		`(?i)\bE\d{1,4}\b`,
 	}
@@ -3758,358 +4206,4 @@ func (s *ScannerService) broadcastSubExtractEvent(eventType string, data *SubExt
 	if s.wsHub != nil {
 		s.wsHub.BroadcastEvent(eventType, data)
 	}
-}
-
-// ==================== 重复媒体检测 ====================
-
-// DuplicateGroup 重复媒体组
-type DuplicateGroup struct {
-	GroupKey   string          `json:"group_key"`   // 分组键（标题+年份）
-	Title      string          `json:"title"`       // 标题
-	Year       int             `json:"year"`        // 年份
-	MediaCount int             `json:"media_count"` // 重复数量
-	Media      []DuplicateItem `json:"media"`       // 重复的媒体列表
-	Suggestion string          `json:"suggestion"`  // 处理建议
-}
-
-// DuplicateItem 重复媒体项
-type DuplicateItem struct {
-	ID         string  `json:"id"`
-	Title      string  `json:"title"`
-	MediaType  string  `json:"media_type"`
-	FilePath   string  `json:"file_path"`
-	FileSize   int64   `json:"file_size"`
-	Resolution string  `json:"resolution"`
-	VideoCodec string  `json:"video_codec"`
-	AudioCodec string  `json:"audio_codec"`
-	Duration   float64 `json:"duration"`
-	LibraryID  string  `json:"library_id"`
-	IsPrimary  bool    `json:"is_primary"` // 是否为推荐保留的版本
-}
-
-// DetectDuplicates 检测媒体库中的重复媒体
-// 检测策略（按优先级）：
-// 1. TMDb ID 精确匹配（仅电影）
-// 2. 标题匹配 + 年份容错：一方被刮削过（有年份）、另一方仍是文件名标题
-//    （无年份）时同样合并，避免列表出现两张相同海报（仅电影）
-// 3. 归一化路径完全一致 —— 同一物理文件以不同大小写/分隔符拼写被重复索引
-//    （全部媒体类型；剧集列表查询不过滤副本，因此不影响剧集页展示）
-// 4. 归一化文件名 + 文件大小一致 —— 同一文件换目录后的重复索引（全部媒体类型）
-func (s *ScannerService) DetectDuplicates(libraryID string) ([]DuplicateGroup, error) {
-	loadMedia := func(onlyMovies bool) ([]model.Media, error) {
-		var rows []model.Media
-		query := s.mediaRepo.DB().Where("deleted_at IS NULL")
-		if onlyMovies {
-			query = query.Where("media_type = ?", "movie")
-		}
-		if libraryID != "" {
-			query = query.Where("library_id = ?", libraryID)
-		}
-		if err := query.Find(&rows).Error; err != nil {
-			return nil, fmt.Errorf("查询媒体列表失败: %w", err)
-		}
-		return rows, nil
-	}
-
-	movies, err := loadMedia(true)
-	if err != nil {
-		return nil, err
-	}
-	allMedia, err := loadMedia(false)
-	if err != nil {
-		return nil, err
-	}
-
-	seen := make(map[string]bool) // 已归组的媒体 ID
-	var groups []DuplicateGroup
-
-	addGroup := func(mediaList []model.Media, key string) {
-		var filtered []model.Media
-		for _, m := range mediaList {
-			if !seen[m.ID] {
-				filtered = append(filtered, m)
-			}
-		}
-		if len(filtered) < 2 {
-			return
-		}
-		groups = append(groups, s.buildDuplicateGroup(filtered, key))
-		for _, m := range filtered {
-			seen[m.ID] = true
-		}
-	}
-
-	// === 1) TMDb ID 匹配（最精确，仅电影）===
-	tmdbGroups := make(map[int][]model.Media)
-	for _, m := range movies {
-		if m.TMDbID > 0 {
-			tmdbGroups[m.TMDbID] = append(tmdbGroups[m.TMDbID], m)
-		}
-	}
-	for _, tmdbID := range sortedIntKeys(tmdbGroups) {
-		addGroup(tmdbGroups[tmdbID], fmt.Sprintf("tmdb:%d", tmdbID))
-	}
-
-	// === 2) 标题匹配（年份容错，仅电影）===
-	for _, cluster := range collectTitleDuplicateClusters(movies) {
-		addGroup(cluster.members, cluster.key)
-	}
-
-	// === 3) 归一化路径一致（全部类型）===
-	pathGroups := make(map[string][]model.Media)
-	for _, m := range allMedia {
-		if key := normalizeMediaPathKey(m.FilePath); key != "" {
-			pathGroups[key] = append(pathGroups[key], m)
-		}
-	}
-	for _, key := range sortedStringKeys(pathGroups) {
-		addGroup(pathGroups[key], "path:"+key)
-	}
-
-	// === 4) 归一化文件名 + 文件大小一致（全部类型）===
-	fileGroups := make(map[string][]model.Media)
-	for _, m := range allMedia {
-		base := normalizeDupFileName(m.FilePath)
-		if base == "" || m.FileSize <= 0 {
-			continue
-		}
-		key := base + "|" + strconv.FormatInt(m.FileSize, 10)
-		fileGroups[key] = append(fileGroups[key], m)
-	}
-	for _, key := range sortedStringKeys(fileGroups) {
-		addGroup(fileGroups[key], "file:"+key)
-	}
-
-	// 按重复数量降序排列
-	sort.Slice(groups, func(i, j int) bool {
-		return groups[i].MediaCount > groups[j].MediaCount
-	})
-
-	s.logger.Infof("重复媒体检测完成: 发现 %d 组重复", len(groups))
-	return groups, nil
-}
-
-// titleDuplicateCluster 标题聚类产生的重复组候选
-type titleDuplicateCluster struct {
-	key     string
-	members []model.Media
-}
-
-// collectTitleDuplicateClusters 按标题聚类电影并容忍年份缺失：
-// - 双方年份都已知且不同 -> 不合并（避免错误合并重拍版）
-// - 只有一个已知年份 -> 该年份组与所有未知年份行合并
-// - 无已知年份 / 多个已知年份 -> 未知年份行单独成组，各年份组独立成组
-func collectTitleDuplicateClusters(movies []model.Media) []titleDuplicateCluster {
-	titleGroups := make(map[string][]model.Media)
-	for _, m := range movies {
-		norm := normalizeDupTitle(m.Title)
-		if norm == "" {
-			continue
-		}
-		titleGroups[norm] = append(titleGroups[norm], m)
-	}
-
-	var clusters []titleDuplicateCluster
-	for _, title := range sortedStringKeys(titleGroups) {
-		rows := titleGroups[title]
-		if len(rows) < 2 {
-			continue
-		}
-
-		byYear := make(map[int][]model.Media)
-		var unknown []model.Media
-		for _, m := range rows {
-			if m.Year > 0 {
-				byYear[m.Year] = append(byYear[m.Year], m)
-			} else {
-				unknown = append(unknown, m)
-			}
-		}
-		years := sortedIntKeys(byYear)
-
-		switch len(years) {
-		case 0:
-			if len(unknown) >= 2 {
-				clusters = append(clusters, titleDuplicateCluster{
-					key:     "titlenoyear:" + title,
-					members: unknown,
-				})
-			}
-		case 1:
-			members := append(append([]model.Media{}, byYear[years[0]]...), unknown...)
-			if len(members) >= 2 {
-				clusters = append(clusters, titleDuplicateCluster{
-					key:     fmt.Sprintf("title:%s|%d", title, years[0]),
-					members: members,
-				})
-			}
-		default:
-			if len(unknown) >= 2 {
-				clusters = append(clusters, titleDuplicateCluster{
-					key:     "titlenoyear:" + title,
-					members: unknown,
-				})
-			}
-			for _, year := range years {
-				if len(byYear[year]) >= 2 {
-					clusters = append(clusters, titleDuplicateCluster{
-						key:     fmt.Sprintf("title:%s|%d", title, year),
-						members: byYear[year],
-					})
-				}
-			}
-		}
-	}
-	return clusters
-}
-
-// normalizeDupTitle 归一化用于重复检测的标题：小写、压缩连续空白。
-func normalizeDupTitle(title string) string {
-	return strings.Join(strings.Fields(strings.ToLower(title)), " ")
-}
-
-// normalizeMediaPathKey 归一化文件路径用于重复检测：
-// 统一分隔符、小写、合并连续斜杠并去掉尾随斜杠，
-// 使同一物理文件的不同路径拼写映射到同一个键。
-func normalizeMediaPathKey(p string) string {
-	key := strings.ToLower(strings.TrimSpace(filepath.ToSlash(p)))
-	for strings.Contains(key, "//") {
-		key = strings.ReplaceAll(key, "//", "/")
-	}
-	return strings.TrimSuffix(key, "/")
-}
-
-// normalizeDupFileName 取归一化的去扩展名文件名用于重复检测。
-func normalizeDupFileName(filePath string) string {
-	base := filepath.Base(filePath)
-	base = strings.TrimSuffix(base, filepath.Ext(base))
-	return strings.Join(strings.Fields(strings.ToLower(base)), " ")
-}
-
-// sortedIntKeys 返回 map[int] 切片的有序键，保证检测结果稳定。
-func sortedIntKeys[V any](m map[int]V) []int {
-	keys := make([]int, 0, len(m))
-	for key := range m {
-		keys = append(keys, key)
-	}
-	sort.Ints(keys)
-	return keys
-}
-
-// sortedStringKeys 返回 map[string] 切片的有序键，保证检测结果稳定。
-func sortedStringKeys[V any](m map[string]V) []string {
-	keys := make([]string, 0, len(m))
-	for key := range m {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
-// buildDuplicateGroup 构建重复组信息
-func (s *ScannerService) buildDuplicateGroup(mediaList []model.Media, groupKey string) DuplicateGroup {
-	group := DuplicateGroup{
-		GroupKey:   groupKey,
-		Title:      mediaList[0].Title,
-		Year:       mediaList[0].Year,
-		MediaCount: len(mediaList),
-	}
-
-	// 选择推荐保留的版本（优先级：4K > 1080p > 720p，同分辨率选文件最大的）
-	resolutionPriority := map[string]int{
-		"4K": 5, "2K": 4, "1080p": 3, "720p": 2, "480p": 1,
-	}
-
-	bestIdx := 0
-	bestScore := 0
-	for i, m := range mediaList {
-		score := resolutionPriority[m.Resolution] * 1000000
-		score += int(m.FileSize / (1024 * 1024)) // 加上文件大小（MB）作为次要排序
-		if score > bestScore {
-			bestScore = score
-			bestIdx = i
-		}
-	}
-
-	for i, m := range mediaList {
-		item := DuplicateItem{
-			ID:         m.ID,
-			Title:      m.Title,
-			MediaType:  m.MediaType,
-			FilePath:   m.FilePath,
-			FileSize:   m.FileSize,
-			Resolution: m.Resolution,
-			VideoCodec: m.VideoCodec,
-			AudioCodec: m.AudioCodec,
-			Duration:   m.Duration,
-			LibraryID:  m.LibraryID,
-			IsPrimary:  i == bestIdx,
-		}
-		group.Media = append(group.Media, item)
-	}
-
-	// 生成处理建议
-	if len(mediaList) == 2 {
-		best := mediaList[bestIdx]
-		otherIdx := 1 - bestIdx
-		other := mediaList[otherIdx]
-		group.Suggestion = fmt.Sprintf("建议保留 %s 版本（%s, %.1fGB），可删除 %s 版本（%s, %.1fGB）",
-			best.Resolution, best.VideoCodec, float64(best.FileSize)/(1024*1024*1024),
-			other.Resolution, other.VideoCodec, float64(other.FileSize)/(1024*1024*1024))
-	} else {
-		group.Suggestion = fmt.Sprintf("发现 %d 个重复版本，建议保留最高质量版本", len(mediaList))
-	}
-
-	return group
-}
-
-// MarkDuplicates 标记重复媒体（在扫描完成后调用）
-// 每次执行前先清空范围内的旧标记，保证结果可修正、可幂等：
-// 之前被错误折叠、或因元数据更新而不再重复的记录会被恢复显示。
-func (s *ScannerService) MarkDuplicates(libraryID string) (int, error) {
-	resetScope := s.mediaRepo.DB().Model(&model.Media{}).Where("deleted_at IS NULL")
-	if libraryID != "" {
-		resetScope = resetScope.Where("library_id = ?", libraryID)
-	}
-	if err := resetScope.UpdateColumns(map[string]interface{}{
-		"duplicate_group": "",
-		"duplicate_of":    "",
-	}).Error; err != nil {
-		return 0, fmt.Errorf("重置重复标记失败: %w", err)
-	}
-
-	groups, err := s.DetectDuplicates(libraryID)
-	if err != nil {
-		return 0, err
-	}
-
-	marked := 0
-	for _, group := range groups {
-		for _, item := range group.Media {
-			if item.IsPrimary {
-				// 主版本：设置 DuplicateGroup 但不设置 DuplicateOf
-				s.mediaRepo.UpdateFields(item.ID, map[string]interface{}{
-					"duplicate_group": group.GroupKey,
-					"duplicate_of":    "",
-				})
-			} else {
-				// 重复版本：设置 DuplicateOf 指向主版本
-				primaryID := ""
-				for _, m := range group.Media {
-					if m.IsPrimary {
-						primaryID = m.ID
-						break
-					}
-				}
-				s.mediaRepo.UpdateFields(item.ID, map[string]interface{}{
-					"duplicate_group": group.GroupKey,
-					"duplicate_of":    primaryID,
-				})
-				marked++
-			}
-		}
-	}
-
-	s.logger.Infof("重复媒体标记完成: 标记 %d 个重复文件", marked)
-	return marked, nil
 }
