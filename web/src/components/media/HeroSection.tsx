@@ -6,6 +6,7 @@ import { usePosterVersion } from '@/stores/mediaRefresh'
 import { useToast } from '@/components/Toast'
 import { Button, Tag, buttonClassName } from '@/components/design-system'
 import { HeroContent, MediaArtwork } from '@/ui'
+import PosterImage from '@/components/PosterImage'
 import { useTranslation } from '@/i18n'
 import { formatDuration, formatDurationShort } from '@/utils/format'
 import type { Media, MediaPlayInfo, Playlist, WatchHistory } from '@/types'
@@ -366,7 +367,7 @@ export default function HeroSection({
     <section className="nv-detail-hero relative overflow-visible border-b border-[var(--nv-border-subtle)] bg-[var(--nv-bg-canvas)]">
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute inset-0 bg-[var(--nv-bg-surface-soft)]">
-          <img
+          <PosterImage
             key={`${backdropAttemptKey}:${backdropFailed ? 'poster' : 'backdrop'}`}
             src={backdropUrl}
             alt=""

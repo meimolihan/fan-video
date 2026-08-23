@@ -1,9 +1,13 @@
-// Nowen Video Service Worker v6
-// 仅缓存生产环境的静态资源；认证、API、HTML 导航、开发模块和非 GET 请求全部直连网络。
+// Nowen Video Service Worker v8
+// 缓存生产环境的静态资源与海报图片；认证、HTML 导航、开发模块、写请求和其余 API 全部直连网络。
 
-const CACHE_VERSION = 'v6'
+const CACHE_VERSION = 'v8'
 const STATIC_CACHE = `nowen-static-${CACHE_VERSION}`
 const IMAGE_CACHE = `nowen-images-${CACHE_VERSION}`
+// 海报/背景图独立缓存：媒体库海报数量远超普通图片，
+// 与 IMAGE_CACHE（上限 200）共用会互相挤兑导致缓存永远命中不了。
+const POSTER_CACHE = `nowen-posters-${CACHE_VERSION}`
+const MAX_POSTER_CACHE = 2000
 
 // 不缓存 HTML 应用壳。页面结构和导航必须始终来自当前部署版本，
 // 避免已经下线的页面与菜单被离线回退重新启动。
@@ -21,7 +25,7 @@ self.addEventListener('install', (event) => {
 })
 
 self.addEventListener('activate', (event) => {
-  const currentCaches = [STATIC_CACHE, IMAGE_CACHE]
+  const currentCaches = [STATIC_CACHE, IMAGE_CACHE, POSTER_CACHE]
   event.waitUntil((async () => {
     const keys = await caches.keys()
     await Promise.all(
@@ -70,6 +74,12 @@ function isAuthenticationRoute(url) {
   return url.pathname === '/login' || url.pathname === '/force-change-password'
 }
 
+// 海报/背景图接口。URL 自带 ?v= 版本戳与 token：
+// 刮削更新或账号切换都会产生新 URL，天然切换到新缓存条目，不会读到旧图。
+function isPosterRequest(url) {
+  return /^\/api\/(media|series|collections)\/[^/]+\/(poster|backdrop)$/.test(url.pathname)
+}
+
 function isBackendRequest(request, url) {
   const accept = request.headers.get('accept') || ''
   return (
@@ -85,6 +95,31 @@ function isBackendRequest(request, url) {
 self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
+
+  // 海报/背景图：缓存优先（刷新时零网络等待、瞬间出图），同时后台静默更新。
+  // 必须在通用后端直连判断之前处理。
+  if (request.method === 'GET' && isPosterRequest(url)) {
+    event.respondWith(
+      caches.open(POSTER_CACHE).then(async (cache) => {
+        const cached = await cache.match(request)
+        const network = fetch(request)
+          .then((response) => {
+            if (!response.ok) return response
+            if (response.headers.has('X-Poster-Placeholder')) {
+              // 服务端已无此图（占位 SVG 不缓存）：清除旧缓存，避免一直显示过期海报
+              if (cached) void cache.delete(request)
+              return response
+            }
+            const clone = response.clone()
+            void cache.put(request, clone).then(() => trimCache(POSTER_CACHE, MAX_POSTER_CACHE))
+            return response
+          })
+          .catch(() => cached)
+        return cached || network
+      }),
+    )
+    return
+  }
 
   // Service Worker 不应参与写请求、跨域请求、认证页、API 或 Vite 开发模块。
   if (

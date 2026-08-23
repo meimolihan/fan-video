@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { streamApi } from '@/api'
 import type { CollectionWithMedia } from '@/types'
 import { Button, Tag } from '@/components/design-system'
+import PosterImage from '@/components/PosterImage'
 
 interface CollectionDetailHeroProps {
   data: CollectionWithMedia
@@ -50,7 +51,7 @@ export default function CollectionDetailHero({ data, movieCount, onBack }: Colle
   return (
     <section className="nv-collection-hero relative overflow-hidden border-b border-[var(--nv-border-subtle)]">
       <div className="nv-collection-hero-backdrop absolute inset-0 overflow-hidden" aria-hidden="true">
-        <img
+        <PosterImage
           src={streamApi.getCollectionPosterUrl(collection.id)}
           alt=""
           onError={(event) => { event.currentTarget.style.display = 'none' }}
@@ -68,7 +69,7 @@ export default function CollectionDetailHero({ data, movieCount, onBack }: Colle
         <div className="flex flex-col gap-6 sm:flex-row sm:items-end">
           <div className="nv-collection-hero-poster relative shrink-0 overflow-hidden">
             <div className="absolute inset-0 flex items-center justify-center text-[var(--nv-text-tertiary)]"><Layers size={42} aria-hidden="true" /></div>
-            <img
+            <PosterImage
               src={streamApi.getCollectionPosterUrl(collection.id)}
               alt={collection.name}
               className="relative h-full w-full object-cover"

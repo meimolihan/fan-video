@@ -35,6 +35,11 @@ func (s *StatsService) RecordPlayback(userID, mediaID string, watchMinutes float
 	return s.statsRepo.Record(stat)
 }
 
+// ClearUserStats 清空用户的全部播放统计，观影报告随之归零。
+func (s *StatsService) ClearUserStats(userID string) (int64, error) {
+	return s.statsRepo.DeleteByUser(userID)
+}
+
 // UserStatsOverview 用户统计概览
 type UserStatsOverview struct {
 	TotalMinutes float64                  `json:"total_minutes"`

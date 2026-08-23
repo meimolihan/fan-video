@@ -112,6 +112,12 @@ func (r *PlaybackStatsRepo) Record(stat *model.PlaybackStats) error {
 	return r.db.Create(stat).Error
 }
 
+// DeleteByUser 清空指定用户的全部播放统计（观影报告数据源）。
+func (r *PlaybackStatsRepo) DeleteByUser(userID string) (int64, error) {
+	result := r.db.Where("user_id = ?", userID).Delete(&model.PlaybackStats{})
+	return result.RowsAffected, result.Error
+}
+
 func (r *PlaybackStatsRepo) DeleteByMediaIDs(mediaIDs []string) (int64, error) {
 	if len(mediaIDs) == 0 {
 		return 0, nil

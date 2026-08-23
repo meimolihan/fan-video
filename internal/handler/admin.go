@@ -16,6 +16,9 @@ import (
 )
 
 // AdminHandler 管理处理器
+
+// processStartedAt 进程启动时间，用于系统状态展示运行时长
+var processStartedAt = time.Now()
 type AdminHandler struct {
 	userService       *service.UserService
 	authService       *service.AuthService
@@ -346,14 +349,15 @@ func (h *AdminHandler) SystemInfo(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": gin.H{
-			"version":    version.Current(),
-			"go_version": runtime.Version(),
-			"os":         runtime.GOOS,
-			"arch":       runtime.GOARCH,
-			"cpus":       runtime.NumCPU(),
-			"goroutines": runtime.NumGoroutine(),
-			"memory":     sysMem,
-			"hw_accel":   h.mediaExecution.GetHWAccelInfo(),
+			"version":        version.Current(),
+			"go_version":     runtime.Version(),
+			"os":             runtime.GOOS,
+			"arch":           runtime.GOARCH,
+			"cpus":           runtime.NumCPU(),
+			"goroutines":     runtime.NumGoroutine(),
+			"memory":         sysMem,
+			"hw_accel":       h.mediaExecution.GetHWAccelInfo(),
+			"uptime_seconds": int64(time.Since(processStartedAt).Seconds()),
 		},
 	})
 }

@@ -80,4 +80,7 @@ export const statsApi = {
 
   getMyStats: () =>
     api.get<{ data: import('@/types').UserStatsOverview }>('/stats/me'),
+
+  clearMyStats: () =>
+    api.delete<{ message?: string; deleted?: number }>('/stats/me'),
 }

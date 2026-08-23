@@ -16,6 +16,8 @@ interface MediaCardProps {
   className?: string
   variant?: MediaCardVariant
   showBadges?: boolean
+  /** 分集卡在海报下方显示「播放 + 查看剧集」双按钮（影视库网格用） */
+  quickActions?: boolean
 }
 
 export default function MediaCard({
@@ -25,11 +27,13 @@ export default function MediaCard({
   className,
   variant = 'poster',
   showBadges = true,
+  quickActions = false,
 }: MediaCardProps) {
   const navigate = useNavigate()
   const posterVersion = usePosterVersion()
 
   const isSeries = !!series || !!media?.series_id
+  const isEpisode = !series && !!media?.series_id
   const seriesData = series || media?.series
   const isLandscape = variant === 'landscape' || variant === 'compact'
   const detailTo = series
@@ -66,6 +70,9 @@ export default function MediaCard({
 
   const artworkRatio: MediaArtworkRatio = isLandscape ? 'landscape' : 'poster'
 
+  // 分集卡快捷操作：海报下方并排「直接播放 + 进入所在剧集」
+  const showEpisodeQuickActions = quickActions && isEpisode && !!media
+
   const formatDuration = (seconds: number) => {
     if (!seconds) return ''
     const h = Math.floor(seconds / 3600)
@@ -100,13 +107,13 @@ export default function MediaCard({
             size="sm"
             iconOnly
             className="nv-media-card-play pointer-events-auto"
-            onClick={() => navigate(playTo)}
-            aria-label={isSeries ? `查看系列 ${title}` : `播放 ${title}`}
-            title={isSeries ? '查看系列' : '立即播放'}
+            onClick={() => navigate(showEpisodeQuickActions && media ? `/play/${media.id}` : playTo)}
+            aria-label={showEpisodeQuickActions || !isSeries ? `播放 ${title}` : `查看系列 ${title}`}
+            title={showEpisodeQuickActions || !isSeries ? '立即播放' : '查看系列'}
           >
-            {isSeries
-              ? <Tv size={16} aria-hidden="true" />
-              : <Play size={16} fill="currentColor" aria-hidden="true" />}
+            {showEpisodeQuickActions || !isSeries
+              ? <Play size={16} fill="currentColor" aria-hidden="true" />
+              : <Tv size={16} aria-hidden="true" />}
           </Button>
         </div>
 

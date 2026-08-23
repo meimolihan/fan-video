@@ -306,6 +306,8 @@ const enUS: Record<string, string> = {
   // ==================== History ====================
   'history.title': 'Watch History',
   'history.clearAll': 'Clear History',
+  'history.clearConfirmTitle': 'Clear Watch History',
+  'history.clear': 'Clear',
   'history.clearConfirm': 'Clear all watch history?',
   'history.loadFailed': 'Failed to load watch history',
   'history.deleteFailed': 'Failed to delete record',
@@ -323,6 +325,12 @@ const enUS: Record<string, string> = {
   // ==================== Favorites ====================
   'favorites.title': 'My Favorites',
   'favorites.loadFailed': 'Failed to load favorites',
+  'favorites.clearAll': 'Clear All Favorites',
+  'favorites.clearConfirmTitle': 'Clear Favorites',
+  'favorites.clear': 'Clear',
+  'favorites.clearConfirm': 'Remove all favorites? This cannot be undone.',
+  'favorites.cleared': 'All favorites cleared',
+  'favorites.clearFailed': 'Failed to clear favorites',
   'favorites.empty': 'No favorites yet',
   'favorites.emptyHint': 'Browse the library and click the favorite button to add items here',
 
@@ -334,6 +342,8 @@ const enUS: Record<string, string> = {
   'playlists.cancelBtn': 'Cancel',
   'playlists.loadFailed': 'Failed to load playlists',
   'playlists.createFailed': 'Failed to create playlist',
+  'playlists.deleteConfirmTitle': 'Delete Playlist',
+  'playlists.delete': 'Delete',
   'playlists.deleteConfirm': 'Delete this playlist?',
   'playlists.deleteFailed': 'Failed to delete playlist',
   'playlists.removeFailed': 'Failed to remove item',
@@ -362,6 +372,12 @@ const enUS: Record<string, string> = {
   'stats.dailyTrend': 'Daily Watch Trend',
   'stats.topGenres': 'Top Genres',
   'stats.mostWatched': 'Most Watched',
+  'stats.clearAll': 'Clear Report',
+  'stats.clearConfirmTitle': 'Clear Viewing Report',
+  'stats.clear': 'Clear',
+  'stats.clearConfirm': 'Clear all viewing statistics? This cannot be undone.',
+  'stats.cleared': 'Viewing report cleared',
+  'stats.clearFailed': 'Failed to clear viewing report',
 
   // ==================== Admin (extra) ====================
   'admin.title': 'System Admin',

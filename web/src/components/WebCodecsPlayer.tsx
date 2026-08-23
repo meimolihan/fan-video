@@ -31,6 +31,8 @@ export interface WebCodecsPlayerHandle {
 export interface WebCodecsPlayerProps {
   src: string
   startPosition?: number
+  /** 系统设置「默认自动播放」：false 时解码就绪后保持暂停 */
+  autoPlay?: boolean
   onLoadedMetadata?: (info: { duration: number; width: number; height: number }) => void
   onTimeUpdate?: (time: number) => void
   onDurationChange?: (d: number) => void
@@ -84,7 +86,7 @@ function closeAudioDecoder(decoder: AudioDecoder | null) {
 
 const WebCodecsPlayer = forwardRef<WebCodecsPlayerHandle, WebCodecsPlayerProps>(
   function WebCodecsPlayer(props, ref) {
-    const { src, startPosition = 0 } = props
+    const { src, startPosition = 0, autoPlay = true } = props
     const canvasRef = useRef<HTMLCanvasElement>(null)
 
     // Worker
@@ -394,14 +396,16 @@ const WebCodecsPlayer = forwardRef<WebCodecsPlayerHandle, WebCodecsPlayerProps>(
       // 应用起始位置
       if (startPosition > 0) {
         doSeek(startPosition)
-      } else {
+      } else if (autoPlay) {
         // 自动播放
+        console.info('[WebCodecs] 解码就绪，自动开始播放')
         playingRef.current = true
         audioStartTimeRef.current = audioCtxRef.current!.currentTime
         audioScheduledEndRef.current = audioCtxRef.current!.currentTime
         cbRef.current.onPlay?.()
         startRenderLoop()
       }
+      // autoPlay 关闭时：解码器已就绪但保持暂停，等待用户点击播放
     }
 
     function handleSample(msg: EncodedSample) {

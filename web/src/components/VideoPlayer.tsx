@@ -44,6 +44,8 @@ interface VideoPlayerProps {
   nextTitle?: string
   isStrm?: boolean
   knownDuration?: number
+  /** 系统设置「默认自动播放」：false 时进入播放页暂停待用户手动开始 */
+  autoPlay?: boolean
   onRemuxFallback?: () => void
   onPreprocessReady?: () => void
   spriteVttUrl?: string
@@ -67,6 +69,7 @@ export default function VideoPlayer({
   nextTitle,
   isStrm = false,
   knownDuration,
+  autoPlay = true,
   onPreprocessReady,
   onRemuxFallback,
   spriteVttUrl,
@@ -98,6 +101,11 @@ export default function VideoPlayer({
   const [qualities, setQualities] = useState<{ index: number; label: string; bitrate?: number; height?: number }[]>([])
   const [currentQuality, setCurrentQuality] = useState(-1)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // 「默认自动播放」关闭时，进入播放页先显示中央播放按钮等待用户开始
+  const [awaitingStart, setAwaitingStart] = useState(!autoPlay)
+  // 移动端浏览器策略：带声音的自动播放被拦截后，退化为静音自动播放，
+  // 等待用户任意点击/点按此提示后再恢复声音。
+  const [awaitingUnmute, setAwaitingUnmute] = useState(false)
   const [currentBitrate, setCurrentBitrate] = useState(0)
   const [bandwidthEstimate, setBandwidthEstimate] = useState(0)
 
@@ -387,6 +395,17 @@ export default function VideoPlayer({
     if (translatedSubs.length > 0) loadSubtitle('translated', translatedSubs[0].language)
   }, [externalSubs, embeddedSubs, aiSubtitleStatus, translatedSubs, loadSubtitle])
 
+  // 用户通过控制栏手动取消静音时，收起「点击开启声音」提示
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    const onVolumeChange = () => {
+      if (!video.muted && video.volume > 0) setAwaitingUnmute(false)
+    }
+    video.addEventListener('volumechange', onVolumeChange)
+    return () => video.removeEventListener('volumechange', onVolumeChange)
+  }, [])
+
   useEffect(() => {
     if (!mediaId || activeSubtitle || userDisabledSubtitleRef.current) return
     if (externalSubs.length > 0 || embeddedSubs.some(subtitle => !subtitle.bitmap) || aiSubtitleStatus?.status === 'completed' || translatedSubs.length > 0) {
@@ -404,14 +423,48 @@ export default function VideoPlayer({
       hlsRef.current = null
     }
 
+    // 浏览器自动播放策略可能拦截无手势的 play()（整页刷新/新标签页直接进入播放页）。
+    // 被拦截时回退为显示中央播放按钮，等待用户手动开始，而不是静默停在暂停画面。
+    // 浏览器自动播放策略可能拦截无手势的 play()（整页刷新/新标签页直接进入播放页，
+    // 以及移动端 iOS Safari / 安卓 Chrome 对一切带声音自动播放的限制）。
+    // 降级链：正常播放 → 静音播放（画面先动，提示点击开声）→ 中央 ▶ 手动开始。
+    const startPlayback = () => {
+      video.play().then(() => {
+        console.info('[VideoPlayer] 自动播放成功')
+      }).catch(() => {
+        if (video.muted) {
+          setAwaitingStart(true)
+          return
+        }
+        video.muted = true
+        video.play().then(() => {
+          console.info('[VideoPlayer] 带声音自动播放被拦截，已静音自动播放，等待手势恢复声音')
+          setAwaitingUnmute(true)
+        }).catch((err) => {
+          console.warn('[VideoPlayer] 静音自动播放也被拦截，等待手动开始:', err?.name || err)
+          video.muted = false
+          setAwaitingStart(true)
+        })
+      })
+    }
+
     if (mode === 'direct' || mode === 'remux' || mode === 'smart_remux') {
-      video.src = src
+      // 移动端浏览器（iOS Safari 等）在无手势时不会主动加载媒体，
+      // 必须立即调用 play() 来启动加载管线；若等 loadedmetadata 再 play
+      // 会互相等待造成死锁（黑屏且不触发任何回退 UI）。
+      // #t= 媒体片段让 iOS 原生定位到起始进度（对 mp4/原生 HLS 有效）。
+      video.src = startPosition > 0 ? `${src}#t=${startPosition}` : src
       setQualities([])
+      if (autoPlay) startPlayback()
       video.addEventListener('loadedmetadata', () => {
-        if (startPosition > 0) video.currentTime = startPosition
-        video.play().catch(() => {})
+        // 元数据可能在用户已退出播放页后才就绪（组件卸载后 once 监听器
+        // 仍可能收到已排队的事件）。若元素已被移出文档，绝不操作播放。
+        // 否则会产生"只有声音、找不到播放窗口"的游离播放。
+        if (!video.isConnected) return
+        if (startPosition > 0 && video.currentTime < 1) video.currentTime = startPosition
       }, { once: true })
       video.addEventListener('error', () => {
+        if (!video.isConnected) return
         const error = video.error
         if ((mode === 'remux' || mode === 'smart_remux') && onRemuxFallback) {
           console.warn('Remux 播放失败，自动降级到 HLS 转码:', error?.message)
@@ -446,8 +499,12 @@ export default function VideoPlayer({
           height: level.height,
         }))
         setQualities([{ index: -1, label: '自动' }, ...levels])
-        if (startPosition > 0) video.currentTime = startPosition
-        video.play().catch(() => {})
+        // 与 direct 路径同理：元素已离开文档（用户已退出播放页）时不自动播放
+        if (!video.isConnected) return
+        if (autoPlay) {
+          if (startPosition > 0) video.currentTime = startPosition
+          startPlayback()
+        }
       })
       hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
         setCurrentQuality(data.level)
@@ -486,9 +543,14 @@ export default function VideoPlayer({
       })
       hlsRef.current = hls
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // iOS 原生 HLS：与 direct 同理，必须立即 play() 启动加载，
+      // 起始进度等元数据就绪后再定位（提前设 currentTime 在 iOS 上不生效）。
       video.src = src
-      if (startPosition > 0) video.currentTime = startPosition
-      video.play().catch(() => {})
+      if (autoPlay) startPlayback()
+      video.addEventListener('loadedmetadata', () => {
+        if (!video.isConnected) return
+        if (startPosition > 0 && video.currentTime < 1) video.currentTime = startPosition
+      }, { once: true })
     } else {
       setLoadError('当前浏览器不支持HLS播放')
     }
@@ -496,15 +558,25 @@ export default function VideoPlayer({
     return () => {
       hlsRef.current?.destroy()
       hlsRef.current = null
+      // direct/remux/原生 HLS 模式没有 hls 实例可销毁。若不显式停止，
+      // 被移出 DOM 的 <video> 会按规范继续播放音频（videoRef 与事件闭包
+      // 仍持有引用），表现为"返回后仍有声音但找不到播放窗口"。
+      // pause + 清空 src + load() 可立即释放媒体管线与音频输出。
+      const video = videoRef.current
+      if (video) {
+        video.pause()
+        video.removeAttribute('src')
+        video.load()
+      }
     }
-  }, [src, mode, startPosition, reset, onRemuxFallback])
+  }, [src, mode, startPosition, reset, onRemuxFallback, autoPlay])
 
   const remuxOffsetRef = useRef(0)
 
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-    const onPlay = () => setPlaying(true)
+    const onPlay = () => { setPlaying(true); setAwaitingStart(false) }
     const onPause = () => setPlaying(false)
     const onTimeUpdate = () => setCurrentTime(video.currentTime + remuxOffsetRef.current)
     const onDurationChange = () => setDuration(video.duration)
@@ -973,6 +1045,7 @@ export default function VideoPlayer({
         onClick={handleVideoClick}
         onDoubleClick={toggleFullscreen}
         playsInline
+        preload="auto"
         crossOrigin="anonymous"
       />
 
@@ -1007,6 +1080,37 @@ export default function VideoPlayer({
             )}
           </div>
         </div>
+      )}
+
+      {awaitingStart && !loadError && (
+        <button
+          type="button"
+          onClick={togglePlay}
+          aria-label="开始播放"
+          className="absolute inset-0 z-20 flex items-center justify-center bg-black/35 transition-colors hover:bg-black/25"
+        >
+          <span className="grid h-16 w-16 place-items-center rounded-full bg-[var(--nv-player-accent)] text-white shadow-[0_8px_28px_rgba(0,0,0,.45)] transition-transform duration-150 hover:scale-105">
+            <Play size={28} fill="currentColor" aria-hidden="true" />
+          </span>
+        </button>
+      )}
+
+      {awaitingUnmute && !loadError && (
+        <button
+          type="button"
+          onClick={() => {
+            const video = videoRef.current
+            if (!video) return
+            video.muted = false
+            setAwaitingUnmute(false)
+            // 极端情况下（静音播放又被系统中断）同手势内补一次播放
+            if (video.paused) video.play().catch(() => {})
+          }}
+          className="absolute bottom-24 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/65 px-4 py-2 text-sm text-white shadow-[0_6px_20px_rgba(0,0,0,.4)] backdrop-blur-md transition hover:bg-black/80"
+        >
+          <VolumeX size={16} aria-hidden="true" />
+          已静音自动播放 · 点击开启声音
+        </button>
       )}
 
       {gestureOverlay && (

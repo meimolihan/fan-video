@@ -8,6 +8,7 @@ import { useTranslation } from '@/i18n'
 import { usePagination } from '@/hooks/usePagination'
 import Pagination from '@/components/Pagination'
 import type { Playlist } from '@/types'
+import PosterImage from '@/components/PosterImage'
 import { Button, EmptyState, Input, Tag } from '@/components/design-system'
 
 export default function PlaylistsPage() {
@@ -212,7 +213,7 @@ export default function PlaylistsPage() {
                                 className="relative h-14 w-24 shrink-0 overflow-hidden rounded-[var(--nv-radius-control)] bg-[var(--nv-bg-surface-soft)]"
                                 aria-label={`播放 ${item.media?.title || t('history.unknownMedia')}`}
                               >
-                                <img
+                                <PosterImage
                                   src={streamApi.getPosterUrl(item.media_id)}
                                   alt={item.media?.title || ''}
                                   className="h-full w-full object-cover"

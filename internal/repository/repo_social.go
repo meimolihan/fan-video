@@ -175,6 +175,12 @@ func (r *FavoriteRepo) DeleteByMediaID(mediaID string) error {
 	return r.db.Where("media_id = ?", mediaID).Delete(&model.Favorite{}).Error
 }
 
+// DeleteByUser 清空指定用户的全部收藏。
+func (r *FavoriteRepo) DeleteByUser(userID string) (int64, error) {
+	result := r.db.Where("user_id = ?", userID).Delete(&model.Favorite{})
+	return result.RowsAffected, result.Error
+}
+
 func (r *FavoriteRepo) DeleteByLibraryMediaIDs(libraryID string) error {
 	return r.db.Where("media_id IN (SELECT id FROM media WHERE library_id = ?)", libraryID).Delete(&model.Favorite{}).Error
 }

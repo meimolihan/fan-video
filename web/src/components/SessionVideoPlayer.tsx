@@ -9,6 +9,7 @@ interface SessionVideoPlayerProps {
   mediaId: string
   title?: string
   startPosition?: number
+  autoPlay?: boolean
   onBack?: () => void
   onNext?: () => void
   nextTitle?: string
@@ -31,6 +32,7 @@ export default function SessionVideoPlayer({
   mediaId,
   title,
   startPosition = 0,
+  autoPlay = true,
   onBack,
   onNext,
   nextTitle,
@@ -282,6 +284,7 @@ export default function SessionVideoPlayer({
         title={title}
         startPosition={0}
         knownDuration={knownDuration}
+        autoPlay={autoPlay}
         onBack={handleBack}
         onNext={onNext ? handleNext : undefined}
         nextTitle={nextTitle}

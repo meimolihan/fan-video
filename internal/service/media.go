@@ -533,6 +533,11 @@ func (s *MediaService) RemoveFavorite(userID, mediaID string) error {
 	return s.favRepo.Remove(userID, mediaID)
 }
 
+// ClearFavorites 清空用户的全部收藏
+func (s *MediaService) ClearFavorites(userID string) (int64, error) {
+	return s.favRepo.DeleteByUser(userID)
+}
+
 // IsFavorited 检查是否已收藏
 func (s *MediaService) IsFavorited(userID, mediaID string) bool {
 	return s.favRepo.Exists(userID, mediaID)

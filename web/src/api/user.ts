@@ -68,6 +68,16 @@ export const userApi = {
     return response
   },
 
+  clearFavorites: async () => {
+    const response = await api.delete<{ message?: string; deleted?: number }>('/users/me/favorites')
+    // 清空是全量删除：把本窗口记录过的所有已收藏条目广播为未收藏，
+    // 让仍挂载的心形按钮（详情页/卡片）同步熄灭，并失效收藏列表缓存。
+    for (const [mediaId, state] of favoriteMutationState) {
+      if (state.favorited) publishFavoriteChanged(mediaId, false)
+    }
+    return response
+  },
+
   checkFavorite: async (mediaId: string) => {
     const startedRevision = favoriteMutationState.get(mediaId)?.revision ?? 0
     const response = await api.get<{ data: boolean }>(`/users/me/favorites/${mediaId}/check`)

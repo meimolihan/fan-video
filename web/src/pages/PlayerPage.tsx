@@ -182,6 +182,12 @@ export default function PlayerPage() {
             : streamApi.getMasterUrl(id)
 
   const effectiveBrowserMode = runtimeMode || (mode === 'webcodecs' ? null : mode)
+  console.info('[PlayerPage] 自动播放诊断:', {
+    default_autoplay: playInfo.default_autoplay,
+    resolved_autoPlay: playInfo.default_autoplay !== false,
+    mode,
+    src_kind: isPreprocessed ? 'preprocessed' : mode,
+  })
   const browserPlaybackResetKey = `${id}:${isPreprocessed ? playInfo.preprocessed_url : 'planned'}:${webcodecsFailed ? 'wc-fallback' : 'initial'}:${highlightMode ? `${clipStart}-${clipEnd}` : 'full'}`
   // 个人影视库：分集标题已是真实文件名，直接展示「剧名 - 文件名」，
   // 不再叠加 SxxEyy 编号前缀（编号仅在后端无标题时兜底显示）
@@ -263,6 +269,7 @@ export default function PlayerPage() {
           title={playerTitle}
           startPosition={switchPosition}
           knownDuration={playInfo.duration}
+          autoPlay={playInfo.default_autoplay !== false}
           onBack={handleBack}
           onNext={nextEpisode ? handleNext : undefined}
           nextTitle={nextTitle}
@@ -281,6 +288,7 @@ export default function PlayerPage() {
           isStrm={playInfo.is_strm}
           knownDuration={playInfo.duration}
           startPosition={switchPosition}
+          autoPlay={playInfo.default_autoplay !== false}
           spriteVttUrl={playInfo.sprite_vtt_url ? streamApi.withTokenUrl(playInfo.sprite_vtt_url) : undefined}
           onPreprocessReady={handlePreprocessReady}
           onModeChange={handleRuntimeModeChange}

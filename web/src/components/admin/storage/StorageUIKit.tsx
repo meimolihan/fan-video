@@ -94,13 +94,15 @@ export function Toggle({ checked, onChange, disabled, accent: _accent = 'neon' }
       }}
     >
       <span
-        className={clsx(
-          'absolute top-0.5 h-5 w-5 rounded-full transition-transform duration-200',
-          checked ? 'translate-x-[22px]' : 'translate-x-0.5',
-        )}
+        className="pointer-events-none absolute h-5 w-5 rounded-full transition-transform duration-200"
         style={{
+          left: 2,
+          top: 1,
           background: checked ? 'var(--nv-text-on-brand)' : 'var(--nv-text-tertiary)',
           boxShadow: '0 1px 3px rgba(0,0,0,.2)',
+          // 内联 transform，不依赖 Tailwind 任意值工具类；
+          // 行程 18px 使开启时右侧留出与左侧对称的 2px 边距
+          transform: checked ? 'translateX(18px)' : 'translateX(0)',
         }}
       />
     </button>

@@ -8,7 +8,6 @@ import {
   HardDrive,
   LayoutDashboard,
   Loader2,
-  Search,
   Server,
   Settings,
   Users,
@@ -25,7 +24,7 @@ import DashboardTab from '@/components/admin/DashboardTab'
 import StorageTab from '@/components/admin/StorageTab'
 import UsersTab from '@/components/admin/UsersTab'
 import { AdminPageHeader, AdminStatus } from '@/components/admin/AdminPrimitives'
-import { Input } from '@/components/design-system'
+import { SearchField } from '@/components/design-system'
 import { useTranslation } from '@/i18n'
 
 const TABS = [
@@ -218,6 +217,7 @@ export default function AdminPage() {
     auto_preprocess_on_scan: false,
     auto_transcode_on_play: false,
     prefer_direct_play: true,
+    default_autoplay: true,
   })
 
   const { connected, on, off } = useWebSocket()
@@ -454,14 +454,12 @@ export default function AdminPage() {
           actions={(
             <div className="flex flex-wrap items-center justify-end gap-2">
               <div className="relative w-full min-w-0 sm:w-64">
-                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[var(--nv-text-tertiary)]" />
-                <Input
-                  type="search"
+                <SearchField
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  className="pl-9"
                   placeholder={t('admin.searchPlaceholder')}
                   aria-label={t('admin.searchPlaceholder')}
+                  wrapperClassName="!w-full !min-w-0 sm:!w-full"
                 />
                 {quickNavItems.length > 0 && (
                   <div className="absolute left-0 right-0 top-full z-[var(--nv-z-dropdown)] mt-2 overflow-hidden rounded-[var(--nv-radius-control)] border border-[var(--nv-border-default)] bg-[var(--nv-bg-elevated)] py-1 shadow-[var(--nv-shadow-elevated)]">

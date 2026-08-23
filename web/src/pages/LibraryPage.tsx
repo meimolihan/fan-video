@@ -335,7 +335,7 @@ export default function LibraryPage() {
         pagedMixed.length === 0 ? (
           <EmptyState icon={<Film size={24} />} title={hasLocalFilter ? '没有找到匹配的内容' : '此媒体库暂无内容'} description={hasLocalFilter ? '尝试调整筛选条件或使用其他关键词。' : '扫描媒体文件后，内容会显示在这里。'} action={hasLocalFilter ? <Button variant="secondary" size="sm" onClick={clearAllFilters}>清除所有筛选</Button> : undefined} />
         ) : viewMode === 'grid' ? (
-          <SharedMediaGrid>{pagedMixed.map((item) => item.type === 'series' && item.series ? <MediaCard key={`s-${item.series.id}`} series={item.series} /> : item.media ? <MediaCard key={`m-${item.media.id}`} media={item.media} /> : null)}</SharedMediaGrid>
+          <SharedMediaGrid>{pagedMixed.map((item) => item.type === 'series' && item.series ? <MediaCard key={`s-${item.series.id}`} series={item.series} /> : item.media ? <MediaCard key={`m-${item.media.id}`} media={item.media} quickActions /> : null)}</SharedMediaGrid>
         ) : viewMode === 'list' ? (
           <div className="divide-y divide-[var(--nv-border-subtle)] border-y border-[var(--nv-border-subtle)]">{pagedMixed.map((item) => <LibraryListItem key={item.type === 'series' ? `s-${item.series?.id}` : `m-${item.media?.id}`} item={item} />)}</div>
         ) : (

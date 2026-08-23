@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import type { Media } from '@/types'
+import PosterImage from '@/components/PosterImage'
 import {
   AlertCircle,
   Check,
@@ -344,7 +345,7 @@ export default function FileListView({
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex items-center gap-3">
-                          <img
+                          <PosterImage
                             src={streamApi.getPosterUrl(file.id)}
                             alt=""
                             className="h-12 w-8 shrink-0 rounded-[var(--nv-radius-sm)] object-cover"
@@ -430,7 +431,7 @@ export default function FileListView({
                 onContextMenu={(event) => handleFileContextMenu(event, file)}
               >
                 <div className={`relative aspect-[2/3] overflow-hidden rounded-[var(--nv-radius-card)] bg-[var(--nv-bg-surface-soft)] shadow-[var(--nv-shadow-card)] transition-shadow duration-150 group-hover:shadow-[var(--nv-shadow-card-hover)] ${selected ? 'ring-1 ring-[var(--nv-text-secondary)]' : ''}`}>
-                  <img
+                  <PosterImage
                     src={streamApi.getPosterUrl(file.id)}
                     alt=""
                     className="h-full w-full object-cover"

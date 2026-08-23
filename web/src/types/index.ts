@@ -490,6 +490,7 @@ export interface SystemInfo {
     system_used_percent?: number
   }
   hw_accel: string
+  uptime_seconds: number
 }
 
 export interface TranscodeJob {
@@ -541,6 +542,7 @@ export interface MediaPlayInfo {
   sprite_url?: string // 进度条雪碧图地址（预处理完成后可用）
   sprite_vtt_url?: string // 进度条雪碧图 WebVTT 索引地址
   prefer_direct_play?: boolean // 系统设置：优先直接播放
+  default_autoplay?: boolean // 系统设置：进入播放页自动播放
   can_remux?: boolean // 是否支持 remux（容器不兼容但编码兼容）
   remux_url?: string // Remux 播放地址（零转码，仅转封装）
 }
@@ -756,6 +758,7 @@ export interface SystemSettings {
   auto_preprocess_on_scan: boolean   // 扫描后自动触发预处理
   auto_transcode_on_play: boolean    // 播放时自动触发转码
   prefer_direct_play: boolean        // 优先直接播放（禁用自动转码）
+  default_autoplay: boolean          // 默认自动播放（进入播放页自动开始）
 }
 
 // ==================== 豆瓣数据源 ====================

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { mediaApi, seriesApi, libraryApi, streamApi } from '@/api'
 import { useToast } from '@/components/Toast'
 import { useWebSocket, WS_EVENTS } from '@/hooks/useWebSocket'
@@ -574,6 +574,7 @@ export default function BrowsePage() {
                 key={`${item.type}-${item.media.id}`}
                 media={item.media}
                 eyebrow={item.type === 'episode' ? item.media.series?.title : undefined}
+                quickActions
               />
             ) : null)}
         </MediaGrid>
@@ -664,6 +665,7 @@ function BrowseListItem({ item }: { item: MixedItem }) {
 }
 
 function PosterWallItem({ item }: { item: MixedItem }) {
+  const navigate = useNavigate()
   const posterVersion = usePosterVersion()
   const isSeries = item.type === 'series'
   const media = isSeries ? undefined : item.media
@@ -673,6 +675,8 @@ function PosterWallItem({ item }: { item: MixedItem }) {
   const linkTo = series ? `/series/${series.id}` : media?.series_id ? `/series/${media.series_id}` : `/media/${media?.id}`
   const posterUrl = getItemPosterUrl(item, posterVersion)
   const hasPoster = hasItemPoster(item)
+  // 分集：中间播放按钮直接播放；点击其余位置由整卡 Link 进入所在剧集
+  const isEpisode = !isSeries && !!media?.series_id
 
   return (
     <Link to={linkTo} className="nv-browse-poster-card group block min-w-0" aria-label={title}>
@@ -690,7 +694,19 @@ function PosterWallItem({ item }: { item: MixedItem }) {
         )}
       >
         <div className="absolute inset-0 z-10 grid place-items-center bg-[var(--nv-bg-overlay)] opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-[var(--nv-action-primary)] text-[var(--nv-text-on-brand)]"><Play size={12} fill="currentColor" /></span>
+          {isEpisode && media ? (
+            <button
+              type="button"
+              onClick={(event) => { event.preventDefault(); event.stopPropagation(); navigate(`/play/${media.id}`) }}
+              aria-label={`播放 ${title}`}
+              title="立即播放"
+              className="grid h-8 w-8 place-items-center rounded-full bg-[var(--nv-action-primary)] text-[var(--nv-text-on-brand)] transition-transform duration-150 hover:scale-110"
+            >
+              <Play size={12} fill="currentColor" aria-hidden="true" />
+            </button>
+          ) : (
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-[var(--nv-action-primary)] text-[var(--nv-text-on-brand)]"><Play size={12} fill="currentColor" /></span>
+          )}
         </div>
         {rating > 0 && <SemanticTag tone="quality" className="absolute left-1.5 top-1.5 z-20"><Star size={9} fill="currentColor" />{rating.toFixed(1)}</SemanticTag>}
         {isSeries && <SemanticTag tone="quality" className="absolute bottom-1.5 right-1.5 z-20">剧集</SemanticTag>}

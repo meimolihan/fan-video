@@ -6,7 +6,7 @@ const HIDDEN_ATTRIBUTE = 'data-nowen-capability-hidden'
 
 function hideUnsupportedPreprocessSetting() {
   const headings = Array.from(document.querySelectorAll<HTMLHeadingElement>('h4'))
-  const heading = headings.find((item) => item.textContent?.trim() === '扫描后自动预处理')
+  const heading = headings.find((item) => item.textContent?.trim() === '扫描后预处理')
   const row = heading?.closest<HTMLElement>('.flex.items-start.justify-between.gap-4')
   if (!row || row.getAttribute(HIDDEN_ATTRIBUTE) === 'preprocess') return
 

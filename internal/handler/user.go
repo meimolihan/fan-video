@@ -154,6 +154,19 @@ func (h *UserHandler) RemoveFavorite(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "已取消收藏"})
 }
 
+// ClearFavorites 清空当前用户的全部收藏
+func (h *UserHandler) ClearFavorites(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+
+	deleted, err := h.mediaService.ClearFavorites(userID.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "清空收藏失败"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "已清空", "deleted": deleted})
+}
+
 // CheckFavorite 检查是否已收藏
 func (h *UserHandler) CheckFavorite(c *gin.Context) {
 	userID, _ := c.Get("user_id")

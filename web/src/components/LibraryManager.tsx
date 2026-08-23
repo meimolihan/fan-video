@@ -289,10 +289,9 @@ function LibraryManager({
       >
         {libraries.length > 0 ? (
           <div className="overflow-visible">
-            <div className="hidden grid-cols-[minmax(180px,2fr)_minmax(220px,2fr)_120px_150px_120px] gap-4 border-b border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)] px-5 py-3 text-xs font-semibold uppercase tracking-wide text-[var(--nv-text-tertiary)] lg:grid">
+            <div className="hidden grid-cols-[minmax(240px,2fr)_minmax(260px,2fr)_170px_140px] gap-4 border-b border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)] px-5 py-3 text-xs font-semibold uppercase tracking-wide text-[var(--nv-text-tertiary)] lg:grid">
               <SortHeader active={sortBy === 'name'} asc={sortAsc} onClick={() => toggleSort('name')}>媒体库</SortHeader>
               <span>媒体文件夹</span>
-              <SortHeader active={sortBy === 'type'} asc={sortAsc} onClick={() => toggleSort('type')}>类型</SortHeader>
               <SortHeader active={sortBy === 'created'} asc={sortAsc} onClick={() => toggleSort('created')}>最近更新</SortHeader>
               <span className="text-center">操作</span>
             </div>
@@ -424,13 +423,16 @@ function LibraryRow({
 
   return (
     <div className={clsx('relative', !isLast && 'border-b border-[var(--nv-border-subtle)]')}>
-      <div className="grid gap-4 px-4 py-4 transition-colors hover:bg-[var(--nv-bg-hover)] sm:px-5 lg:grid-cols-[minmax(180px,2fr)_minmax(220px,2fr)_120px_150px_120px] lg:items-center">
+      <div className="grid gap-4 px-4 py-4 transition-colors hover:bg-[var(--nv-bg-hover)] sm:px-5 lg:grid-cols-[minmax(240px,2fr)_minmax(260px,2fr)_170px_140px] lg:items-center">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--nv-radius-control)] border border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)] text-[var(--nv-action-primary)]">
             <TypeIcon size={19} />
           </div>
           <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold text-[var(--nv-text-primary)]">{library.name}</h3>
+            <div className="flex min-w-0 items-center gap-2">
+              <h3 className="truncate text-sm font-semibold text-[var(--nv-text-primary)]">{library.name}</h3>
+              <span className="shrink-0"><Tag>{typeConfig.label}</Tag></span>
+            </div>
             {isDeleting ? (
               <div className="mt-1 flex items-center gap-2">
                 <AdminStatus tone="active">删除中</AdminStatus>
@@ -450,9 +452,7 @@ function LibraryRow({
           <span className="truncate font-mono text-xs sm:text-sm">{displayPath}</span>
         </div>
 
-        <div><Tag>{typeConfig.label}</Tag></div>
-
-        <div className="flex items-center gap-2 text-xs text-[var(--nv-text-tertiary)] sm:text-sm">
+        <div className="flex items-center gap-1.5 text-xs text-[var(--nv-text-tertiary)] sm:text-sm">
           <Calendar size={13} className="shrink-0" />
           <span>{formatDate(library.last_scan)}</span>
         </div>

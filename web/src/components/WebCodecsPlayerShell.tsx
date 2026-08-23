@@ -33,6 +33,8 @@ interface WebCodecsPlayerShellProps {
   title?: string
   startPosition?: number
   knownDuration?: number
+  /** 系统设置「默认自动播放」：false 时进入播放页暂停待用户手动开始 */
+  autoPlay?: boolean
   onBack?: () => void
   onNext?: () => void
   nextTitle?: string
@@ -58,6 +60,7 @@ export default function WebCodecsPlayerShell({
   title,
   startPosition,
   knownDuration,
+  autoPlay = true,
   onBack,
   onNext,
   nextTitle,
@@ -256,6 +259,7 @@ export default function WebCodecsPlayerShell({
           ref={playerRef}
           src={src}
           startPosition={startPosition}
+          autoPlay={autoPlay}
           onTimeUpdate={handleTimeUpdate}
           onDurationChange={handleDurationChange}
           onPlay={handlePlay}

@@ -306,6 +306,8 @@ const jaJP: Record<string, string> = {
   // ==================== 視聴履歴 ====================
   'history.title': '視聴履歴',
   'history.clearAll': '履歴をクリア',
+  'history.clearConfirmTitle': '視聴履歴をクリア',
+  'history.clear': 'クリア',
   'history.clearConfirm': 'すべての視聴履歴をクリアしますか？',
   'history.loadFailed': '視聴履歴の読み込みに失敗しました',
   'history.deleteFailed': '記録の削除に失敗しました',
@@ -323,6 +325,12 @@ const jaJP: Record<string, string> = {
   // ==================== お気に入り ====================
   'favorites.title': 'お気に入り',
   'favorites.loadFailed': 'お気に入りの読み込みに失敗しました',
+  'favorites.clearAll': 'お気に入りをすべてクリア',
+  'favorites.clearConfirmTitle': 'お気に入りをクリア',
+  'favorites.clear': 'クリア',
+  'favorites.clearConfirm': 'すべてのお気に入りを削除しますか？この操作は元に戻せません。',
+  'favorites.cleared': 'お気に入りをクリアしました',
+  'favorites.clearFailed': 'お気に入りのクリアに失敗しました',
   'favorites.empty': 'お気に入りはまだありません',
   'favorites.emptyHint': 'ライブラリを閲覧して、お気に入りボタンをクリックして追加してください',
 
@@ -334,6 +342,8 @@ const jaJP: Record<string, string> = {
   'playlists.cancelBtn': 'キャンセル',
   'playlists.loadFailed': 'プレイリストの読み込みに失敗しました',
   'playlists.createFailed': 'プレイリストの作成に失敗しました',
+  'playlists.deleteConfirmTitle': 'プレイリストを削除',
+  'playlists.delete': '削除',
   'playlists.deleteConfirm': 'このプレイリストを削除しますか？',
   'playlists.deleteFailed': 'プレイリストの削除に失敗しました',
   'playlists.removeFailed': 'アイテムの削除に失敗しました',
@@ -362,6 +372,12 @@ const jaJP: Record<string, string> = {
   'stats.dailyTrend': '日別視聴トレンド',
   'stats.topGenres': '人気ジャンル',
   'stats.mostWatched': '最も視聴した作品',
+  'stats.clearAll': 'レポートをクリア',
+  'stats.clearConfirmTitle': '視聴レポートをクリア',
+  'stats.clear': 'クリア',
+  'stats.clearConfirm': 'すべての視聴統計をクリアしますか？この操作は元に戻せません。',
+  'stats.cleared': '視聴レポートをクリアしました',
+  'stats.clearFailed': '視聴レポートのクリアに失敗しました',
 
   // ==================== 管理（追加） ====================
   'admin.title': 'システム管理',

@@ -357,6 +357,8 @@ const zhCN: Record<string, string> = {
   // ==================== 观看历史 ====================
   'history.title': '观看历史',
   'history.clearAll': '清空历史',
+  'history.clearConfirmTitle': '清空观看历史',
+  'history.clear': '清空',
   'history.clearConfirm': '确定清空所有观看历史？',
   'history.loadFailed': '加载观看历史失败',
   'history.deleteFailed': '删除记录失败',
@@ -374,6 +376,12 @@ const zhCN: Record<string, string> = {
   // ==================== 收藏 ====================
   'favorites.title': '我的收藏',
   'favorites.loadFailed': '加载收藏列表失败',
+  'favorites.clearAll': '清空收藏',
+  'favorites.clearConfirmTitle': '清空我的收藏',
+  'favorites.clear': '清空',
+  'favorites.clearConfirm': '确定清空全部收藏？此操作不可恢复。',
+  'favorites.cleared': '收藏已清空',
+  'favorites.clearFailed': '清空收藏失败',
   'favorites.empty': '还没有收藏的内容',
   'favorites.emptyHint': '浏览媒体库，点击收藏按钮添加到这里',
 
@@ -385,6 +393,8 @@ const zhCN: Record<string, string> = {
   'playlists.cancelBtn': '取消',
   'playlists.loadFailed': '加载播放列表失败',
   'playlists.createFailed': '创建播放列表失败',
+  'playlists.deleteConfirmTitle': '删除播放列表',
+  'playlists.delete': '删除',
   'playlists.deleteConfirm': '确定删除此播放列表？',
   'playlists.deleteFailed': '删除播放列表失败',
   'playlists.removeFailed': '移除项目失败',
@@ -413,6 +423,12 @@ const zhCN: Record<string, string> = {
   'stats.dailyTrend': '每日观看趋势',
   'stats.topGenres': '最爱类型',
   'stats.mostWatched': '看得最多',
+  'stats.clearAll': '清空报告',
+  'stats.clearConfirmTitle': '清空观影报告',
+  'stats.clear': '清空',
+  'stats.clearConfirm': '确定清空所有观影统计数据？此操作不可恢复。',
+  'stats.cleared': '观影报告已清空',
+  'stats.clearFailed': '清空观影报告失败',
 
   // ==================== 管理后台 ====================
   'admin.title': '系统管理',

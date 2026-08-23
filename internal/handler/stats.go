@@ -49,6 +49,19 @@ func (h *StatsHandler) GetUserStats(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": overview})
 }
 
+// ClearMyStats 清空当前用户的播放统计
+func (h *StatsHandler) ClearMyStats(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+
+	deleted, err := h.statsService.ClearUserStats(userID.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "清空统计失败"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "已清空", "deleted": deleted})
+}
+
 // GetUserStatsAdmin 管理员查看指定用户的统计
 func (h *StatsHandler) GetUserStatsAdmin(c *gin.Context) {
 	userID := c.Param("userId")

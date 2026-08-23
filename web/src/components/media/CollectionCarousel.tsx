@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { collectionApi, streamApi } from '@/api'
 import { Button, Surface, Tag } from '@/components/design-system'
+import PosterImage from '@/components/PosterImage'
 import type { CollectionMediaItem, CollectionWithMedia } from '@/types'
 
 interface CollectionCarouselProps {
@@ -170,7 +171,7 @@ function CollectionCard({
         <div className="absolute inset-0 flex items-center justify-center text-[var(--nv-text-tertiary)]">
           <Film size={30} aria-hidden="true" />
         </div>
-        <img
+        <PosterImage
           src={streamApi.getPosterUrl(item.id)}
           alt={item.title}
           className="relative z-10 h-full w-full object-cover transition-[transform,filter] duration-300 ease-out group-hover:scale-[1.025] group-hover:brightness-90"
@@ -250,7 +251,7 @@ function CollectionListItem({
           <div className="absolute inset-0 flex items-center justify-center text-[var(--nv-text-tertiary)]">
             <Film size={16} aria-hidden="true" />
           </div>
-          <img
+          <PosterImage
             src={streamApi.getPosterUrl(item.id)}
             alt={item.title}
             className="relative z-10 h-full w-full object-cover"

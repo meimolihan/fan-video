@@ -5,6 +5,7 @@ import type { Media, Series } from '@/types'
 import { streamApi } from '@/api'
 import { Button, Tag, buttonClassName } from '@/components/design-system'
 import { HeroContent, MediaArtwork } from '@/ui'
+import PosterImage from '@/components/PosterImage'
 
 interface SeriesHeroProps {
   series: Series
@@ -80,7 +81,7 @@ export default function SeriesHero({
     <section className="nv-detail-hero nv-series-hero relative border-b border-[var(--nv-border-subtle)] bg-[var(--nv-bg-canvas)]">
       <div className="nv-series-backdrop absolute inset-0 overflow-hidden" aria-hidden="true">
         {series.backdrop_path ? (
-          <img
+          <PosterImage
             key={`series-backdrop-${series.id}-${posterVersion}`}
             src={streamApi.getSeriesBackdropUrl(series.id, posterVersion)}
             alt=""
@@ -88,7 +89,7 @@ export default function SeriesHero({
             onLoad={() => setImageLoaded(true)}
           />
         ) : series.poster_path ? (
-          <img
+          <PosterImage
             key={`series-backdrop-poster-${series.id}-${posterVersion}`}
             src={streamApi.getSeriesPosterUrl(series.id, posterVersion)}
             alt=""

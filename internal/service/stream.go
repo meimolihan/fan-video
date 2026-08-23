@@ -37,6 +37,7 @@ type MediaPlayInfo struct {
 	SpriteURL        string  `json:"sprite_url"`         // 进度条雪碧图地址（预处理完成后可用）
 	SpriteVTTURL     string  `json:"sprite_vtt_url"`     // 进度条雪碧图 WebVTT 索引地址
 	PreferDirectPlay bool    `json:"prefer_direct_play"` // 系统设置：优先直接播放（禁用自动转码）
+	DefaultAutoplay  bool    `json:"default_autoplay"`   // 系统设置：进入播放页是否自动开始播放
 	CanRemux         bool    `json:"can_remux"`          // 是否支持 remux（MKV等容器内编码兼容但容器不兼容）
 	RemuxURL         string  `json:"remux_url"`          // Remux 播放地址（零转码，仅转封装）
 }
@@ -312,6 +313,16 @@ func (s *StreamService) GetMediaPlayInfo(mediaID string) (*MediaPlayInfo, error)
 		if strings.Contains(urlLower, ".m3u8") {
 			info.HlsURL = fmt.Sprintf("/api/stream/%s/direct", mediaID)
 		}
+		// 读取系统设置：进入播放页是否自动播放（与主路径保持一致）
+		if s.settingRepo != nil {
+			if val, err := s.settingRepo.Get("default_autoplay"); err == nil {
+				info.DefaultAutoplay = val == "true" || val == "1"
+			} else {
+				info.DefaultAutoplay = true
+			}
+		} else {
+			info.DefaultAutoplay = true
+		}
 		return info, nil
 	}
 
@@ -352,6 +363,17 @@ func (s *StreamService) GetMediaPlayInfo(mediaID string) (*MediaPlayInfo, error)
 		}
 	} else {
 		info.PreferDirectPlay = true
+	}
+
+	// 读取系统设置：进入播放页是否自动播放
+	if s.settingRepo != nil {
+		if val, err := s.settingRepo.Get("default_autoplay"); err == nil {
+			info.DefaultAutoplay = val == "true" || val == "1"
+		} else {
+			info.DefaultAutoplay = true // 默认自动播放
+		}
+	} else {
+		info.DefaultAutoplay = true
 	}
 
 	// 检查是否有预处理内容（优先使用预处理的 HLS 流，实现秒开）

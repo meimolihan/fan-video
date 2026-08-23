@@ -1,8 +1,9 @@
 import { userApi } from '@/api'
 import { useToast } from '@/components/Toast'
-import { EmptyState } from '@/components/design-system'
+import { useDialog } from '@/components/Dialog'
+import { Button, EmptyState } from '@/components/design-system'
 import { useTranslation } from '@/i18n'
-import { usePageCache } from '@/hooks/usePageCache'
+import { usePageCache, invalidatePageCachePrefix } from '@/hooks/usePageCache'
 import { usePagination } from '@/hooks/usePagination'
 import type { Favorite } from '@/types'
 import MediaCard from '@/components/MediaCard'
@@ -13,7 +14,7 @@ import {
   PersonalWorkspaceHeader,
   PersonalWorkspacePanel,
 } from '@/ui'
-import { Heart } from 'lucide-react'
+import { Heart, Trash2 } from 'lucide-react'
 
 interface FavoritesData {
   list: Favorite[]
@@ -27,8 +28,9 @@ export default function FavoritesPage() {
   })
   const toast = useToast()
   const { t } = useTranslation()
+  const dialog = useDialog()
 
-  const { data, loading, error } = usePageCache<FavoritesData>(
+  const { data, loading, error, mutate, refetch } = usePageCache<FavoritesData>(
     `favorites:page=${page}:size=${size}`,
     async () => {
       const res = await userApi.favorites(page, size)
@@ -44,6 +46,26 @@ export default function FavoritesPage() {
   const media = favorites.map((favorite) => favorite.media).filter(Boolean)
   const pages = totalPages(total)
 
+  const handleClear = async () => {
+    const ok = await dialog.confirm({
+      title: t('favorites.clearConfirmTitle'),
+      message: t('favorites.clearConfirm'),
+      confirmText: t('favorites.clear'),
+      variant: 'danger',
+    })
+    if (!ok) return
+    try {
+      await userApi.clearFavorites()
+      mutate({ list: [], total: 0 })
+      invalidatePageCachePrefix('favorites:')
+      invalidatePageCachePrefix('home:')
+      refetch(true)
+      toast.success(t('favorites.cleared'))
+    } catch {
+      toast.error(t('favorites.clearFailed'))
+    }
+  }
+
   return (
     <PersonalWorkspace className="nv-favorites-page">
       <PersonalWorkspaceHeader
@@ -54,6 +76,12 @@ export default function FavoritesPage() {
         statValue={total}
         statLabel="个收藏"
         statAriaLabel={`共 ${total} 个收藏`}
+        actions={total > 0 ? (
+          <Button variant="danger" size="sm" onClick={handleClear}>
+            <Trash2 size={14} aria-hidden="true" />
+            {t('favorites.clearAll')}
+          </Button>
+        ) : undefined}
       />
 
       <PersonalWorkspacePanel

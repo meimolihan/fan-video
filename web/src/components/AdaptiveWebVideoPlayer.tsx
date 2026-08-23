@@ -32,6 +32,8 @@ interface AdaptiveWebVideoPlayerProps {
   supportsHEVC: boolean
   title?: string
   startPosition?: number
+  /** 系统设置「默认自动播放」：false 时进入播放页不自动开始 */
+  autoPlay?: boolean
   onBack?: () => void
   onNext?: () => void
   nextTitle?: string
@@ -101,6 +103,7 @@ export default function AdaptiveWebVideoPlayer({
   resetKey,
   title,
   startPosition = 0,
+  autoPlay = true,
   onBack,
   onNext,
   nextTitle,
@@ -197,7 +200,7 @@ export default function AdaptiveWebVideoPlayer({
         window.setTimeout(() => {
           if (operationRef.current === operation) {
             video.load()
-            void video.play().catch(() => undefined)
+            if (autoPlay) void video.play().catch(() => undefined)
           }
         }, NETWORK_RETRY_DELAY_MS)
         return
@@ -239,7 +242,7 @@ export default function AdaptiveWebVideoPlayer({
         transitionInFlightRef.current = false
       }
     }
-  }, [activeMode, mediaId, onTransition])
+  }, [activeMode, mediaId, onTransition, autoPlay])
 
   useEffect(() => {
     const root = rootRef.current
@@ -299,6 +302,7 @@ export default function AdaptiveWebVideoPlayer({
           title={title}
           startPosition={resumePosition}
           knownDuration={knownDuration}
+          autoPlay={autoPlay}
           onBack={onBack}
           onNext={onNext}
           nextTitle={nextTitle}
@@ -313,6 +317,7 @@ export default function AdaptiveWebVideoPlayer({
           mediaId={mediaId}
           title={title}
           startPosition={resumePosition}
+          autoPlay={autoPlay}
           onBack={onBack}
           onNext={onNext}
           nextTitle={nextTitle}

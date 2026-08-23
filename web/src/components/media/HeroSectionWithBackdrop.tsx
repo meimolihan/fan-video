@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Captions } from 'lucide-react'
 import { withToken } from '@/api/stream'
 import { Button } from '@/components/design-system'
+import PosterImage from '@/components/PosterImage'
 import SubtitleManager from '@/components/SubtitleManager'
 import HeroSection from './HeroSection'
 import './hero-section-backdrop.css'
@@ -41,7 +42,7 @@ export default function HeroSectionWithBackdrop(props: HeroSectionWithBackdropPr
       data-has-backdrop={isBackdropReady ? 'true' : 'false'}
     >
       {shouldRequestBackdrop && (
-        <img
+        <PosterImage
           key={backdropKey}
           src={getMediaBackdropUrl(media.id, posterVersion)}
           alt=""

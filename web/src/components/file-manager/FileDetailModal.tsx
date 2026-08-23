@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { Edit3, Eye, HardDrive, ImageOff, Sparkles } from 'lucide-react'
 import type { Media } from '@/types'
 import { streamApi } from '@/api/stream'
+import PosterImage from '@/components/PosterImage'
 import {
   Button,
   Modal,
@@ -51,7 +52,7 @@ export default function FileDetailModal({ media, onClose, onEdit, onRefreshArtwo
           <div className="mx-auto w-32 sm:mx-0 sm:w-36">
             <div className="aspect-[2/3] overflow-hidden rounded-[var(--nv-radius-card)] bg-[var(--nv-bg-surface-soft)]">
               {!posterFailed ? (
-                <img
+                <PosterImage
                   src={streamApi.getPosterUrl(media.id)}
                   alt={`${media.title || '媒体'}海报`}
                   className="h-full w-full object-cover"

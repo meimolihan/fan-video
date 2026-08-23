@@ -180,6 +180,7 @@ const (
 	SettingAutoPreprocess   = "auto_preprocess_on_scan" // 扫描后自动触发预处理
 	SettingAutoTranscode    = "auto_transcode_on_play"  // 播放时自动触发转码
 	SettingPreferDirectPlay = "prefer_direct_play"      // 优先直接播放（禁用自动转码）
+	SettingDefaultAutoplay  = "default_autoplay"        // 默认自动播放（进入播放页自动开始）
 )
 
 // GetSystemSettings 获取系统全局设置
@@ -200,6 +201,7 @@ func (h *AdminHandler) GetSystemSettings(c *gin.Context) {
 		SettingAutoPreprocess:   getBoolSetting(all, SettingAutoPreprocess, false),  // 默认关闭：扫描后不自动预处理
 		SettingAutoTranscode:    getBoolSetting(all, SettingAutoTranscode, false),   // 默认关闭：播放时不自动转码
 		SettingPreferDirectPlay: getBoolSetting(all, SettingPreferDirectPlay, true), // 默认开启：优先直接播放
+		SettingDefaultAutoplay:  getBoolSetting(all, SettingDefaultAutoplay, true),  // 默认开启：进入播放页自动播放
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": settings})
@@ -215,6 +217,7 @@ type UpdateSystemSettingsRequest struct {
 	AutoPreprocess     *bool   `json:"auto_preprocess_on_scan"`
 	AutoTranscode      *bool   `json:"auto_transcode_on_play"`
 	PreferDirectPlay   *bool   `json:"prefer_direct_play"`
+	DefaultAutoplay    *bool   `json:"default_autoplay"`
 }
 
 // UpdateSystemSettings 更新系统全局设置
@@ -249,6 +252,9 @@ func (h *AdminHandler) UpdateSystemSettings(c *gin.Context) {
 	}
 	if req.PreferDirectPlay != nil {
 		kvs[SettingPreferDirectPlay] = boolToStr(*req.PreferDirectPlay)
+	}
+	if req.DefaultAutoplay != nil {
+		kvs[SettingDefaultAutoplay] = boolToStr(*req.DefaultAutoplay)
 	}
 
 	if len(kvs) == 0 {

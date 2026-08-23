@@ -181,6 +181,7 @@ func registerCoreAPI(
 	api.PUT("/users/me/progress/:mediaId", handlers.User.UpdateProgress)
 	api.GET("/users/me/progress/:mediaId", handlers.User.GetProgress)
 	api.GET("/users/me/favorites", handlers.User.Favorites)
+	api.DELETE("/users/me/favorites", handlers.User.ClearFavorites)
 	api.POST("/users/me/favorites/:mediaId", handlers.User.AddFavorite)
 	api.DELETE("/users/me/favorites/:mediaId", handlers.User.RemoveFavorite)
 	api.GET("/users/me/favorites/:mediaId/check", handlers.User.CheckFavorite)
@@ -215,6 +216,7 @@ func registerCoreAPI(
 
 	api.POST("/stats/playback", handlers.Stats.RecordPlayback)
 	api.GET("/stats/me", handlers.Stats.GetUserStats)
+	api.DELETE("/stats/me", handlers.Stats.ClearMyStats)
 
 	api.GET("/media/:id/collection", handlers.Collection.GetMediaCollection)
 	api.GET("/collections", handlers.Collection.ListCollections)

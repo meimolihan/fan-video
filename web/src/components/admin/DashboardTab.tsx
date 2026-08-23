@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Check,
   Cpu,
+  Clock,
   FolderCog,
   HardDrive,
   Link,
@@ -13,6 +14,7 @@ import {
   Merge,
   MonitorPlay,
   Play,
+  PlayCircle,
   Save,
   Scan,
   Server,
@@ -102,6 +104,16 @@ export default function DashboardTab({
       case 'none': return '软件编码'
       default: return hw
     }
+  }
+
+  const uptimeLabel = (seconds: number) => {
+    if (!Number.isFinite(seconds) || seconds <= 0) return '刚刚启动'
+    const d = Math.floor(seconds / 86400)
+    const h = Math.floor((seconds % 86400) / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
+    if (d > 0) return `${d} 天 ${h} 小时`
+    if (h > 0) return `${h} 小时 ${m} 分钟`
+    return `${m} 分钟`
   }
 
   const handleSaveSettings = async () => {
@@ -242,10 +254,11 @@ export default function DashboardTab({
           description="当前服务运行环境与资源概览。"
           icon={<Server size={18} />}
         >
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
             <MetricCard icon={<Cpu size={16} />} label="CPU 核心数" value={`${systemInfo.cpus} 核`} />
             <MetricCard icon={<Activity size={16} />} label="Go 协程" value={String(systemInfo.goroutines)} detail="活跃 goroutine" />
             <MemoryMetric systemInfo={systemInfo} />
+            <MetricCard icon={<Clock size={16} />} label="运行时长" value={uptimeLabel(systemInfo.uptime_seconds)} detail="自上次服务启动" />
             <MetricCard
               icon={<Zap size={16} />}
               label="硬件加速"
@@ -321,7 +334,7 @@ export default function DashboardTab({
 
         <SettingRow
           icon={<Link size={16} />}
-          title="网盘优先直连播放"
+          title="网盘直连播放"
           description="播放网盘文件时优先使用直链进行在线播放。"
           control={(
             <ToggleButton
@@ -344,8 +357,20 @@ export default function DashboardTab({
         />
 
         <SettingRow
+          icon={<PlayCircle size={16} />}
+          title="默认自动播放"
+          description="开启后点击播放按钮进入播放界面时自动开始播放；关闭则进入后手动点击播放。"
+          control={(
+            <ToggleButton
+              checked={sysSettings.default_autoplay}
+              onChange={() => setSysSettings((s) => ({ ...s, default_autoplay: !s.default_autoplay }))}
+            />
+          )}
+        />
+
+        <SettingRow
           icon={<Scan size={16} />}
-          title="扫描后自动预处理"
+          title="扫描后预处理"
           description="扫描媒体库完成时自动触发视频预处理和字幕预处理。"
           control={(
             <ToggleButton
@@ -357,7 +382,7 @@ export default function DashboardTab({
 
         <SettingRow
           icon={<Play size={16} />}
-          title="播放时自动转码"
+          title="自动转码播放"
           description="播放不支持直接播放的格式时自动触发实时转码。"
           control={(
             <ToggleButton
@@ -453,10 +478,7 @@ export default function DashboardTab({
         icon={<ShieldAlert size={18} />}
         className="border-[color-mix(in_srgb,var(--nv-status-danger)_24%,var(--nv-border-subtle))]"
       >
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--nv-radius-control)] bg-[color-mix(in_srgb,var(--nv-status-danger)_10%,transparent)] text-[var(--nv-status-danger)]">
-            <Trash2 size={20} />
-          </div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 flex-1">
             <h4 className="text-sm font-semibold text-[var(--nv-text-primary)]">一键彻底清空所有数据</h4>
             <p className="mt-1 text-xs leading-6 text-[var(--nv-text-tertiary)]">

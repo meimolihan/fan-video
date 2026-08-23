@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BarChart3, Clock, Film, Heart } from 'lucide-react'
+import { BarChart3, Clock, Film, Heart, Trash2 } from 'lucide-react'
 import { statsApi, streamApi } from '@/api'
 import { useTranslation } from '@/i18n'
+import { useToast } from '@/components/Toast'
+import { useDialog } from '@/components/Dialog'
 import type { UserStatsOverview } from '@/types'
-import { EmptyState, PageContainer, Section, Tag } from '@/components/design-system'
+import PosterImage from '@/components/PosterImage'
+import { EmptyState, PageContainer, Section, Tag, Button } from '@/components/design-system'
 
 export default function StatsPage() {
   const [stats, setStats] = useState<UserStatsOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const { t } = useTranslation()
+  const toast = useToast()
+  const dialog = useDialog()
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -23,6 +28,30 @@ export default function StatsPage() {
     }
     fetchStats()
   }, [])
+
+  const hasData = !!stats && (
+    stats.total_minutes > 0
+    || (stats.daily_stats?.length ?? 0) > 0
+    || (stats.top_genres?.length ?? 0) > 0
+    || (stats.most_watched?.length ?? 0) > 0
+  )
+
+  const handleClear = async () => {
+    const ok = await dialog.confirm({
+      title: t('stats.clearConfirmTitle'),
+      message: t('stats.clearConfirm'),
+      confirmText: t('stats.clear'),
+      variant: 'danger',
+    })
+    if (!ok) return
+    try {
+      await statsApi.clearMyStats()
+      setStats(null)
+      toast.success(t('stats.cleared'))
+    } catch {
+      toast.error(t('stats.clearFailed'))
+    }
+  }
 
   const dailyMax = useMemo(() => {
     if (!stats?.daily_stats?.length) return 0
@@ -79,9 +108,17 @@ export default function StatsPage() {
   return (
     <PageContainer>
       <div className="space-y-8">
-        <header className="border-b border-[var(--nv-border-subtle)] pb-5">
-          <h1 className="text-2xl font-semibold tracking-[-0.02em] text-[var(--nv-text-primary)]">{t('stats.title')}</h1>
-          <p className="mt-1.5 text-sm text-[var(--nv-text-tertiary)]">观看时长、内容偏好与最近观看趋势。</p>
+        <header className="flex items-end justify-between gap-4 border-b border-[var(--nv-border-subtle)] pb-5">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold tracking-[-0.02em] text-[var(--nv-text-primary)]">{t('stats.title')}</h1>
+            <p className="mt-1.5 text-sm text-[var(--nv-text-tertiary)]">观看时长、内容偏好与最近观看趋势。</p>
+          </div>
+          {hasData && (
+            <Button variant="danger" size="sm" onClick={handleClear} className="shrink-0">
+              <Trash2 size={14} aria-hidden="true" />
+              {t('stats.clearAll')}
+            </Button>
+          )}
         </header>
 
         <section aria-label={t('stats.title')} className="grid border-y border-[var(--nv-border-subtle)] sm:grid-cols-2 xl:grid-cols-4">
@@ -150,7 +187,7 @@ export default function StatsPage() {
                 <article key={item.media_id} className="group min-w-0 transition-transform duration-150 hover:-translate-y-0.5">
                   <div className="relative aspect-[2/3] overflow-hidden rounded-[var(--nv-radius-card)] bg-[var(--nv-bg-surface-soft)] shadow-[var(--nv-shadow-card)] transition-shadow duration-150 group-hover:shadow-[var(--nv-shadow-card-hover)]">
                     {item.poster_path ? (
-                      <img
+                      <PosterImage
                         src={item.media_type === 'series'
                           ? streamApi.getSeriesPosterUrl(item.media_id)
                           : streamApi.getPosterUrl(item.media_id)}
