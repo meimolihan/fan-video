@@ -225,6 +225,7 @@ func TestScanMixedLibraryGroupsSameDirVideosAsSeries(t *testing.T) {
 	if err := db.Create(library).Error; err != nil {
 		t.Fatal(err)
 	}
+	library.EnableFileFilter = false // 测试假文件过小：Create 后显式关闭大小过滤
 
 	scanner := NewScannerService(repos.Media, repos.Series, cfg, zap.NewNop().Sugar())
 	count, err := scanner.scanMixedLibrary(library)
@@ -298,6 +299,7 @@ func TestScanMixedLibraryDoesNotCollapseRootWhenSubdirsHaveEpisodes(t *testing.T
 	if err := db.Create(library).Error; err != nil {
 		t.Fatal(err)
 	}
+	library.EnableFileFilter = false // 测试假文件过小：Create 后显式关闭大小过滤
 
 	scanner := NewScannerService(repos.Media, repos.Series, cfg, zap.NewNop().Sugar())
 	if _, err := scanner.scanMixedLibrary(library); err != nil {
@@ -363,6 +365,7 @@ func TestScanMixedLibraryRootWithDirectEpisodeFilesBecomesSeries(t *testing.T) {
 	if err := db.Create(library).Error; err != nil {
 		t.Fatal(err)
 	}
+	library.EnableFileFilter = false // 测试假文件过小：Create 后显式关闭大小过滤
 
 	scanner := NewScannerService(repos.Media, repos.Series, cfg, zap.NewNop().Sugar())
 	if _, err := scanner.scanMixedLibrary(library); err != nil {
@@ -404,6 +407,7 @@ func TestScanMixedLibraryKeepsLooseMoviesAtConfiguredRoot(t *testing.T) {
 	if err := db.Create(library).Error; err != nil {
 		t.Fatal(err)
 	}
+	library.EnableFileFilter = false // 测试假文件过小：Create 后显式关闭大小过滤
 
 	scanner := NewScannerService(repos.Media, repos.Series, cfg, zap.NewNop().Sugar())
 	count, err := scanner.scanMixedLibrary(library)
@@ -454,6 +458,7 @@ func TestScanMixedLibraryRelinksPreexistingMoviesAsEpisodes(t *testing.T) {
 	if err := db.Create(library).Error; err != nil {
 		t.Fatal(err)
 	}
+	library.EnableFileFilter = false // 测试假文件过小：Create 后显式关闭大小过滤
 
 	// 预置「历史电影」记录（无剧集归属）
 	for i, p := range paths {
@@ -540,6 +545,7 @@ func TestScanMixedLibraryDrillsIntoMultiVideoWrapper(t *testing.T) {
 	if err := db.Create(library).Error; err != nil {
 		t.Fatal(err)
 	}
+	library.EnableFileFilter = false // 测试假文件过小：Create 后显式关闭大小过滤
 
 	scanner := NewScannerService(repos.Media, repos.Series, cfg, zap.NewNop().Sugar())
 	if _, err := scanner.scanMixedLibrary(library); err != nil {
@@ -621,6 +627,7 @@ func TestScanMixedLibraryAlbumTree(t *testing.T) {
 	if err := db.Create(library).Error; err != nil {
 		t.Fatal(err)
 	}
+	library.EnableFileFilter = false // 测试假文件过小：Create 后显式关闭大小过滤
 
 	scanner := NewScannerService(repos.Media, repos.Series, cfg, zap.NewNop().Sugar())
 	if _, err := scanner.scanMixedLibrary(library); err != nil {
@@ -717,6 +724,7 @@ func TestScanTVShowLibraryRelinksUnlinkedLooseFiles(t *testing.T) {
 	if err := db.Create(library).Error; err != nil {
 		t.Fatal(err)
 	}
+	library.EnableFileFilter = false // 测试假文件过小：Create 后显式关闭大小过滤
 
 	// 预置无归属的散落记录
 	for _, p := range paths {

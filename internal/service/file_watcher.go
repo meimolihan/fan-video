@@ -394,17 +394,6 @@ func (fw *FileWatcherService) triggerIncrementalScan(libraryID string) {
 
 	fw.logger.Infof("增量扫描完成: %s, 新增 %d 个媒体", lib.Name, count)
 
-	// 增量扫描后只处理新增且未整理过的媒体，修正标题并创建硬链接，再进入刮削。
-	if count > 0 && fw.scanPostProcess != nil && lib.AutoOrganizeMode != model.AutoOrganizeOff {
-		if okCount, totalAI, err := fw.scanPostProcess.ProcessUnprocessedLibraryWithProgress(libraryID, nil); err != nil {
-			fw.logger.Warnf("增量 AI 整理失败: %s - %v", lib.Name, err)
-		} else if totalAI == 0 {
-			fw.logger.Infof("增量扫描无新增待 AI 整理媒体: %s", lib.Name)
-		} else {
-			fw.logger.Infof("增量 AI 整理完成: %s, 成功 %d / 待整理 %d", lib.Name, okCount, totalAI)
-		}
-	}
-
 	// 如果有新增媒体，自动触发刮削
 	if count > 0 {
 		go func() {

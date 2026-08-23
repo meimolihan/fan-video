@@ -1,6 +1,7 @@
 import type { KeyboardEvent } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button, Input, Select } from '@/components/design-system'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 
 interface PaginationProps {
   page: number
@@ -27,20 +28,25 @@ export default function Pagination({
   showJumper = true,
   maxButtons = 7,
 }: PaginationProps) {
+  // 手机宽度（≤479px，与 base.css 移动端断点一致）渲染紧凑分页：
+  // 最多 5 个页码按钮全部可见、可点击直接跳转，长区间折叠为省略号。
+  const isCompactViewport = useMediaQuery('(max-width: 479px)')
+  const effectiveMaxButtons = isCompactViewport ? Math.min(maxButtons, 5) : maxButtons
+
   if (totalPages <= 1) return null
 
   const getPageNumbers = (): (number | 'ellipsis')[] => {
-    if (totalPages <= maxButtons) {
+    if (totalPages <= effectiveMaxButtons) {
       return Array.from({ length: totalPages }, (_, index) => index + 1)
     }
 
     const pages: (number | 'ellipsis')[] = []
-    const half = Math.floor((maxButtons - 2) / 2)
+    const half = Math.floor((effectiveMaxButtons - 2) / 2)
     let start = Math.max(2, page - half)
     let end = Math.min(totalPages - 1, page + half)
 
-    if (page - half < 2) end = Math.min(totalPages - 1, maxButtons - 1)
-    if (page + half > totalPages - 1) start = Math.max(2, totalPages - maxButtons + 2)
+    if (page - half < 2) end = Math.min(totalPages - 1, effectiveMaxButtons - 1)
+    if (page + half > totalPages - 1) start = Math.max(2, totalPages - effectiveMaxButtons + 2)
 
     pages.push(1)
     if (start > 2) pages.push('ellipsis')

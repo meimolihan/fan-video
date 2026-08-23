@@ -122,6 +122,12 @@ func registerCoreAPI(
 
 	api.GET("/admin/media-analysis/config", middleware.AdminOnly(), mediaAnalysis.WorkerConfig)
 	api.PUT("/admin/media-analysis/config", middleware.AdminOnly(), mediaAnalysis.UpdateWorkerConfig)
+	// 批量生成 / 清空精彩片段（媒体库管理页）
+	api.POST("/admin/media-analysis/batch", middleware.AdminOnly(), mediaAnalysis.StartBatchHighlights)
+	api.GET("/admin/media-analysis/batch/status", middleware.AdminOnly(), mediaAnalysis.BatchHighlightsStatus)
+	api.DELETE("/admin/media-analysis/batch", middleware.AdminOnly(), mediaAnalysis.StopBatchHighlights)
+	api.DELETE("/admin/media-analysis/highlights-all", middleware.AdminOnly(), mediaAnalysis.ClearAllHighlights)
+	api.GET("/admin/media-analysis/highlights-stats", middleware.AdminOnly(), mediaAnalysis.HighlightStorageStats)
 	api.GET("/admin/media-analysis/workers", middleware.AdminOnly(), mediaAnalysis.Workers)
 	api.POST("/media-analysis/workers/heartbeat", middleware.AdminOnly(), mediaAnalysis.WorkerHeartbeat)
 	api.POST("/media-analysis/workers/claim", middleware.AdminOnly(), mediaAnalysis.WorkerClaim)

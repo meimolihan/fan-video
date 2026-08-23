@@ -71,6 +71,7 @@ func TestGetPosterPathNeverSharesGenericCover(t *testing.T) {
 	if err := db.Create(library).Error; err != nil {
 		t.Fatal(err)
 	}
+	library.EnableFileFilter = false // 测试假文件过小：Create 后显式关闭大小过滤
 
 	ids := map[string]string{}
 	for i, name := range []string{"ep1.mp4", "ep2.mp4"} {

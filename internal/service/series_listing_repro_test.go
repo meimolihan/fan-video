@@ -81,6 +81,7 @@ func TestSeriesListingRepro(t *testing.T) {
 			if err := db.Create(library).Error; err != nil {
 				t.Fatal(err)
 			}
+			library.EnableFileFilter = false // 测试假文件过小：Create 后显式关闭大小过滤
 
 			scanner := NewScannerService(repos.Media, repos.Series, cfg, zap.NewNop().Sugar())
 			if _, err := scanner.ScanLibrary(library); err != nil {

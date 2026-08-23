@@ -285,10 +285,9 @@ func (s *LibraryService) Scan(id string) error {
 			s.logger.Warnf("媒体库所有路径均为空 (媒体库: %s)", lib.Name)
 		}
 
-		// 用户可感知的主阶段固定为：1. 入库进度 → 2. AI 整理进度 → 3. 元数据刮削进度。
-		// 合并/匹配等收尾任务不单独占主进度阶段，避免刷新后进度条顺序混乱。
-		stepTotal := 3
-		needAIOrganize := s.scanPostProcess != nil && lib.AutoOrganizeMode != model.AutoOrganizeOff
+		// 用户可感知的主阶段固定为：1. 入库进度 → 2. 元数据刮削进度。
+		// （AI 整理阶段已移除）合并/匹配等收尾任务不单独占主进度阶段。
+		stepTotal := 2
 		stepCurrent := 0
 
 		// 广播阶段事件的辅助函数
@@ -339,26 +338,7 @@ func (s *LibraryService) Scan(id string) error {
 		s.logger.Infof("媒体库 %s 文件扫描完成，新增 %d 个媒体", lib.Name, count)
 		updatePhaseProgress("scanning", count, count, fmt.Sprintf("入库完成: 新增 %d 个媒体", count))
 
-		// 第二步：AI 自动整理 — 识别、归类、命名与可选硬链接。
-		broadcastPhase("ai_organizing", fmt.Sprintf("正在 AI 整理: %s", lib.Name))
-		if needAIOrganize {
-			okCount, totalAI, err := s.scanPostProcess.ProcessUnprocessedLibraryWithProgress(id, func(current, total, okCount int) {
-				updatePhaseProgress("ai_organizing", current, total, fmt.Sprintf("AI 整理进度: [%d/%d] 成功 %d", current, total, okCount))
-			})
-			if err != nil {
-				s.logger.Warnf("媒体库 %s AI 自动整理失败: %v", lib.Name, err)
-			} else if totalAI == 0 {
-				updatePhaseProgress("ai_organizing", 1, 1, fmt.Sprintf("媒体库 %s 无新增待 AI 整理媒体，已跳过", lib.Name))
-				s.logger.Infof("媒体库 %s 无新增待 AI 整理媒体，跳过 AI 调用", lib.Name)
-			} else {
-				s.logger.Infof("媒体库 %s AI 自动整理完成: 成功 %d / 待整理 %d", lib.Name, okCount, totalAI)
-				s.syncSeriesTitlesFromEpisodes(id)
-			}
-		} else {
-			updatePhaseProgress("ai_organizing", 1, 1, fmt.Sprintf("媒体库 %s 已跳过 AI 整理", lib.Name))
-		}
-
-		// 第三步：自动刮削元数据（如果媒体库开启了自动刮削）
+		// 第二步：自动刮削元数据（如果媒体库开启了自动刮削）
 		broadcastPhase("scraping", fmt.Sprintf("正在刮削元数据: %s", lib.Name))
 		if lib.AutoScrapeMetadata {
 			if lib.Type == "tvshow" || lib.Type == "mixed" {
@@ -769,10 +749,9 @@ func (s *LibraryService) Reindex(id string) error {
 			}
 		}
 
-		// 用户可感知的主阶段固定为：1. 入库进度 → 2. AI 整理进度 → 3. 元数据刮削进度。
-		// 重建索引的清理、合并、匹配等属于收尾任务，不单独占主进度阶段。
-		stepTotal := 3
-		needAIOrganize := s.scanPostProcess != nil && lib.AutoOrganizeMode != model.AutoOrganizeOff
+		// 用户可感知的主阶段固定为：1. 入库进度 → 2. 元数据刮削进度。
+		// （AI 整理阶段已移除）重建的清理、合并、匹配等属于收尾任务，不单独占主进度阶段。
+		stepTotal := 2
 		stepCurrent := 0
 
 		broadcastPhase := func(phase, message string) {
@@ -829,29 +808,10 @@ func (s *LibraryService) Reindex(id string) error {
 		s.logger.Infof("媒体库 %s 文件扫描完成，共 %d 个媒体，继续执行重建后处理", lib.Name, count)
 		updatePhaseProgress("scanning", count, count, fmt.Sprintf("入库完成: 共 %d 个媒体", count))
 
-		// 第二步：AI 自动整理。必须在刮削前同步标题/路径/硬链接。
-		if needAIOrganize {
-			s.cleanOrganizeOutputDir(lib)
-		}
-		broadcastPhase("ai_organizing", fmt.Sprintf("正在 AI 整理: %s", lib.Name))
-		if needAIOrganize {
-			okCount, totalAI, err := s.scanPostProcess.ProcessUnprocessedLibraryWithProgress(id, func(current, total, okCount int) {
-				updatePhaseProgress("ai_organizing", current, total, fmt.Sprintf("AI 整理进度: [%d/%d] 成功 %d", current, total, okCount))
-			})
-			if err != nil {
-				s.logger.Warnf("媒体库 %s 重建索引 AI 自动整理失败: %v", lib.Name, err)
-			} else if totalAI == 0 {
-				updatePhaseProgress("ai_organizing", 1, 1, fmt.Sprintf("媒体库 %s 无待 AI 整理媒体，已跳过", lib.Name))
-				s.logger.Infof("媒体库 %s 重建索引无待 AI 整理媒体", lib.Name)
-			} else {
-				s.logger.Infof("媒体库 %s 重建索引 AI 自动整理完成: 成功 %d / 待整理 %d", lib.Name, okCount, totalAI)
-				s.syncSeriesTitlesFromEpisodes(id)
-			}
-		} else {
-			updatePhaseProgress("ai_organizing", 1, 1, fmt.Sprintf("媒体库 %s 已跳过 AI 整理", lib.Name))
-		}
+		// 释放 AI 整理历史占用的输出目录（硬链接树），无论当前模式如何都清一次
+		s.cleanOrganizeOutputDir(lib)
 
-		// 第三步：自动刮削元数据（如果媒体库开启了自动刮削）
+		// 第二步：自动刮削元数据（如果媒体库开启了自动刮削）
 		broadcastPhase("scraping", fmt.Sprintf("正在刮削元数据: %s", lib.Name))
 		if lib.AutoScrapeMetadata {
 			if lib.Type == "tvshow" || lib.Type == "mixed" {

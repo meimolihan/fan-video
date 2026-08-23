@@ -57,6 +57,20 @@ func (r *VideoHighlightRepo) Update(highlight *model.VideoHighlight) error { ret
 func (r *VideoHighlightRepo) DeleteByMediaID(mediaID string) error { return r.db.Where("media_id = ?", mediaID).Delete(&model.VideoHighlight{}).Error }
 func (r *VideoHighlightRepo) Delete(id string) error { return r.db.Delete(&model.VideoHighlight{}, "id = ?", id).Error }
 
+// ListAllMediaIDs 返回存在精彩片段记录的全部媒体 ID（去重）。
+func (r *VideoHighlightRepo) ListAllMediaIDs() ([]string, error) {
+	var ids []string
+	err := r.db.Model(&model.VideoHighlight{}).Distinct().Pluck("media_id", &ids).Error
+	return ids, err
+}
+
+// CountAll 统计全库精彩片段总数。
+func (r *VideoHighlightRepo) CountAll() (int64, error) {
+	var n int64
+	err := r.db.Model(&model.VideoHighlight{}).Count(&n).Error
+	return n, err
+}
+
 // ReplaceByMediaID 原子替换一个媒体的全部精彩片段。
 func (r *VideoHighlightRepo) ReplaceByMediaID(mediaID string, highlights []model.VideoHighlight) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
@@ -64,6 +78,13 @@ func (r *VideoHighlightRepo) ReplaceByMediaID(mediaID string, highlights []model
 		if len(highlights) == 0 { return nil }
 		return tx.Create(&highlights).Error
 	})
+}
+
+// CountByType 统计指定类型的分析任务数。
+func (r *AIAnalysisTaskRepo) CountByType(taskType string) (int64, error) {
+	var n int64
+	err := r.db.Model(&model.AIAnalysisTask{}).Where("task_type = ?", taskType).Count(&n).Error
+	return n, err
 }
 
 // ==================== V3: AIAnalysisTaskRepo ====================

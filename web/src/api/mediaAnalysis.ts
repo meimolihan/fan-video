@@ -55,6 +55,22 @@ export interface MediaAnalysisTask {
 
 export type MediaAnalysisExecutionMode = 'auto' | 'client_preferred' | 'server_only' | 'off'
 
+export interface BatchHighlightStatus {
+  running: boolean
+  stop_requested: boolean
+  total: number
+  processed: number
+  skipped: number
+  discarded: number
+  failed: number
+  remaining: number
+  current_media_id: string
+  current_title: string
+  current_progress: number
+  started_at: string
+  finished_at?: string | null
+}
+
 export interface MediaAnalysisWorkerConfig {
   execution_mode: MediaAnalysisExecutionMode
   modes: MediaAnalysisExecutionMode[]
@@ -193,6 +209,13 @@ export interface MediaAnalysisWorkerFailure {
   error: string
 }
 
+export interface HighlightStorageStats {
+  highlight_rows: number
+  highlight_media: number
+  local_videos: number
+  highlight_tasks: number
+}
+
 export const mediaAnalysisApi = {
   getHighlights: (mediaId: string) =>
     api.get<{ data: MediaHighlightList }>(`/media/${mediaId}/highlights`),
@@ -205,6 +228,22 @@ export const mediaAnalysisApi = {
 
   deleteHighlights: (mediaId: string) =>
     api.delete<{ message: string }>(`/media/${mediaId}/highlights`),
+
+  // ==================== 批量处理（媒体库管理） ====================
+  startBatchHighlights: () =>
+    api.post<{ data: BatchHighlightStatus; message: string }>('/admin/media-analysis/batch'),
+
+  getBatchStatus: () =>
+    api.get<{ data: BatchHighlightStatus }>('/admin/media-analysis/batch/status'),
+
+  stopBatchHighlights: () =>
+    api.delete<{ data: BatchHighlightStatus; message: string }>('/admin/media-analysis/batch'),
+
+  clearAllHighlights: () =>
+    api.delete<{ message: string; media_count: number; highlight_count: number }>('/admin/media-analysis/highlights-all'),
+
+  getHighlightStorageStats: () =>
+    api.get<HighlightStorageStats>('/admin/media-analysis/highlights-stats'),
 
   // 导出精彩片段为独立 mp4（同步切片，短片段秒级完成）
   exportHighlight: (mediaId: string, highlightId: string) =>

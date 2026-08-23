@@ -49,6 +49,7 @@ type MediaAnalysisService struct {
 	logger        *zap.SugaredLogger
 	wsHub         *WSHub
 	semaphore     chan struct{}
+	batch         batchHighlightState
 	previewMu     sync.Mutex
 }
 

@@ -11,15 +11,14 @@ import {
   ArrowUpDown,
   Calendar,
   ChevronRight,
+  Database,
   Film,
   FolderOpen,
   FolderPlus,
   HardDrive,
   Layers,
-  MoreHorizontal,
   Pencil,
   RefreshCw,
-  RotateCcw,
   ScanLine,
   Trash2,
   Tv,
@@ -28,6 +27,7 @@ import {
 import clsx from 'clsx'
 import { AdminPanel, AdminStatus } from '@/components/admin/AdminPrimitives'
 import { Button, EmptyState, Tag } from '@/components/design-system'
+import HighlightsBatchPanel from '@/components/admin/HighlightsBatchPanel'
 import { invalidateMediaListCaches } from '@/utils/invalidateMediaCaches'
 
 const TYPE_CONFIG: Record<string, { label: string; icon: typeof Film }> = {
@@ -47,11 +47,10 @@ interface LibraryManagerProps {
   scanPhase: Record<string, ScanPhaseData>
 }
 
-type MainScanStage = 'scanning' | 'ai_organizing' | 'scraping'
+type MainScanStage = 'scanning' | 'scraping'
 
 const MAIN_SCAN_STAGES: { id: MainScanStage; label: string; short: string }[] = [
   { id: 'scanning', label: '入库进度', short: '入库' },
-  { id: 'ai_organizing', label: 'AI整理进度', short: 'AI整理' },
   { id: 'scraping', label: '元数据刮削进度', short: '刮削' },
 ]
 
@@ -74,7 +73,6 @@ function LibraryManager({
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [sortBy, setSortBy] = useState<'name' | 'created' | 'type'>('created')
   const [sortAsc, setSortAsc] = useState(false)
-  const [activeMenu, setActiveMenu] = useState<string | null>(null)
   const [scanAllLoading, setScanAllLoading] = useState(false)
   const [editingLibrary, setEditingLibrary] = useState<Library | null>(null)
   const [deletingLibraries, setDeletingLibraries] = useState<Set<string>>(new Set())
@@ -195,7 +193,6 @@ function LibraryManager({
       })
       if (!ok) return
 
-      setActiveMenu(null)
       setDeletingLibraries((current) => new Set(current).add(id))
 
       try {
@@ -310,19 +307,10 @@ function LibraryManager({
                 progress={scanProgress[library.id]}
                 scrape={scrapeProgress[library.id]}
                 phase={scanPhase[library.id]}
-                activeMenu={activeMenu === library.id}
                 onScan={() => handleScan(library.id)}
                 onDelete={() => handleDelete(library.id)}
-                onMenu={() => setActiveMenu(activeMenu === library.id ? null : library.id)}
-                onCloseMenu={() => setActiveMenu(null)}
-                onEdit={() => {
-                  setActiveMenu(null)
-                  setEditingLibrary(library)
-                }}
-                onReindex={() => {
-                  setActiveMenu(null)
-                  handleReindex(library.id)
-                }}
+                onEdit={() => setEditingLibrary(library)}
+                onReindex={() => handleReindex(library.id)}
                 formatDate={formatDate}
               />
             ))}
@@ -341,6 +329,8 @@ function LibraryManager({
           />
         )}
       </AdminPanel>
+
+      <HighlightsBatchPanel />
 
       <CreateLibraryModal
         open={showCreateModal}
@@ -389,11 +379,8 @@ function LibraryRow({
   progress,
   scrape,
   phase,
-  activeMenu,
   onScan,
   onDelete,
-  onMenu,
-  onCloseMenu,
   onEdit,
   onReindex,
   formatDate,
@@ -405,11 +392,8 @@ function LibraryRow({
   progress?: ScanProgressData
   scrape?: ScrapeProgressData
   phase?: ScanPhaseData
-  activeMenu: boolean
   onScan: () => void
   onDelete: () => void
-  onMenu: () => void
-  onCloseMenu: () => void
   onEdit: () => void
   onReindex: () => void
   formatDate: (date: string | null) => string
@@ -419,11 +403,9 @@ function LibraryRow({
   const allPaths = getLibraryPaths(library)
   const displayPath = allPaths.length > 1 ? `${allPaths[0]} +${allPaths.length - 1}` : allPaths[0] || library.path
 
-  const activeStage: MainScanStage = phase?.phase === 'ai_organizing'
-    ? 'ai_organizing'
-    : phase?.phase === 'scraping' || (!phase && scrape)
-      ? 'scraping'
-      : 'scanning'
+  const activeStage: MainScanStage = phase?.phase === 'scraping' || (!phase && scrape)
+    ? 'scraping'
+    : 'scanning'
   const activeStageIndex = MAIN_SCAN_STAGES.findIndex((stage) => stage.id === activeStage)
   const stageLabel = MAIN_SCAN_STAGES[activeStageIndex]?.label || '入库进度'
   const phaseCurrent = phase?.current || 0
@@ -432,17 +414,13 @@ function LibraryRow({
     ? scrape
       ? { current: scrape.current, total: scrape.total }
       : { current: phaseCurrent, total: phaseTotal }
-    : activeStage === 'ai_organizing'
-      ? { current: phaseCurrent, total: phaseTotal }
-      : { current: progress?.current || progress?.new_found || phaseCurrent, total: progress?.total || phaseTotal }
+    : { current: progress?.current || progress?.new_found || phaseCurrent, total: progress?.total || phaseTotal }
   const stagePercent = stageProgress.total > 0
     ? clampPercent((stageProgress.current / stageProgress.total) * 100)
     : activeStageIndex > 0 ? 100 : 35
   const stageMessage = activeStage === 'scraping' && scrape
     ? `元数据刮削 [${scrape.current}/${scrape.total}] ${scrape.media_title || ''}`
-    : activeStage === 'ai_organizing' && phase?.total
-      ? `AI整理 [${phase.current || 0}/${phase.total}]`
-      : progress?.message || phase?.message || '正在入库...'
+    : progress?.message || phase?.message || '正在入库...'
 
   return (
     <div className={clsx('relative', !isLast && 'border-b border-[var(--nv-border-subtle)]')}>
@@ -483,6 +461,12 @@ function LibraryRow({
           <Button variant="ghost" size="sm" iconOnly onClick={onScan} disabled={isScanning || isDeleting} title={isDeleting ? '媒体库正在删除' : '扫描媒体文件'} aria-label="扫描媒体文件">
             <RefreshCw size={16} className={isScanning ? 'animate-spin text-[var(--nv-action-primary)]' : undefined} />
           </Button>
+          <Button variant="ghost" size="sm" iconOnly onClick={onEdit} disabled={isDeleting} title="编辑媒体库" aria-label="编辑媒体库">
+            <Pencil size={16} />
+          </Button>
+          <Button variant="ghost" size="sm" iconOnly onClick={onReindex} disabled={isScanning || isDeleting} title="重建索引" aria-label="重建索引">
+            <Database size={16} className={isScanning ? 'animate-pulse text-[var(--nv-action-primary)]' : undefined} />
+          </Button>
           <Button
             variant="danger"
             size="sm"
@@ -494,26 +478,6 @@ function LibraryRow({
           >
             {isDeleting ? <RefreshCw size={16} className="animate-spin" /> : <Trash2 size={16} />}
           </Button>
-          <div className="relative">
-            <Button variant="ghost" size="sm" iconOnly onClick={onMenu} disabled={isDeleting} aria-label="更多操作">
-              <MoreHorizontal size={16} />
-            </Button>
-            {activeMenu && !isDeleting && (
-              <>
-                <div className="fixed inset-0 z-[var(--nv-z-dropdown)]" onClick={onCloseMenu} />
-                <div className="absolute right-0 top-full z-[calc(var(--nv-z-dropdown)+1)] mt-1 w-44 overflow-hidden rounded-[var(--nv-radius-control)] border border-[var(--nv-border-default)] bg-[var(--nv-bg-elevated)] py-1 shadow-[var(--nv-shadow-elevated)]">
-                  <button type="button" onClick={onEdit} className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--nv-text-secondary)] transition-colors hover:bg-[var(--nv-bg-hover)] hover:text-[var(--nv-text-primary)]">
-                    <Pencil size={14} />
-                    编辑媒体库
-                  </button>
-                  <button type="button" onClick={onReindex} disabled={isScanning || isDeleting} className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--nv-text-secondary)] transition-colors hover:bg-[var(--nv-bg-hover)] hover:text-[var(--nv-text-primary)] disabled:opacity-50">
-                    <RotateCcw size={14} />
-                    重建索引
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
         </div>
       </div>
 

@@ -275,6 +275,14 @@ func (r *MediaRepo) ListByLibraryID(libraryID string) ([]model.Media, error) {
 	return media, err
 }
 
+// ListAllLocalVideos 返回全部本地视频（排除 STRM 远程流）的轻量记录，供批量任务遍历。
+func (r *MediaRepo) ListAllLocalVideos() ([]model.Media, error) {
+	var media []model.Media
+	err := r.db.Select("id", "title", "file_path", "stream_url").
+		Where("(stream_url IS NULL OR stream_url = '')").Find(&media).Error
+	return media, err
+}
+
 func (r *MediaRepo) ListBySeriesID(seriesID string) ([]model.Media, error) {
 	var media []model.Media
 	err := r.db.Where("series_id = ?", seriesID).

@@ -244,28 +244,35 @@
     margin-right: 0;
   }
 
-  /* A seven-button desktop paginator plus touch-size controls easily spans
-     multiple phone rows. Keep the four directional actions and the current
-     page visible; larger viewports retain the full numbered paginator. */
+  /* Phones render a compact numbered pager: Pagination.tsx shrinks to five
+     page buttons at this breakpoint, so every number stays visible and
+     tappable instead of collapsing into a lone "current page" chip. The
+     jumper input stays hidden (numbers are directly clickable); extremely
+     narrow screens get horizontal scrolling inside the page strip as a
+     safety net rather than hidden controls. */
   .nv-pagination {
     column-gap: 6px;
     row-gap: 10px;
     padding-block: 18px;
   }
 
-  .nv-pagination-total,
-  .nv-pagination-size {
+  .nv-pagination-summary,
+  .nv-pagination-size,
+  .nv-pagination-pages,
+  .nv-pagination-options {
     flex: 0 0 auto;
   }
 
-  .nv-pagination-ellipsis,
-  .nv-pagination-page:not([aria-current='page']),
-  .nv-pagination-jumper {
-    display: none !important;
+  .nv-pagination-pages {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
-  .nv-pagination-page[aria-current='page'] {
-    min-width: 44px;
+  .nv-pagination-pages::-webkit-scrollbar { display: none; }
+
+  .nv-pagination-jumper {
+    display: none !important;
   }
 }
 

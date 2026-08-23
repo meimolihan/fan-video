@@ -432,6 +432,62 @@ func (s *ScannerService) SetWSHub(hub *WSHub) {
 	s.wsHub = hub
 }
 
+// isFileTooSmall 判断文件是否命中媒体库「最小文件大小」过滤规则。
+// .strm 是纯文本远程流索引，大小与内容无关，始终豁免。
+func isFileTooSmall(library *model.Library, path string, size int64) bool {
+	if library == nil || !library.EnableFileFilter || library.MinFileSize <= 0 {
+		return false
+	}
+	if strings.EqualFold(filepath.Ext(path), ".strm") {
+		return false
+	}
+	return size < int64(library.MinFileSize)*1024*1024
+}
+
+// skipUndersized 命中大小过滤时记录日志并返回 true（调用方应跳过该文件）。
+func (s *ScannerService) skipUndersized(library *model.Library, path string, size int64) bool {
+	if !isFileTooSmall(library, path, size) {
+		return false
+	}
+	s.logger.Infof("文件过滤: 跳过过小文件(%.2fMB < %dMB): %s",
+		float64(size)/(1024*1024), library.MinFileSize, path)
+	return true
+}
+
+func isFileFilterActive(library *model.Library) bool {
+	return library != nil && library.EnableFileFilter && library.MinFileSize > 0
+}
+
+// purgeUndersizedMedia 清除库内低于大小阈值的存量媒体记录及其关联数据。
+// 覆盖所有入库管线（电影/混合/电视剧/批量导入等）的历史遗留数据；
+// FileSize 未知(0)的记录不动。返回清除数量。
+func (s *ScannerService) purgeUndersizedMedia(library *model.Library) int {
+	if !isFileFilterActive(library) {
+		return 0
+	}
+	minBytes := int64(library.MinFileSize) * 1024 * 1024
+	medias, err := s.mediaRepo.ListByLibraryID(library.ID)
+	if err != nil {
+		s.logger.Warnf("过小清理: 读取媒体库记录失败: %v", err)
+		return 0
+	}
+	removed := 0
+	for i := range medias {
+		m := &medias[i]
+		if m.FileSize <= 0 || isSTRMFile(m.FilePath) || m.FileSize >= minBytes {
+			continue
+		}
+		if delErr := PurgeMediaCompletely(s.mediaRepo, s.cfg.Cache.CacheDir, s.logger, m, "过小文件过滤"); delErr != nil {
+			s.logger.Warnf("过小清理: 清除记录失败 %s: %v", m.FilePath, delErr)
+			continue
+		}
+		s.logger.Infof("文件过滤: 清除存量过小记录(%.2fMB < %dMB): %s",
+			float64(m.FileSize)/(1024*1024), library.MinFileSize, m.FilePath)
+		removed++
+	}
+	return removed
+}
+
 // SetVFSManager 设置 VFS 管理器（V2.1: 用于 webdav:// 路径支持）
 func (s *ScannerService) SetVFSManager(vfsMgr *VFSManager) {
 	s.vfsMgr = vfsMgr
@@ -722,6 +778,12 @@ func (s *ScannerService) ScanLibraryWithOptions(library *model.Library, opts Sca
 		count, err = s.scanMovieLibrary(library)
 	}
 
+	// 全局存量清扫：清除所有入库管线（电影/混合/电视剧等）遗留的过小媒体记录
+	sizeRemoved := 0
+	if err == nil {
+		sizeRemoved = s.purgeUndersizedMedia(library)
+	}
+
 	if err != nil {
 		s.broadcastScanEvent(EventScanFailed, &ScanProgressData{
 			LibraryID:   library.ID,
@@ -740,7 +802,7 @@ func (s *ScannerService) ScanLibraryWithOptions(library *model.Library, opts Sca
 		})
 	}
 
-	s.logger.Infof("扫描完成: %s, 新增 %d 个媒体", library.Name, count)
+	s.logger.Infof("扫描完成: %s, 新增 %d 个媒体, 过小清除 %d", library.Name, count, sizeRemoved)
 
 	// 触发预处理回调（如果已配置）
 	if !opts.SuppressCompletionCallback {
@@ -809,18 +871,11 @@ func (s *ScannerService) scanMovieLibrary(library *model.Library) (int, error) {
 		}
 
 		// P0: 文件大小过滤（启用 MinFileSize 配置）
-		// 注意：.strm 是纯文本的远程流索引文件（通常仅几百字节），
-		// 其"大小"与实际媒体内容无关，必须豁免此过滤，否则会被误判为小样片而跳过
-		if library.EnableFileFilter && library.MinFileSize > 0 && ext != ".strm" {
-			minBytes := int64(library.MinFileSize) * 1024 * 1024
-			if info.Size() < minBytes {
-				s.logger.Debugf("跳过过小文件(%dMB < %dMB): %s",
-					info.Size()/(1024*1024), library.MinFileSize, path)
-				collectMu.Lock()
-				totalFiles++
-				collectMu.Unlock()
-				return nil
-			}
+		if s.skipUndersized(library, path, info.Size()) {
+			collectMu.Lock()
+			totalFiles++
+			collectMu.Unlock()
+			return nil
 		}
 
 		// P0: 排除 extras 路径和 Emby 特典后缀文件
@@ -1106,8 +1161,8 @@ func (s *ScannerService) scanMovieLibrary(library *model.Library) (int, error) {
 		}
 	}
 
-	s.logger.Infof("电影库扫描统计: %s — 遍历文件: %d, 视频文件: %d, 新增: %d, 已存在跳过: %d, 已更新: %d, 清理失效: %d",
-		library.Name, totalFiles, videoFiles, count, skippedExist, skippedUpdated, staleRemoved)
+	s.logger.Infof("电影库扫描统计: %s — 遍历文件: %d, 视频文件: %d, 新增: %d, 已存在跳过: %d, 已更新: %d, 清理失效: %d (文件过滤: 开启=%v, 阈值=%dMB)",
+		library.Name, totalFiles, videoFiles, count, skippedExist, skippedUpdated, staleRemoved, library.EnableFileFilter, library.MinFileSize)
 
 	return count, err
 }
@@ -1477,6 +1532,9 @@ func (s *ScannerService) scanMixedLibrary(library *model.Library) (int, error) {
 			if !supportedExts[ext] {
 				return nil
 			}
+			if s.skipUndersized(library, path, info.Size()) {
+				return nil
+			}
 			if existing, err := s.mediaRepo.FindByFilePath(path); err == nil {
 				s.deleteSourceDuplicateIfOrganized(library, existing, path, info)
 				return nil // 已存在
@@ -1536,6 +1594,9 @@ func (s *ScannerService) scanMixedLibrary(library *model.Library) (int, error) {
 		filePath := filepath.Join(entry.rootPath, entry.entry.Name())
 		info, err := entry.entry.Info()
 		if err != nil {
+			continue
+		}
+		if s.skipUndersized(library, filePath, info.Size()) {
 			continue
 		}
 		if existing, err := s.mediaRepo.FindByFilePath(filePath); err == nil {
@@ -2164,6 +2225,9 @@ func (s *ScannerService) scanTVShowLibrary(library *model.Library) (int, error) 
 				if _, err := s.mediaRepo.FindByFilePath(filePath); err == nil {
 					continue
 				}
+				if s.skipUndersized(library, filePath, f.info.Size()) {
+					continue
+				}
 				title := s.extractTitle(f.entry.Name())
 				media := &model.Media{
 					LibraryID: library.ID,
@@ -2229,6 +2293,9 @@ func (s *ScannerService) scanTVShowLibrary(library *model.Library) (int, error) 
 					s.mediaRepo.Update(existing)
 					s.logger.Infof("历史散落媒体补挂到合集: %s -> %s", f.entry.Name(), actualSeriesName)
 				}
+				continue
+			}
+			if s.skipUndersized(library, filePath, f.info.Size()) {
 				continue
 			}
 
@@ -2600,6 +2667,9 @@ func (s *ScannerService) scanMultiSeasonSeries(library *model.Library, seriesTit
 				seasonSet[seasonNum] = true
 				continue
 			}
+			if s.skipUndersized(library, ep.FilePath, ep.FileInfo.Size()) {
+				continue
+			}
 
 			media := &model.Media{
 				LibraryID:    library.ID,
@@ -2789,6 +2859,9 @@ func (s *ScannerService) scanSeriesFolder(library *model.Library, folderPath, se
 		}
 		if _, represented := s.findOrganizedHardlinkRecord(library, ep.FilePath, ep.FileInfo); represented {
 			seasonSet[ep.SeasonNum] = true
+			continue
+		}
+		if s.skipUndersized(library, ep.FilePath, ep.FileInfo.Size()) {
 			continue
 		}
 

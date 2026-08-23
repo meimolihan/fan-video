@@ -213,3 +213,58 @@ func (h *MediaAnalysisHandler) DeleteHighlightExport(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "导出文件已删除"})
 }
+
+// ==================== 精彩片段批量处理（媒体库管理） ====================
+
+// StartBatchHighlights 一键为全部本地视频批量生成精彩片段。
+// POST /api/admin/media-analysis/batch
+func (h *MediaAnalysisHandler) StartBatchHighlights(c *gin.Context) {
+	status, err := h.analysis.StartBatchHighlights()
+	if err != nil {
+		if errors.Is(err, service.ErrMediaAnalysisInProgress) {
+			c.JSON(http.StatusAccepted, gin.H{"data": status, "message": "批量任务已在进行中"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "启动批量任务失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": status, "message": "批量任务已启动"})
+}
+
+// BatchHighlightsStatus 查询批量任务进度。
+// GET /api/admin/media-analysis/batch/status
+func (h *MediaAnalysisHandler) BatchHighlightsStatus(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"data": h.analysis.SnapshotBatchHighlights()})
+}
+
+// StopBatchHighlights 请求停止批量任务。
+// DELETE /api/admin/media-analysis/batch
+func (h *MediaAnalysisHandler) StopBatchHighlights(c *gin.Context) {
+	status, err := h.analysis.StopBatchHighlights()
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": status, "message": "已请求停止，当前视频会处理到安全点"})
+}
+
+// ClearAllHighlights 清空全库所有精彩片段。
+// DELETE /api/admin/media-analysis/highlights-all
+func (h *MediaAnalysisHandler) ClearAllHighlights(c *gin.Context) {
+	mediaCount, highlightCount, err := h.analysis.ClearAllHighlights()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "清空精彩片段失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "已清空全部精彩片段", "media_count": mediaCount, "highlight_count": highlightCount})
+}
+
+// HighlightStorageStats 返回片段相关表的行数统计（诊断用）。
+func (h *MediaAnalysisHandler) HighlightStorageStats(c *gin.Context) {
+	stats, err := h.analysis.GetHighlightStorageStats()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取统计失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, stats)
+}

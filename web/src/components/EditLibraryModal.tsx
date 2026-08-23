@@ -10,7 +10,6 @@ import {
   Layers,
   Plus,
   Search,
-  Sparkles,
   Trash2,
   Tv,
   Video,
@@ -137,7 +136,7 @@ export default function EditLibraryModal({ open, library, onClose, onUpdate }: E
     allow_adult_content: false,
     auto_download_sub: false,
     auto_scrape_metadata: true,
-    auto_organize_mode: 'rule_only',
+    auto_organize_mode: 'off',
     organize_output_dir: '',
     enable_file_watch: false,
   })
@@ -160,7 +159,7 @@ export default function EditLibraryModal({ open, library, onClose, onUpdate }: E
       allow_adult_content: library.allow_adult_content,
       auto_download_sub: library.auto_download_sub,
       auto_scrape_metadata: library.auto_scrape_metadata,
-      auto_organize_mode: library.auto_organize_mode || 'rule_only',
+      auto_organize_mode: library.auto_organize_mode || 'off',
       organize_output_dir: library.organize_output_dir || '',
       enable_file_watch: library.enable_file_watch,
     })
@@ -213,23 +212,6 @@ export default function EditLibraryModal({ open, library, onClose, onUpdate }: E
       setSubmitting(false)
     }
   }
-
-  const organizeOptions = [
-    {
-      value: 'rule_only' as const,
-      title: '自动整理',
-      tag: '推荐',
-      description: '规则识别与归类，按配置生成硬链接目录',
-      requiresAI: false,
-    },
-    {
-      value: 'off' as const,
-      title: '关闭',
-      tag: '手动',
-      description: '扫描后不做任何自动整理',
-      requiresAI: false,
-    },
-  ]
 
   if (!library) return null
 
@@ -356,7 +338,7 @@ export default function EditLibraryModal({ open, library, onClose, onUpdate }: E
             >
               <div>
                 <div className="text-sm font-semibold text-[var(--nv-text-primary)]">高级设置</div>
-                <div className="mt-1 text-xs text-[var(--nv-text-tertiary)]">扫描、元数据、自动整理与文件监控策略</div>
+                <div className="mt-1 text-xs text-[var(--nv-text-tertiary)]">扫描、元数据与文件监控策略</div>
               </div>
               <Tag tone={showAdvanced ? 'brand' : 'neutral'}>{showAdvanced ? '已展开' : '展开'}</Tag>
             </button>
@@ -428,70 +410,6 @@ export default function EditLibraryModal({ open, library, onClose, onUpdate }: E
                     checked={advanced.auto_scrape_metadata}
                     onChange={(value) => updateAdvanced('auto_scrape_metadata', value)}
                   />
-                </div>
-
-                <div className="space-y-3 border-t border-[var(--nv-border-subtle)] pt-5">
-                  <div className="flex items-start gap-2">
-                    <Sparkles size={16} className="mt-0.5 text-[var(--nv-action-primary)]" />
-                    <div>
-                      <div className="text-sm font-medium text-[var(--nv-text-primary)]">自动整理</div>
-                      <div className="mt-1 text-xs leading-5 text-[var(--nv-text-tertiary)]">
-                        扫描入库后执行规则识别、虚拟归类和命名建议。所有结果默认仅写入数据库，不修改源文件。
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {organizeOptions.map((option) => {
-                      const active = advanced.auto_organize_mode === option.value
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => {
-                            updateAdvanced('auto_organize_mode', option.value)
-                          }}
-                          className="rounded-[var(--nv-radius-control)] border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-45"
-                          style={{
-                            borderColor: active ? 'var(--nv-action-primary)' : 'var(--nv-border-subtle)',
-                            background: active ? 'var(--nv-bg-active)' : 'var(--nv-bg-control)',
-                          }}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-sm font-semibold text-[var(--nv-text-primary)]">{option.title}</span>
-                            <Tag tone={active ? 'brand' : 'neutral'}>{option.tag}</Tag>
-                          </div>
-                          <div className="mt-2 text-xs leading-5 text-[var(--nv-text-tertiary)]">{option.description}</div>
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  {advanced.auto_organize_mode === 'off' && (
-                    <div className="rounded-[var(--nv-radius-control)] border border-[var(--nv-border-subtle)] bg-[var(--nv-bg-control)] px-3 py-2 text-xs leading-5 text-[var(--nv-text-tertiary)]">
-                      关闭后扫描不执行任何自动整理。后续可重新开启。
-                    </div>
-                  )}
-                  {advanced.auto_organize_mode === 'rule_only' && (
-                    <div className="rounded-[var(--nv-radius-control)] border border-[var(--nv-border-subtle)] bg-[var(--nv-bg-control)] px-3 py-2 text-xs leading-5 text-[var(--nv-text-tertiary)]">
-                      使用规则解析文件名与本地 NFO，自动归类并生成硬链接目录。
-                    </div>
-                  )}
-
-                  {advanced.auto_organize_mode !== 'off' && (
-                    <FieldBlock label="虚拟化目录（硬链接输出）" description="留空则只写数据库；配置后按分类结果创建硬链接目录树，源文件不变。">
-                      <Input
-                        value={advanced.organize_output_dir}
-                        onChange={(event) => updateAdvanced('organize_output_dir', event.target.value)}
-                        placeholder="如 /media/organized 或 D:\\Media\\Organized"
-                      />
-                      {advanced.organize_output_dir && (
-                        <div className="rounded-[var(--nv-radius-control)] border border-[var(--nv-status-success)] bg-[var(--nv-bg-surface)] px-3 py-2 text-xs text-[var(--nv-status-success)]">
-                          已配置输出目录，整理完成后会在此创建硬链接。
-                        </div>
-                      )}
-                    </FieldBlock>
-                  )}
                 </div>
 
                 <div className="border-t border-[var(--nv-border-subtle)] pt-5">
