@@ -427,71 +427,61 @@ func vfsDir(p string) string {
 	return filepath.Dir(p)
 }
 
-// GetPosterPath 获取海报文件路径
-// 对于剧集（episode），如果自身没有海报，会自动 fallback 到所属 Series 的海报
+// GetPosterPath 获取海报文件路径。
+// 每个视频的海报匹配规则（确保每一个视频拥有独立海报，不做跨视频共享）：
+//  1. 媒体自身已入库的海报（扫描阶段按同名规则挂载）；
+//  2. 视频同级目录下与视频同名的图片（video.mp4 -> video.jpg / video-poster.jpg 等）；
+//  3. 视频同级的任意子目录下与视频同名的图片（video.mp4 -> 封面/video.jpg）；
+//  4. 兜底：提取该视频自身的第一帧作为海报（持久化缓存并回写数据库）。
+//
+// 注意：不再回退到同目录通用封面（poster/cover/folder.jpg）或剧集海报——
+// 那会让同目录的多个视频/同一部剧的全部分集显示同一张图。
 func (s *StreamService) GetPosterPath(mediaID string) (string, error) {
 	media, err := s.mediaRepo.FindByID(mediaID)
 	if err != nil {
 		return "", ErrMediaNotFound
 	}
 
-	// 优先查找媒体自身的海报路径
+	// 1. 媒体自身已入库的海报
 	if media.PosterPath != "" {
 		if _, err := s.statMediaFile(media.PosterPath); err == nil {
 			return media.PosterPath, nil
 		}
 	}
 
-	// 查找同目录下的海报文件
 	dir := vfsDir(media.FilePath)
 	base := strings.TrimSuffix(filepath.Base(media.FilePath), filepath.Ext(media.FilePath))
-
 	posterExts := []string{".jpg", ".jpeg", ".png", ".webp"}
-	posterNames := []string{
-		base,     // 同名
-		"poster", // poster.jpg
-		"cover",  // cover.jpg
-		"folder", // folder.jpg
-	}
 
-	for _, name := range posterNames {
+	// 2. 同级目录下的同名图片
+	for _, suffix := range []string{"", "-poster", "-cover", "-thumb"} {
 		for _, ext := range posterExts {
-			candidate := vfsJoinPath(dir, name+ext)
+			candidate := vfsJoinPath(dir, base+suffix+ext)
 			if _, err := s.statMediaFile(candidate); err == nil {
 				return candidate, nil
 			}
 		}
 	}
 
-	// Fallback：如果是剧集（episode）且自身没有海报，尝试使用所属 Series 的海报
-	if media.SeriesID != "" && s.seriesRepo != nil {
-		series, err := s.seriesRepo.FindByIDOnly(media.SeriesID)
-		if err == nil {
-			// 检查 Series 数据库中的海报路径。
-			// [同目录归组] 若该路径只是从某个分集首帧借用的缓存封面，
-			// 则跳过继承，让每个分集走自己的首帧提取，保持各集封面独立。
-			if series.PosterPath != "" && !s.nfoService.IsFirstFrameCachePath(series.PosterPath) {
-				if _, err := s.statMediaFile(series.PosterPath); err == nil {
-					return series.PosterPath, nil
+	// 3. 同级任意子目录下的同名图片
+	if s.nfoService != nil {
+		if entries, err := s.nfoService.readDir(dir); err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					continue
 				}
-			}
-			// 查找 Series 根目录下的海报文件
-			if series.FolderPath != "" {
-				seriesPosterNames := []string{"poster", "cover", "folder", "show"}
-				for _, name := range seriesPosterNames {
-					for _, ext := range posterExts {
-						candidate := vfsJoinPath(series.FolderPath, name+ext)
-						if _, err := s.statMediaFile(candidate); err == nil {
-							return candidate, nil
-						}
+				subDir := vfsJoinPath(dir, entry.Name())
+				for _, ext := range posterExts {
+					candidate := vfsJoinPath(subDir, base+ext)
+					if _, err := s.statMediaFile(candidate); err == nil {
+						return candidate, nil
 					}
 				}
 			}
 		}
 	}
 
-	// Fallback：本地海报完全缺失时，提取视频第一帧作为封面（带持久化缓存）。
-	// 同时回写数据库，让列表页的 poster_path 直接生效，后续请求零开销。
+	// 4. 兜底：提取视频第一帧（带持久化缓存，并回写数据库让列表页直接生效）
 	if generated, ok := s.generateFirstFrameCover(media); ok {
 		return generated, nil
 	}

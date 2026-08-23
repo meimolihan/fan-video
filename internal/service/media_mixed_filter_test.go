@@ -91,3 +91,30 @@ func TestCountMixedItemTypesUsesFilteredResult(t *testing.T) {
 	require.Equal(t, 1, movieCount)
 	require.Equal(t, 1, seriesCount)
 }
+
+func TestEpisodeItemsInheritSeriesMetadataForFiltering(t *testing.T) {
+	serie := &model.Series{ID: "series-1", Title: "城市故事", Year: 2018, Genres: "剧情", Rating: 9.1}
+	epOld := model.Media{ID: "ep-1", Title: "040624", MediaType: "episode", SeriesID: serie.ID, Series: serie, CreatedAt: time.Date(2024, time.April, 6, 0, 0, 0, 0, time.UTC)}
+	epNew := model.Media{ID: "ep-2", Title: "041324", MediaType: "episode", SeriesID: serie.ID, Series: serie, CreatedAt: time.Date(2024, time.April, 13, 0, 0, 0, 0, time.UTC)}
+
+	// 按剧名搜索能命中分集
+	byQuery := applyMixedListFilter([]MixedItem{
+		{Type: "episode", Media: &epOld},
+	}, MixedListFilter{Query: "城市故事"})
+	require.Len(t, byQuery, 1)
+
+	// 年份/类型筛选回退到所属剧集元数据
+	byYear := applyMixedListFilter([]MixedItem{
+		{Type: "episode", Media: &epOld},
+	}, MixedListFilter{YearFrom: 2018, YearTo: 2018})
+	require.Len(t, byYear, 1)
+	require.Equal(t, 2018, mixedItemYear(MixedItem{Type: "episode", Media: &epOld}))
+	require.Equal(t, "剧情", mixedItemGenres(MixedItem{Type: "episode", Media: &epNew}))
+
+	// 按新增时间排序，新分集在前
+	sorted := applyMixedListFilter([]MixedItem{
+		{Type: "episode", Media: &epOld},
+		{Type: "episode", Media: &epNew},
+	}, MixedListFilter{})
+	require.Equal(t, "ep-2", sorted[0].Media.ID)
+}

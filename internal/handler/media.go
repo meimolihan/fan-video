@@ -138,15 +138,18 @@ func (h *MediaHandler) ListMixed(c *gin.Context) {
 		size = 20
 	}
 
+	includeEpisodes := c.Query("include_episodes") == "1" || c.Query("include_episodes") == "true"
+
 	result, err := h.mediaService.ListMixedFiltered(page, size, service.MixedListFilter{
-		LibraryID:   c.Query("library_id"),
-		ContentType: c.Query("type"),
-		Genre:       c.Query("genre"),
-		Query:       c.Query("q"),
-		YearFrom:    yearFrom,
-		YearTo:      yearTo,
-		Sort:        c.Query("sort"),
-		Order:       c.Query("order"),
+		LibraryID:       c.Query("library_id"),
+		ContentType:     c.Query("type"),
+		Genre:           c.Query("genre"),
+		Query:           c.Query("q"),
+		YearFrom:        yearFrom,
+		YearTo:          yearTo,
+		Sort:            c.Query("sort"),
+		Order:           c.Query("order"),
+		IncludeEpisodes: includeEpisodes,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取混合列表失败"})

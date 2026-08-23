@@ -3,6 +3,7 @@ package service
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/fan-video/fan-video/internal/config"
@@ -72,6 +73,64 @@ func TestIsSameDirVideoGroup(t *testing.T) {
 
 		if !scanner.isSameDirVideoGroup(dir) {
 			t.Fatal("子目录中的视频也应参与同目录归组判定")
+		}
+	})
+}
+
+func TestIsSameDirOrDatedGroupSkipsMultiGroupWrappers(t *testing.T) {
+	scanner := newTestScanner(t)
+
+	t.Run("多个多视频子目录的包装层不整体归组", func(t *testing.T) {
+		dir := t.TempDir()
+		touchVideo(t, filepath.Join(dir, "作品A", "a1.mp4"))
+		touchVideo(t, filepath.Join(dir, "作品A", "a2.mp4"))
+		touchVideo(t, filepath.Join(dir, "作品B", "b1.mp4"))
+		touchVideo(t, filepath.Join(dir, "作品B", "b2.mp4"))
+
+		if scanner.isSameDirOrDatedGroup(dir) {
+			t.Fatal("包装层下有多个各自含多视频的作品目录时，不应整体归组为一部剧集（应下钻让各作品独立归组）")
+		}
+	})
+
+	t.Run("单包装链仍归组", func(t *testing.T) {
+		dir := t.TempDir()
+		touchVideo(t, filepath.Join(dir, "合集", "v1.mp4"))
+		touchVideo(t, filepath.Join(dir, "合集", "v2.mp4"))
+		touchVideo(t, filepath.Join(dir, "合集", "v3.mp4"))
+
+		if !scanner.isSameDirOrDatedGroup(dir) {
+			t.Fatal("单一多视频子目录的包装链应维持归组行为")
+		}
+	})
+
+	t.Run("嵌套单视频集合仍归组", func(t *testing.T) {
+		dir := t.TempDir()
+		touchVideo(t, filepath.Join(dir, "Part-01", "Part-01.mp4"))
+		touchVideo(t, filepath.Join(dir, "Part-02", "Part-02.mp4"))
+
+		if !scanner.isSameDirOrDatedGroup(dir) {
+			t.Fatal("各子目录恰好一个视频的嵌套集合应维持归组行为")
+		}
+	})
+
+	t.Run("日期视频的多组包装层同样不整体归组", func(t *testing.T) {
+		dir := t.TempDir()
+		touchVideo(t, filepath.Join(dir, "作品A", "2024-04-06.mp4"))
+		touchVideo(t, filepath.Join(dir, "作品A", "2024-04-07.mp4"))
+		touchVideo(t, filepath.Join(dir, "作品B", "2024-05-12.mp4"))
+
+		if scanner.isSameDirOrDatedGroup(dir) {
+			t.Fatal("多个日期视频子目录并列时不应整体归组")
+		}
+	})
+
+	t.Run("直属多视频不受包装层判定影响", func(t *testing.T) {
+		dir := t.TempDir()
+		touchVideo(t, filepath.Join(dir, "01.mp4"))
+		touchVideo(t, filepath.Join(dir, "02.mp4"))
+
+		if !scanner.isSameDirOrDatedGroup(dir) {
+			t.Fatal("直属多视频目录应归组")
 		}
 	})
 }
@@ -448,6 +507,187 @@ func TestScanMixedLibraryRelinksPreexistingMoviesAsEpisodes(t *testing.T) {
 		Count(&orphans)
 	if orphans != 0 {
 		t.Fatalf("不应残留无归属媒体行，实际 %d 条", orphans)
+	}
+}
+
+func TestScanMixedLibraryDrillsIntoMultiVideoWrapper(t *testing.T) {
+	requireFFmpeg(t)
+	db := setupTestDB(t)
+	repos := repository.NewRepositories(db)
+	cfg := &config.Config{}
+	cfg.Cache.CacheDir = filepath.Join(t.TempDir(), "cache")
+	cfg.App.FFprobePath = "ffprobe"
+	cfg.App.FFmpegPath = "ffmpeg"
+
+	// 回归背景：演员/作者名等包装目录下并列多个「各自含 N 个视频」的作品目录时，
+	// 旧逻辑把整棵子树折叠成一个以包装层命名的错误大剧集，
+	// 用户看到的是大量「目录下有 n 个视频」的目录没有匹配成各自的剧集。
+	root := t.TempDir()
+	wrapper := filepath.Join(root, "演员合集")
+	for _, name := range []string{"a1.mp4", "a2.mp4"} {
+		touchVideo(t, filepath.Join(wrapper, "作品A", name))
+	}
+	for _, name := range []string{"b1.mp4", "b2.mp4"} {
+		touchVideo(t, filepath.Join(wrapper, "作品B", name))
+	}
+
+	library := &model.Library{
+		ID:   "lib-wrapper-drill",
+		Name: "混合库",
+		Path: root,
+		Type: "mixed",
+	}
+	if err := db.Create(library).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	scanner := NewScannerService(repos.Media, repos.Series, cfg, zap.NewNop().Sugar())
+	if _, err := scanner.scanMixedLibrary(library); err != nil {
+		t.Fatal(err)
+	}
+
+	list, total, err := repos.Series.List(1, 50, library.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 || len(list) != 2 {
+		t.Fatalf("包装层应下钻为 2 部独立剧集，实际 total=%d: %+v", total, list)
+	}
+	if list[0].Title == "演员合集" || list[1].Title == "演员合集" {
+		t.Fatalf("不应出现以包装层目录名命名的剧集: %+v", list)
+	}
+	for _, s := range list {
+		if s.EpisodeCount != 2 {
+			t.Fatalf("%s 应有 2 集，实际 %d", s.Title, s.EpisodeCount)
+		}
+	}
+}
+
+// TestScanMixedLibraryAlbumTree 修复用户真实库结构的回归测试：
+// 库根下 N 个人名目录，每个目录含若干「MMDDYY 日期 / HEYZO 番号」命名的视频，
+// 以及一个「人名_封面」子目录存放同名 JPG。
+// 期望：每个人名目录各自归组为一部剧集（84 个目录 → 84 部剧），
+// 且分集海报命中 _封面 子目录里的同名图片。
+func TestScanMixedLibraryAlbumTree(t *testing.T) {
+	requireFFmpeg(t)
+	db := setupTestDB(t)
+	repos := repository.NewRepositories(db)
+	cfg := &config.Config{}
+	cfg.Cache.CacheDir = filepath.Join(t.TempDir(), "cache")
+	cfg.App.FFprobePath = "ffprobe"
+	cfg.App.FFmpegPath = "ffmpeg"
+
+	type actressDir struct {
+		name   string
+		videos []string
+		cover  string // 封面子目录名；空串表示无封面子目录
+		covers []string
+		stray  string // 直接放在人名目录下的杂散图片；空串表示无
+	}
+	dirs := []actressDir{
+		{name: "いずみ美耶", videos: []string{"061220.mp4", "072023.mp4", "081620.mp4"}, cover: "いずみ美耶_封面", covers: []string{"061220.jpg", "072023.jpg", "081620.jpg"}},
+		{name: "すみれ美香", videos: []string{"020522.mp4", "031321.mp4", "052121.mp4", "062620.mp4"}, cover: "すみれ美香_封面", covers: []string{"020522.jpg", "031321.jpg"}},
+		{name: "メイリン", videos: []string{"123020.mp4", "HEYZO-2926.mp4"}, cover: "メイリン_封面", covers: []string{"123020.jpg", "HEYZO-2926.jpg"}},
+		{name: "小衣くるみ", videos: []string{"HEYZO-2350.mp4", "HEYZO-2408.mp4", "HEYZO-2572.mp4"}, cover: "小衣くるみ_封面", covers: []string{"HEYZO-2350.jpg", "HEYZO-2408.jpg", "HEYZO-2572.jpg"}},
+		{name: "川村りな", videos: []string{"022423.mp4", "042924.mp4", "HEYZO-2793.mp4", "HEYZO_3066.mp4"}, cover: "川村りな_封面", covers: []string{"022423.jpg", "HEYZO_3066.jpg"}},
+		{name: "上山奈々", videos: []string{"012222.mp4", "043021.mp4", "051620.mp4", "082221.mp4", "082722.mp4", "112721.mp4", "HEYZO-2577.mp4", "HEYZO-2652.mp4", "HEYZO-2675.mp4"}, cover: "上山奈々_封面", covers: []string{"012222.jpg", "HEYZO-2577.jpg"}},
+		{name: "友利七葉", videos: []string{"072922.mp4", "111621.mp4", "HEYZO-2893.mp4"}, cover: "友利七葉 _封面", covers: []string{"072922.jpg"}}, // 封面目录名带空格
+		{name: "如月結衣", videos: []string{"010322.mp4", "042323.mp4", "062023_001.mp4", "081722.mp4"}, cover: "如月結衣_封面", covers: []string{"042323.jpg", "062023_001.jpg"}, stray: "042323.jpg"},
+	}
+
+	root := t.TempDir()
+	for _, d := range dirs {
+		for _, v := range d.videos {
+			touchVideo(t, filepath.Join(root, d.name, v))
+		}
+		if d.cover != "" {
+			for _, c := range d.covers {
+				touchVideo(t, filepath.Join(root, d.name, d.cover, c))
+			}
+		}
+		if d.stray != "" {
+			if err := os.WriteFile(filepath.Join(root, d.name, d.stray), []byte("img"), 0644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	library := &model.Library{
+		ID:   "lib-album-tree",
+		Name: "混合库",
+		Path: root,
+		Type: "mixed",
+	}
+	if err := db.Create(library).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	scanner := NewScannerService(repos.Media, repos.Series, cfg, zap.NewNop().Sugar())
+	if _, err := scanner.scanMixedLibrary(library); err != nil {
+		t.Fatal(err)
+	}
+
+	list, total, err := repos.Series.List(1, 100, library.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != int64(len(dirs)) || len(list) != len(dirs) {
+		names := make([]string, 0, len(list))
+		for _, s := range list {
+			names = append(names, s.Title)
+		}
+		t.Fatalf("每个演员目录应各自成剧：期望 %d 部，实际 total=%d 列表=%v", len(dirs), total, names)
+	}
+	byTitle := make(map[string]*model.Series, len(list))
+	for i := range list {
+		byTitle[list[i].Title] = &list[i]
+	}
+	for _, d := range dirs {
+		s, ok := byTitle[d.name]
+		if !ok {
+			t.Fatalf("缺少以 %s 命名的剧集: %+v", d.name, byTitle)
+		}
+		if s.EpisodeCount != len(d.videos) {
+			t.Fatalf("%s 应有 %d 集，实际 %d", d.name, len(d.videos), s.EpisodeCount)
+		}
+		var n int64
+		db.Model(&model.Media{}).Where("series_id = ?", s.ID).Count(&n)
+		if n != int64(len(d.videos)) {
+			t.Fatalf("%s 名下分集记录应为 %d 条，实际 %d", d.name, len(d.videos), n)
+		}
+		// 分集海报规则：有同名封面的分集必须精确指向自己的那张图；
+		// 没有同名封面的分集必须有首帧兜底海报，绝不能为空或共享他人图片。
+		var eps []model.Media
+		db.Model(&model.Media{}).Where("series_id = ?", s.ID).Find(&eps)
+		if d.cover == "" {
+			continue
+		}
+		for _, ep := range eps {
+			base := strings.TrimSuffix(filepath.Base(ep.FilePath), filepath.Ext(ep.FilePath))
+			// 规则优先级：① 同级目录同名图 > ② 封面子目录同名图
+			want := ""
+			if d.stray != "" && strings.TrimSuffix(d.stray, filepath.Ext(d.stray)) == base {
+				want = filepath.Join(root, d.name, d.stray)
+			}
+			if want == "" {
+				for _, c := range d.covers {
+					cb := strings.TrimSuffix(c, filepath.Ext(c))
+					if cb == base {
+						want = filepath.Join(root, d.name, d.cover, c)
+						break
+					}
+				}
+			}
+			if want != "" && ep.PosterPath != want {
+				t.Fatalf("%s/%s 应命中封面 %s，实际 %q", d.name, base, want, ep.PosterPath)
+			}
+			// 无同名封面时应有海报：真视频为首帧缓存路径；本测试的假视频无法抽帧，
+			// 允许为空（运行时 GetPosterPath 会懒生成），但绝不能指向别人的图片
+			if want == "" && ep.PosterPath != "" && !strings.Contains(filepath.Base(ep.PosterPath), "first") &&
+				!strings.HasPrefix(filepath.Base(ep.PosterPath), base) {
+				t.Fatalf("%s/%s 的兜底海报 %q 疑似共享他人封面", d.name, base, ep.PosterPath)
+			}
+		}
 	}
 }
 

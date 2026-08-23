@@ -19,6 +19,9 @@ type MixedListFilter struct {
 	YearTo      int
 	Sort        string
 	Order       string
+	// IncludeEpisodes 为 true 时，「全部」类型将剧集展平为逐个分集条目
+	//（电影 + 全部分集视频）；「电影」「剧集」标签行为不变。
+	IncludeEpisodes bool
 }
 
 func (f MixedListFilter) normalized() MixedListFilter {
@@ -74,24 +77,58 @@ func (s *MediaService) ListMixedFiltered(page, size int, rawFilter MixedListFilt
 	}
 	seriesList = deduplicateSeriesByTitle(seriesList)
 
-	items := make([]MixedItem, 0, len(movies)+len(seriesList))
+	movieItems := make([]MixedItem, 0, len(movies))
 	for i := range movies {
-		items = append(items, MixedItem{Type: "movie", Media: &movies[i]})
+		movieItems = append(movieItems, MixedItem{Type: "movie", Media: &movies[i]})
 	}
+	seriesItems := make([]MixedItem, 0, len(seriesList))
 	for i := range seriesList {
-		items = append(items, MixedItem{Type: "series", Series: &seriesList[i]})
+		seriesItems = append(seriesItems, MixedItem{Type: "series", Series: &seriesList[i]})
 	}
 
-	items = applyMixedListFilter(items, filter)
-	movieCount, seriesCount := countMixedItemTypes(items)
+	var episodeItems []MixedItem
+	if filter.IncludeEpisodes {
+		episodes, err := s.mediaRepo.RecentEpisodesAll(filter.LibraryID)
+		if err != nil {
+			return nil, err
+		}
+		episodeItems = make([]MixedItem, 0, len(episodes))
+		for i := range episodes {
+			episodeItems = append(episodeItems, MixedItem{Type: "episode", Media: &episodes[i]})
+		}
+	}
+
+	movieItems = applyMixedListFilter(movieItems, filter)
+	seriesItems = applyMixedListFilter(seriesItems, filter)
+	if episodeItems != nil {
+		episodeItems = applyMixedListFilter(episodeItems, filter)
+	}
+
+	// 「全部」= 电影 + （展平分集 或 剧集合集卡）；「电影」「剧集」标签各自独立。
+	items := make([]MixedItem, 0, len(movieItems)+len(seriesItems)+len(episodeItems))
+	switch {
+	case filter.ContentType == "movie":
+		items = append(items, movieItems...)
+	case filter.ContentType == "series":
+		items = append(items, seriesItems...)
+	case filter.IncludeEpisodes:
+		items = append(items, movieItems...)
+		items = append(items, episodeItems...)
+	default:
+		items = append(items, movieItems...)
+		items = append(items, seriesItems...)
+	}
+
+	// 计数始终基于电影/剧集两个独立维度，与是否展平无关，
+	// 保证前端「电影」「剧集」标签徽标在任意模式下稳定。
 	total := int64(len(items))
 	start := (page - 1) * size
 	if start >= len(items) {
 		return &MixedListResult{
 			Items:       []MixedItem{},
 			Total:       total,
-			MovieCount:  movieCount,
-			SeriesCount: seriesCount,
+			MovieCount:  len(movieItems),
+			SeriesCount: len(seriesItems),
 		}, nil
 	}
 	end := start + size
@@ -101,8 +138,8 @@ func (s *MediaService) ListMixedFiltered(page, size int, rawFilter MixedListFilt
 	return &MixedListResult{
 		Items:       items[start:end],
 		Total:       total,
-		MovieCount:  movieCount,
-		SeriesCount: seriesCount,
+		MovieCount:  len(movieItems),
+		SeriesCount: len(seriesItems),
 	}, nil
 }
 
@@ -135,6 +172,10 @@ func mixedItemMatches(item MixedItem, filter MixedListFilter) bool {
 	}
 	if filter.Query != "" {
 		searchable := mixedItemTitle(item) + " " + mixedItemOriginalTitle(item)
+		// 分集额外匹配所属剧名，便于按剧名搜到具体某一集。
+		if item.Type == "episode" && item.Media != nil && item.Media.Series != nil {
+			searchable += " " + item.Media.Series.Title
+		}
 		if !containsFold(searchable, filter.Query) {
 			return false
 		}
@@ -199,7 +240,13 @@ func mixedItemTitle(item MixedItem) string {
 
 func mixedItemOriginalTitle(item MixedItem) string {
 	if item.Media != nil {
-		return item.Media.OrigTitle
+		if item.Media.OrigTitle != "" || item.Type != "episode" {
+			return item.Media.OrigTitle
+		}
+		if item.Media.Series != nil {
+			return item.Media.Series.OrigTitle
+		}
+		return ""
 	}
 	if item.Series != nil {
 		return item.Series.OrigTitle
@@ -209,7 +256,13 @@ func mixedItemOriginalTitle(item MixedItem) string {
 
 func mixedItemGenres(item MixedItem) string {
 	if item.Media != nil {
-		return item.Media.Genres
+		if item.Media.Genres != "" || item.Type != "episode" {
+			return item.Media.Genres
+		}
+		if item.Media.Series != nil {
+			return item.Media.Series.Genres
+		}
+		return ""
 	}
 	if item.Series != nil {
 		return item.Series.Genres
@@ -219,7 +272,13 @@ func mixedItemGenres(item MixedItem) string {
 
 func mixedItemYear(item MixedItem) int {
 	if item.Media != nil {
-		return item.Media.Year
+		if item.Media.Year > 0 || item.Type != "episode" {
+			return item.Media.Year
+		}
+		if item.Media.Series != nil {
+			return item.Media.Series.Year
+		}
+		return 0
 	}
 	if item.Series != nil {
 		return item.Series.Year
@@ -229,7 +288,13 @@ func mixedItemYear(item MixedItem) int {
 
 func mixedItemRating(item MixedItem) float64 {
 	if item.Media != nil {
-		return item.Media.Rating
+		if item.Media.Rating > 0 || item.Type != "episode" {
+			return item.Media.Rating
+		}
+		if item.Media.Series != nil {
+			return item.Media.Series.Rating
+		}
+		return 0
 	}
 	if item.Series != nil {
 		return item.Series.Rating

@@ -1,0 +1,2677 @@
+/* ============================================================
+ * base.css — 设计令牌与全局基础（global/fluent/design-system/neo-aurora 基座）
+ * 由原相关样式按全局级联顺序合并而来（方案一 · CSS 大扫除）
+ * 内容除剥离 @import 外逐字保留，勿在此文件内再使用 @import
+ * ============================================================ */
+
+/* ---- 来源: global.css ---- */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Nowen Video global foundation.
+ *
+ * Theme values live in design-system.css. This file only owns browser-level
+ * base behavior and a small set of intentionally global utilities that are
+ * still useful across product surfaces.
+ */
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    overflow-x: hidden;
+    background: var(--nv-bg-canvas);
+    color: var(--nv-text-primary);
+    font-family: var(--nv-font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html.no-theme-transition *,
+  html.no-theme-transition *::before,
+  html.no-theme-transition *::after {
+    transition: none !important;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border-radius: var(--nv-radius-pill);
+    background: color-mix(in srgb, var(--nv-text-tertiary) 42%, transparent);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--nv-action-primary) 52%, var(--nv-text-tertiary));
+  }
+
+  input[type='range'] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 5px;
+    border-radius: var(--nv-radius-pill);
+    background: var(--nv-bg-hover);
+    outline: none;
+  }
+
+  input[type='range']::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 15px;
+    height: 15px;
+    border: 2px solid var(--nv-bg-elevated);
+    border-radius: 50%;
+    background: var(--nv-action-primary);
+    box-shadow: var(--nv-shadow-card);
+    cursor: pointer;
+    transition: transform var(--nv-motion-fast) var(--nv-ease-standard), box-shadow var(--nv-motion-fast) var(--nv-ease-standard);
+  }
+
+  input[type='range']::-webkit-slider-thumb:hover {
+    transform: scale(1.025);
+    box-shadow: var(--nv-shadow-focus);
+  }
+
+  input[type='range']::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    border: 2px solid var(--nv-bg-elevated);
+    border-radius: 50%;
+    background: var(--nv-action-primary);
+    box-shadow: var(--nv-shadow-card);
+    cursor: pointer;
+  }
+
+  input[type='range']::-moz-range-track {
+    height: 5px;
+    border-radius: var(--nv-radius-pill);
+    background: var(--nv-bg-hover);
+  }
+
+  video::cue {
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, .68);
+    color: #fff;
+    font-size: 1.1em;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(
+      90deg,
+      var(--nv-bg-surface-soft) 25%,
+      var(--nv-bg-hover) 50%,
+      var(--nv-bg-surface-soft) 75%
+    );
+    background-size: 200% 100%;
+    animation: nv-global-shimmer 1.8s linear infinite;
+  }
+
+  .gradient-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--nv-hero-bottom-scrim);
+  }
+
+  .noise-bg::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: .012;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter id='n'%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .tooltip {
+    position: absolute;
+    z-index: var(--nv-z-dropdown);
+    pointer-events: none;
+    white-space: nowrap;
+    border: 1px solid var(--nv-border-default);
+    border-radius: var(--nv-radius-control);
+    background: var(--nv-bg-elevated);
+    color: var(--nv-text-primary);
+    box-shadow: var(--nv-shadow-elevated);
+    padding: .375rem .75rem;
+    font-size: .75rem;
+    font-weight: 500;
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 1rem);
+  }
+
+  .pwa-safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  @keyframes nv-global-shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+}
+
+@media (max-width: 479px) {
+  /* 开关（role="switch"）是固定尺寸的滑块控件，
+     强制 44px 最小尺寸会把 24px 高的轨道拉伸变形，旋钮错位 */
+  button:not(.inline-link):not([role='switch']),
+  a[role='button'],
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .modal-responsive {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  /* iOS Safari zooms focused form controls below 16px and can leave the app
+     visually scaled after the keyboard closes. Keep phone editing stable while
+     desktop/tablet retain the compact product typography. */
+  .nv-search input,
+  .nv-input,
+  .nv-textarea,
+  .nv-select {
+    font-size: 16px !important;
+  }
+
+  /* Browse/search toolbars should use the whole phone width instead of forcing
+     a desktop-style search + selector row into ~360 CSS pixels. */
+  .nv-browse-toolbar .nv-search {
+    flex-basis: 100%;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+
+  .nv-browse-toolbar > .nv-select {
+    width: auto !important;
+    min-width: 7rem;
+    flex: 1 1 7rem;
+  }
+
+  .nv-search-page-toolbar {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .nv-search-page-toolbar > .nv-page-title-lockup {
+    min-width: 0;
+    flex: 1 1 12rem;
+  }
+
+  .nv-search-filter-row {
+    align-items: flex-start;
+  }
+
+  .nv-search-filter-row > span {
+    width: 100%;
+    min-width: 0;
+    flex-basis: 100%;
+    margin-right: 0;
+  }
+
+  /* A seven-button desktop paginator plus touch-size controls easily spans
+     multiple phone rows. Keep the four directional actions and the current
+     page visible; larger viewports retain the full numbered paginator. */
+  .nv-pagination {
+    column-gap: 6px;
+    row-gap: 10px;
+    padding-block: 18px;
+  }
+
+  .nv-pagination-total,
+  .nv-pagination-size {
+    flex: 0 0 auto;
+  }
+
+  .nv-pagination-ellipsis,
+  .nv-pagination-page:not([aria-current='page']),
+  .nv-pagination-jumper {
+    display: none !important;
+  }
+
+  .nv-pagination-page[aria-current='page'] {
+    min-width: 44px;
+  }
+}
+
+/* FileManager has two optional side panels. On tablets the 256px folder tree
+   plus the 380px AI assistant leaves almost no room for the actual file list.
+   Keep the tree for wide desktop only; stack an open assistant below the list
+   on narrower tablets/phones so 390/768 layouts never exceed the viewport. */
+@media (max-width: 63.999rem) {
+  .nv-file-manager-shell > .flex.gap-4 {
+    flex-direction: column;
+  }
+
+  .nv-file-manager-shell > .flex.gap-4 > .opacity-100:last-child {
+    width: 100% !important;
+    max-width: 100%;
+    max-height: min(60dvh, 34rem) !important;
+  }
+
+  .nv-file-manager-shell > .flex.gap-4 > .opacity-100:last-child > div {
+    width: 100% !important;
+  }
+}
+
+@media (min-width: 64rem) and (max-width: 79.999rem) {
+  .nv-file-manager-shell > .flex.gap-4 > .hidden.flex-shrink-0:first-child {
+    display: none !important;
+    width: 0 !important;
+  }
+
+  .nv-file-manager-shell button[title$='文件夹面板'] {
+    display: none !important;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .touch-target {
+    min-height: 48px;
+    min-width: 48px;
+  }
+
+  .hover-only:hover {
+    background: transparent !important;
+  }
+
+  .scroll-smooth {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .landscape-hide {
+    display: none !important;
+  }
+}
+
+@media (display-mode: standalone) {
+  .browser-only {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* Media detail polish: the hero already owns the quality badge, so hide the
+ * duplicated standalone badge above the info cards. */
+[aria-label='媒体标识'] > .nv-tag[data-tone='brand'] {
+  display: none;
+}
+
+/* A saved favorite is a semantic positive selection, but the conventional
+ * heart affordance should stay red rather than inheriting the cyan brand color. */
+.nv-button[data-variant='secondary'][aria-pressed='true']:has(.lucide-heart) {
+  border-color: color-mix(in srgb, var(--nv-status-danger) 30%, transparent);
+  background: color-mix(in srgb, var(--nv-status-danger) 10%, transparent);
+  color: var(--nv-status-danger);
+}
+
+.nv-button[data-variant='secondary'][aria-pressed='true']:has(.lucide-heart):hover {
+  border-color: color-mix(in srgb, var(--nv-status-danger) 42%, transparent);
+  background: color-mix(in srgb, var(--nv-status-danger) 16%, transparent);
+  color: var(--nv-status-danger);
+}
+
+/* Library content tabs must keep a shared control height. The series count tag
+ * used to make only the “剧集合集” button taller than “全部内容”. */
+[aria-label='媒体库内容类型'] > .nv-button {
+  height: 2.25rem;
+  min-height: 2.25rem;
+}
+
+[aria-label='媒体库内容类型'] > .nv-button .nv-tag {
+  min-height: 1.25rem;
+  padding: .1rem .4rem;
+  line-height: 1;
+}
+
+/* Browsing pages are action-dense surfaces. Keep the title/type controls,
+ * toolbar and result area visually connected instead of inheriting the large
+ * editorial section rhythm used by content/detail pages. This is intentionally
+ * scoped to both the global 影视库 and a single 媒体库 so their vertical rhythm
+ * stays in sync. */
+.nv-section-stack:has(> [aria-label='媒体类型']),
+.nv-section-stack:has(> [aria-label='媒体库内容类型']) {
+  gap: clamp(.875rem, 1.2vw, 1.25rem);
+}
+
+/* Genre/keyword metadata can contain hundreds or even thousands of values.
+ * Never let that tag cloud turn the filter panel into a document-length page.
+ * Once a chip group is clearly large, keep it to roughly 3–4 rows and make the
+ * group itself scrollable. Other small filter groups keep their normal layout. */
+.nv-section-stack:has(> [aria-label='媒体类型']) .flex.flex-wrap.gap-2:has(> button:nth-child(25)),
+.nv-section-stack:has(> [aria-label='媒体库内容类型']) .flex.flex-wrap.gap-2:has(> button:nth-child(25)) {
+  max-height: 9.5rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-content: flex-start;
+  scrollbar-gutter: stable;
+  padding: .125rem .35rem .25rem .125rem;
+  border-radius: var(--nv-radius-control);
+  background: color-mix(in srgb, var(--nv-bg-control) 42%, transparent);
+  box-shadow: inset 0 -1px 0 var(--nv-border-subtle);
+}
+
+@media (max-width: 767px) {
+  .nv-section-stack:has(> [aria-label='媒体类型']) .flex.flex-wrap.gap-2:has(> button:nth-child(25)),
+  .nv-section-stack:has(> [aria-label='媒体库内容类型']) .flex.flex-wrap.gap-2:has(> button:nth-child(25)) {
+    max-height: 12rem;
+  }
+}
+
+
+/* ---- 来源: fluent.css ---- */
+/** Fluent v9 components share the Nowen semantic visual layer. */
+.fui-FluentProvider { background: transparent !important; }
+
+.fui-MenuList,
+.fui-PopoverSurface,
+.fui-DialogSurface,
+.fui-Tooltip {
+  border: 1px solid var(--nv-border-default) !important;
+  border-radius: var(--nv-radius-popover) !important;
+  background: var(--nv-bg-elevated) !important;
+  color: var(--nv-text-primary) !important;
+  box-shadow: var(--nv-shadow-elevated) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.fui-MenuList { padding: 6px !important; }
+.fui-MenuItem { min-height: 34px !important; border-radius: 9px !important; color: var(--nv-text-secondary) !important; }
+.fui-MenuItem:hover,
+.fui-MenuItem:focus-visible { background: var(--nv-fill-hover) !important; color: var(--nv-text-primary) !important; }
+
+.fui-Button { border-radius: var(--nv-radius-control) !important; box-shadow: none !important; }
+.fui-Button[appearance='primary'] { border-color: transparent !important; background: var(--nv-action-primary) !important; color: var(--nv-text-on-brand) !important; font-weight: 560 !important; }
+.fui-Button[appearance='primary']:hover { background: var(--nv-action-primary-hover) !important; }
+.fui-Button[appearance='primary']:active { background: var(--nv-action-primary-active) !important; transform: none; }
+.fui-Button[appearance='subtle'],
+.fui-Button[appearance='transparent'] { background: transparent !important; color: var(--nv-text-tertiary) !important; }
+.fui-Button[appearance='subtle']:hover,
+.fui-Button[appearance='transparent']:hover { background: var(--nv-fill-hover) !important; color: var(--nv-text-primary) !important; }
+
+.fui-Input,
+.fui-Combobox,
+.fui-Dropdown,
+.fui-Textarea {
+  min-height: 34px !important;
+  border: 1px solid var(--nv-border-default) !important;
+  border-radius: var(--nv-radius-control) !important;
+  background: var(--nv-bg-control) !important;
+  color: var(--nv-text-primary) !important;
+  box-shadow: none !important;
+}
+.fui-Input:hover,
+.fui-Combobox:hover,
+.fui-Dropdown:hover,
+.fui-Textarea:hover { border-color: var(--nv-border-hover) !important; }
+.fui-Input:focus-within,
+.fui-Combobox:focus-within,
+.fui-Dropdown:focus-within,
+.fui-Textarea:focus-within { border-color: var(--nv-border-strong) !important; box-shadow: var(--nv-shadow-focus) !important; }
+
+:where(button, a, input, select, textarea, [role='button']):focus-visible { outline: 2px solid var(--nv-focus-ring); outline-offset: 2px; }
+
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--nv-text-primary) 14%, transparent) transparent; }
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: var(--nv-radius-sm); background: color-mix(in srgb, var(--nv-text-primary) 13%, transparent); background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--nv-text-primary) 22%, transparent); background-clip: padding-box; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+
+/* ---- 来源: design-system.css ---- */
+/* Nowen Video Design System
+ *
+ * Visual reference: StarEllis/Navi-Gui ui-redesign.
+ * This file translates Navi's visual grammar into Nowen semantic tokens.
+ * Product components consume --nv-* roles only; Navi brand/token names are
+ * intentionally not copied into Nowen Video.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Status colors are semantic only. They are not the product chrome. */
+  --nv-status-success: #6fbf88;
+  --nv-status-warning: #d7a85c;
+  --nv-status-danger: #ff6d73;
+  --nv-status-rating: #d8b565;
+  --nv-status-info: #79a9c9;
+
+  /* Compatibility aliases for callers still using the historical token names.
+     They intentionally resolve to the restrained neutral accent, not cyan. */
+  --nv-brand-cyan-50: #f5f1f6;
+  --nv-brand-cyan-100: #ece6ed;
+  --nv-brand-cyan-300: #bcaabd;
+  --nv-brand-cyan-400: #a18aa3;
+  --nv-brand-cyan-500: #8d758f;
+  --nv-brand-cyan-600: #78647a;
+  --nv-ambient-purple: #8d758f;
+
+  /* Typography
+   * 不依赖网络字体:各平台系统 UI 字体本身质量足够(macOS/iOS 为 SF Pro,
+   * Windows 11 为 Segoe UI Variable),离线的 NAS 部署也能正常渲染。
+   * 拉丁字形取自系统字体,中文回落到 PingFang SC / Microsoft YaHei。
+   * 三个角色:sans 正文、display 标题(配紧字距)、mono 技术数据。 */
+  --nv-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --nv-font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --nv-font-mono: ui-monospace, SFMono-Regular, "SF Mono", "Cascadia Code", "Segoe UI Mono", Consolas, "Liberation Mono", monospace;
+  --nv-font-brand: var(--nv-font-display);
+  --nv-type-display: clamp(2rem, 1.55rem + 1.5vw, 3.125rem);
+  --nv-type-h1: clamp(1.65rem, 1.4rem + .9vw, 2.35rem);
+  --nv-type-h2: clamp(1.08rem, 1.02rem + .28vw, 1.3rem);
+  --nv-type-h3: 1rem;
+  --nv-type-title: .9375rem;
+  --nv-type-body: .875rem;
+  --nv-type-body-sm: .8125rem;
+  --nv-type-caption: .75rem;
+  --nv-type-meta: .6875rem;
+  --nv-line-tight: 1.18;
+  --nv-line-title: 1.35;
+  --nv-line-body: 1.55;
+  --nv-tracking-tight: -.015em;
+  --nv-tracking-normal: 0;
+  --nv-tracking-wide: .035em;
+
+  /* Spacing */
+  --nv-space-1: .25rem;
+  --nv-space-2: .5rem;
+  --nv-space-3: .75rem;
+  --nv-space-4: 1rem;
+  --nv-space-5: 1.25rem;
+  --nv-space-6: 1.5rem;
+  --nv-space-8: 2rem;
+  --nv-space-10: 2.5rem;
+  --nv-space-12: 3rem;
+  --nv-space-16: 4rem;
+
+  /* Radius roles mirror the reference hierarchy: controls < cards < popovers. */
+  --nv-radius-sm: 8px;
+  --nv-radius-control: 10px;
+  --nv-radius-card: 12px;
+  --nv-radius-container: 14px;
+  --nv-radius-popover: 16px;
+  --nv-radius-modal: 18px;
+  --nv-radius-hero: 16px;
+  --nv-radius-pill: 999px;
+
+  /* Layout */
+  --nv-rail-width: 72px;
+  --nv-sidebar-expanded: 72px;
+  --nv-sidebar-collapsed: 72px;
+  --nv-topbar-height: 56px;
+  --nv-content-max: 120rem;
+  --nv-content-wide-max: 120rem;
+  --nv-page-gutter: clamp(16px, 1.4vw, 20px);
+  --nv-section-gap: clamp(24px, 2.2vw, 32px);
+  --nv-grid-column: 192px;
+  --nv-grid-gap-x: clamp(12px, 1vw, 16px);
+  --nv-grid-gap-y: clamp(20px, 1.8vw, 28px);
+  --nv-grid-gap: var(--nv-grid-gap-x);
+
+  /* Motion: reference uses quick opacity/background/2-4px translation. */
+  --nv-motion-fast: 120ms;
+  --nv-motion-normal: 180ms;
+  --nv-motion-slow: 200ms;
+  --nv-ease-standard: cubic-bezier(.2, .72, .2, 1);
+  --nv-ease-emphasized: cubic-bezier(.2, .8, .2, 1);
+
+  --nv-z-base: 0;
+  --nv-z-sticky: 20;
+  --nv-z-dropdown: 60;
+  --nv-z-overlay: 80;
+  --nv-z-modal: 100;
+  --nv-z-toast: 120;
+
+  --nv-bp-mobile: 30rem;
+  --nv-bp-tablet: 48rem;
+  --nv-bp-laptop: 64rem;
+  --nv-bp-desktop: 90rem;
+  --nv-bp-wide: 120rem;
+}
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --nv-bg-canvas: #0b090d;
+  --nv-bg-surface: #0e0d10;
+  --nv-bg-surface-soft: #121014;
+  --nv-bg-elevated: #171019;
+  --nv-bg-poster: #181119;
+  --nv-bg-control: rgba(255, 255, 255, .026);
+  --nv-fill-hover: rgba(255, 255, 255, .052);
+  --nv-fill-active: rgba(255, 255, 255, .082);
+  --nv-bg-hover: var(--nv-fill-hover);
+  --nv-bg-active: var(--nv-fill-active);
+  --nv-bg-overlay: rgba(4, 3, 5, .76);
+
+  --nv-text-primary: #f5f1f6;
+  --nv-text-secondary: rgba(245, 241, 246, .72);
+  --nv-text-tertiary: rgba(245, 241, 246, .46);
+  --nv-text-disabled: rgba(245, 241, 246, .28);
+  --nv-text-on-brand: #0b090d;
+
+  --nv-border-subtle: rgba(255, 255, 255, .055);
+  --nv-border-default: rgba(255, 255, 255, .08);
+  --nv-border-hover: rgba(255, 255, 255, .15);
+  --nv-border-strong: rgba(255, 255, 255, .16);
+
+  /* Primary actions are neutral/light like the reference. The muted plum is
+     reserved for small selection/status hints, never a page-wide highlight. */
+  --nv-action-primary: #f5f1f6;
+  --nv-action-primary-hover: #ffffff;
+  --nv-action-primary-active: #ddd5df;
+  --nv-action-muted: #a18aa3;
+  --nv-action-muted-hover: #b19bb3;
+  --nv-focus-ring: rgba(245, 241, 246, .34);
+
+  --nv-shadow-card: 0 10px 28px rgba(0, 0, 0, .22);
+  --nv-shadow-card-hover: 0 18px 38px rgba(0, 0, 0, .36);
+  --nv-shadow-elevated: 0 20px 48px rgba(0, 0, 0, .42);
+  --nv-shadow-focus: 0 0 0 3px rgba(245, 241, 246, .09);
+
+  --nv-ambient-cyan: transparent;
+  --nv-ambient-purple-soft: transparent;
+  --nv-hero-scrim: linear-gradient(90deg, rgba(11, 9, 13, .97) 0%, rgba(11, 9, 13, .83) 37%, rgba(11, 9, 13, .36) 72%, rgba(11, 9, 13, .16) 100%);
+  --nv-hero-bottom-scrim: linear-gradient(0deg, #0b090d 0%, rgba(11, 9, 13, .78) 38%, rgba(11, 9, 13, .08) 86%, transparent 100%);
+}
+
+/* Keep the existing theme capability without creating a second visual system.
+   The light palette preserves the same neutral hierarchy and control geometry. */
+[data-theme="light"] {
+  color-scheme: light;
+  --nv-bg-canvas: #f3f0f4;
+  --nv-bg-surface: #f8f6f8;
+  --nv-bg-surface-soft: #ece8ed;
+  --nv-bg-elevated: #ffffff;
+  --nv-bg-poster: #e7e1e8;
+  --nv-bg-control: rgba(31, 25, 33, .035);
+  --nv-fill-hover: rgba(31, 25, 33, .055);
+  --nv-fill-active: rgba(31, 25, 33, .085);
+  --nv-bg-hover: var(--nv-fill-hover);
+  --nv-bg-active: var(--nv-fill-active);
+  --nv-bg-overlay: rgba(20, 16, 22, .38);
+
+  --nv-text-primary: #211c23;
+  --nv-text-secondary: rgba(33, 28, 35, .70);
+  --nv-text-tertiary: rgba(33, 28, 35, .48);
+  --nv-text-disabled: rgba(33, 28, 35, .30);
+  --nv-text-on-brand: #ffffff;
+
+  --nv-border-subtle: rgba(33, 28, 35, .055);
+  --nv-border-default: rgba(33, 28, 35, .09);
+  --nv-border-hover: rgba(33, 28, 35, .16);
+  --nv-border-strong: rgba(33, 28, 35, .18);
+
+  --nv-action-primary: #332b35;
+  --nv-action-primary-hover: #211c23;
+  --nv-action-primary-active: #493d4c;
+  --nv-action-muted: #78647a;
+  --nv-action-muted-hover: #665368;
+  --nv-focus-ring: rgba(33, 28, 35, .28);
+
+  --nv-shadow-card: 0 8px 24px rgba(28, 20, 31, .07);
+  --nv-shadow-card-hover: 0 16px 34px rgba(28, 20, 31, .12);
+  --nv-shadow-elevated: 0 18px 44px rgba(28, 20, 31, .16);
+  --nv-shadow-focus: 0 0 0 3px rgba(33, 28, 35, .08);
+
+  --nv-ambient-cyan: transparent;
+  --nv-ambient-purple-soft: transparent;
+  --nv-hero-scrim: linear-gradient(90deg, rgba(243, 240, 244, .98) 0%, rgba(243, 240, 244, .88) 38%, rgba(243, 240, 244, .42) 72%, rgba(243, 240, 244, .12) 100%);
+  --nv-hero-bottom-scrim: linear-gradient(0deg, #f3f0f4 0%, rgba(243, 240, 244, .82) 38%, transparent 86%);
+}
+
+html,
+body,
+#root {
+  font-family: var(--nv-font-sans);
+}
+
+body {
+  background: var(--nv-bg-canvas);
+  color: var(--nv-text-primary);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--nv-action-muted) 30%, transparent);
+  color: var(--nv-text-primary);
+}
+
+:where(a, button, input, textarea, select, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--nv-focus-ring);
+  outline-offset: 2px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* App shell / navigation                                                      */
+/* -------------------------------------------------------------------------- */
+
+.nv-app-shell {
+  background: var(--nv-bg-canvas);
+  color: var(--nv-text-primary);
+}
+
+.nv-app-body {
+  background: var(--nv-bg-canvas);
+}
+
+.nv-main-scroll {
+  min-width: 0;
+  background: var(--nv-bg-canvas);
+  scrollbar-gutter: stable;
+}
+
+.nv-page-container {
+  width: 100%;
+  max-width: var(--nv-content-max);
+  margin-inline: auto;
+  padding: 8px var(--nv-page-gutter) 32px;
+}
+
+.nv-page-container[data-width="wide"] {
+  max-width: var(--nv-content-wide-max);
+}
+
+.nv-topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--nv-z-sticky);
+  min-height: var(--nv-topbar-height);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 var(--nv-page-gutter);
+  border-bottom: 1px solid var(--nv-border-subtle);
+  background: color-mix(in srgb, var(--nv-bg-canvas) 94%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.nv-topbar-title {
+  min-width: 0;
+  color: var(--nv-text-primary);
+  font-size: .9375rem;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nv-topbar-meta {
+  color: var(--nv-text-tertiary);
+  font-size: var(--nv-type-caption);
+  white-space: nowrap;
+}
+
+.nv-topbar-spacer { flex: 1 1 auto; }
+
+.nv-search {
+  min-width: 12rem;
+  width: min(28vw, 22rem);
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+  border: 1px solid var(--nv-border-default);
+  border-radius: var(--nv-radius-pill);
+  background: rgba(255, 255, 255, .025);
+  color: var(--nv-text-secondary);
+  transition: background-color var(--nv-motion-normal) var(--nv-ease-standard), border-color var(--nv-motion-normal) var(--nv-ease-standard);
+}
+
+.nv-search:focus-within {
+  border-color: var(--nv-border-strong);
+  background: rgba(255, 255, 255, .04);
+}
+
+.nv-search > svg {
+  flex: 0 0 auto;
+  color: var(--nv-text-tertiary);
+}
+
+.nv-search input {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  border: 0 !important;
+  outline: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  color: var(--nv-text-primary);
+  box-shadow: none !important;
+  font-size: var(--nv-type-body-sm);
+}
+
+.nv-search input::placeholder { color: var(--nv-text-tertiary); }
+
+.nv-rail {
+  position: relative;
+  z-index: 30;
+  width: var(--nv-rail-width);
+  min-width: var(--nv-rail-width);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 8px 10px;
+  border-right: 1px solid var(--nv-border-default);
+  background: #0d0a0e;
+}
+
+[data-theme="light"] .nv-rail { background: #eee9ef; }
+
+.nv-rail-brand {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 8px;
+  color: var(--nv-text-primary);
+  font-size: .82rem;
+  font-weight: 750;
+  letter-spacing: -.04em;
+}
+
+.nv-rail-scroll {
+  width: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.nv-rail-scroll::-webkit-scrollbar { display: none; }
+
+.nv-rail-divider {
+  width: 34px;
+  height: 1px;
+  flex: 0 0 auto;
+  margin: 7px 0;
+  background: var(--nv-border-default);
+}
+
+.nv-rail-item {
+  position: relative;
+  width: 54px;
+  min-height: 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 5px 3px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--nv-text-tertiary);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--nv-motion-fast) var(--nv-ease-standard), color var(--nv-motion-fast) var(--nv-ease-standard);
+}
+
+.nv-rail-item:hover {
+  background: var(--nv-fill-hover);
+  color: var(--nv-text-primary);
+}
+
+.nv-rail-item[aria-current="page"],
+.nv-rail-item.is-active {
+  background: var(--nv-fill-active);
+  color: var(--nv-text-primary);
+}
+
+.nv-rail-icon {
+  width: 34px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+}
+
+.nv-rail-label {
+  width: 100%;
+  overflow: hidden;
+  color: currentColor;
+  font-size: 9px;
+  font-weight: 520;
+  line-height: 1.1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nv-rail-footer {
+  width: 100%;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-top: 8px;
+}
+
+.nv-mobile-nav {
+  display: none;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Page rhythm                                                                 */
+/* -------------------------------------------------------------------------- */
+
+.nv-section-stack {
+  display: grid;
+  gap: var(--nv-section-gap);
+}
+
+.nv-section { min-width: 0; }
+
+.nv-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nv-space-4);
+  margin-bottom: 12px;
+}
+
+.nv-section-title {
+  margin: 0;
+  color: var(--nv-text-primary);
+  font-size: var(--nv-type-h2);
+  font-weight: 650;
+  line-height: var(--nv-line-title);
+  letter-spacing: var(--nv-tracking-tight);
+}
+
+.nv-section-description {
+  margin-top: 2px;
+  color: var(--nv-text-tertiary);
+  font-size: var(--nv-type-body-sm);
+}
+
+.nv-stack { display: flex; flex-direction: column; }
+.nv-stack[data-gap="1"] { gap: var(--nv-space-1); }
+.nv-stack[data-gap="2"] { gap: var(--nv-space-2); }
+.nv-stack[data-gap="3"] { gap: var(--nv-space-3); }
+.nv-stack[data-gap="4"] { gap: var(--nv-space-4); }
+.nv-stack[data-gap="6"] { gap: var(--nv-space-6); }
+.nv-stack[data-gap="8"] { gap: var(--nv-space-8); }
+
+.nv-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, var(--nv-grid-column)));
+  justify-content: start;
+  align-items: start;
+  gap: var(--nv-grid-gap-y) var(--nv-grid-gap-x);
+}
+
+/* Surface is an intentional grouping primitive, not a default wrapper for every
+   page block. It has no glow and no card shadow by default. */
+.nv-surface {
+  background: var(--nv-bg-surface);
+  border: 1px solid var(--nv-border-default);
+  border-radius: var(--nv-radius-container);
+  box-shadow: none;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Controls                                                                    */
+/* -------------------------------------------------------------------------- */
+
+.nv-button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: var(--nv-radius-control);
+  padding: 0 12px;
+  font: 560 var(--nv-type-body-sm)/1 var(--nv-font-sans);
+  letter-spacing: var(--nv-tracking-normal);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color var(--nv-motion-fast) var(--nv-ease-standard), border-color var(--nv-motion-fast) var(--nv-ease-standard), color var(--nv-motion-fast) var(--nv-ease-standard), box-shadow var(--nv-motion-fast) var(--nv-ease-standard), transform var(--nv-motion-fast) var(--nv-ease-standard);
+}
+
+.nv-button:hover { transform: translateY(-1px); }
+.nv-button:active { transform: translateY(0); }
+.nv-button:disabled,
+.nv-button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: .42;
+  transform: none;
+}
+
+.nv-button[data-variant="primary"] {
+  border-color: color-mix(in srgb, var(--nv-action-primary) 74%, transparent);
+  background: var(--nv-action-primary);
+  color: var(--nv-text-on-brand);
+  box-shadow: none;
+}
+.nv-button[data-variant="primary"]:hover { background: var(--nv-action-primary-hover); }
+.nv-button[data-variant="primary"]:active { background: var(--nv-action-primary-active); }
+
+.nv-button[data-variant="secondary"] {
+  border-color: var(--nv-border-default);
+  background: rgba(255, 255, 255, .025);
+  color: var(--nv-text-secondary);
+}
+.nv-button[data-variant="secondary"]:hover {
+  border-color: var(--nv-border-hover);
+  background: var(--nv-fill-hover);
+  color: var(--nv-text-primary);
+}
+
+.nv-button[data-variant="ghost"] {
+  border-color: transparent;
+  background: transparent;
+  color: var(--nv-text-tertiary);
+}
+.nv-button[data-variant="ghost"]:hover {
+  background: var(--nv-fill-hover);
+  color: var(--nv-text-primary);
+}
+
+.nv-button[data-variant="danger"] {
+  border-color: color-mix(in srgb, var(--nv-status-danger) 25%, transparent);
+  background: color-mix(in srgb, var(--nv-status-danger) 9%, transparent);
+  color: var(--nv-status-danger);
+}
+.nv-button[data-variant="danger"]:hover {
+  background: color-mix(in srgb, var(--nv-status-danger) 14%, transparent);
+}
+
+.nv-button[data-size="sm"] { min-height: 30px; padding: 0 9px; font-size: .75rem; }
+.nv-button[data-size="lg"] { min-height: 40px; padding: 0 15px; font-size: .875rem; }
+.nv-button[data-icon-only="true"] { width: 34px; padding: 0; }
+.nv-button[data-icon-only="true"][data-size="sm"] { width: 30px; }
+.nv-button[data-icon-only="true"][data-size="lg"] { width: 40px; }
+
+.nv-input,
+.nv-textarea,
+.nv-select {
+  width: 100%;
+  border: 1px solid var(--nv-border-default);
+  border-radius: var(--nv-radius-control);
+  background: var(--nv-bg-control);
+  color: var(--nv-text-primary);
+  box-shadow: none;
+  outline: none;
+  font: 500 var(--nv-type-body-sm)/1.35 var(--nv-font-sans);
+  transition: background-color var(--nv-motion-fast) var(--nv-ease-standard), border-color var(--nv-motion-fast) var(--nv-ease-standard), box-shadow var(--nv-motion-fast) var(--nv-ease-standard);
+}
+
+.nv-input,
+.nv-select { height: 34px; padding: 0 10px; }
+.nv-textarea { min-height: 92px; padding: 9px 10px; line-height: 1.55; resize: vertical; }
+
+.nv-input::placeholder,
+.nv-textarea::placeholder { color: var(--nv-text-tertiary); }
+
+.nv-input:hover,
+.nv-textarea:hover,
+.nv-select:hover { border-color: var(--nv-border-hover); }
+
+.nv-input:focus,
+.nv-textarea:focus,
+.nv-select:focus {
+  border-color: var(--nv-border-strong);
+  background: color-mix(in srgb, var(--nv-bg-control) 70%, var(--nv-bg-surface));
+  box-shadow: var(--nv-shadow-focus);
+}
+
+.nv-input[aria-invalid="true"],
+.nv-textarea[aria-invalid="true"],
+.nv-select[aria-invalid="true"] { border-color: color-mix(in srgb, var(--nv-status-danger) 52%, transparent); }
+
+.nv-input:disabled,
+.nv-textarea:disabled,
+.nv-select:disabled { cursor: not-allowed; opacity: .48; }
+
+.nv-menu {
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--nv-border-default);
+  border-radius: var(--nv-radius-popover);
+  background: var(--nv-bg-elevated);
+  color: var(--nv-text-primary);
+  box-shadow: var(--nv-shadow-elevated);
+}
+
+.nv-menu-item {
+  width: 100%;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--nv-text-secondary);
+  font-size: var(--nv-type-body-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.nv-menu-item:hover,
+.nv-menu-item:focus-visible { background: var(--nv-fill-hover); color: var(--nv-text-primary); }
+.nv-menu-item[aria-selected="true"],
+.nv-menu-item.is-active { background: var(--nv-fill-active); color: var(--nv-text-primary); }
+
+.nv-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 20px;
+  max-width: 100%;
+  padding: 2px 6px;
+  border: 1px solid var(--nv-border-default);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .035);
+  color: var(--nv-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+.nv-tag[data-tone="brand"] {
+  border-color: color-mix(in srgb, var(--nv-action-muted) 28%, transparent);
+  background: color-mix(in srgb, var(--nv-action-muted) 10%, transparent);
+  color: color-mix(in srgb, var(--nv-action-muted) 78%, var(--nv-text-primary));
+}
+.nv-tag[data-tone="quality"] {
+  border-color: rgba(255, 255, 255, .14);
+  background: rgba(5, 4, 6, .64);
+  color: rgba(255, 255, 255, .86);
+}
+.nv-tag[data-tone="success"] {
+  border-color: color-mix(in srgb, var(--nv-status-success) 26%, transparent);
+  background: color-mix(in srgb, var(--nv-status-success) 8%, transparent);
+  color: var(--nv-status-success);
+}
+.nv-tag[data-tone="warning"],
+.nv-tag[data-tone="rating"] {
+  border-color: color-mix(in srgb, var(--nv-status-rating) 26%, transparent);
+  background: color-mix(in srgb, var(--nv-status-rating) 8%, transparent);
+  color: var(--nv-status-rating);
+}
+.nv-tag[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--nv-status-danger) 26%, transparent);
+  background: color-mix(in srgb, var(--nv-status-danger) 8%, transparent);
+  color: var(--nv-status-danger);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Media cards                                                                 */
+/* -------------------------------------------------------------------------- */
+
+.nv-media-card {
+  position: relative;
+  min-width: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+}
+
+.nv-media-card-poster {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 2 / 3;
+  border: 1px solid var(--nv-border-subtle);
+  border-radius: var(--nv-radius-card);
+  background: var(--nv-bg-poster);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, .12);
+  transition: transform var(--nv-motion-normal) var(--nv-ease-standard), border-color var(--nv-motion-normal) var(--nv-ease-standard), box-shadow var(--nv-motion-normal) var(--nv-ease-standard);
+}
+
+.nv-media-card-poster > img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  transition: filter var(--nv-motion-normal) var(--nv-ease-standard);
+}
+
+.nv-media-card:hover .nv-media-card-poster,
+.nv-media-card:focus-within .nv-media-card-poster {
+  transform: translateY(-3px);
+  border-color: var(--nv-border-default);
+  box-shadow: var(--nv-shadow-card-hover);
+}
+
+.nv-media-card:hover .nv-media-card-poster > img,
+.nv-media-card:focus-within .nv-media-card-poster > img { filter: brightness(.82); }
+
+.nv-media-card-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  background: rgba(5, 4, 6, .20);
+  opacity: 0;
+  transition: opacity var(--nv-motion-normal) var(--nv-ease-standard);
+}
+
+.nv-media-card:hover .nv-media-card-overlay,
+.nv-media-card:focus-within .nv-media-card-overlay { opacity: 1; }
+
+.nv-media-card-play {
+  width: 36px !important;
+  min-height: 36px !important;
+  border-radius: 999px !important;
+  transform: translateY(3px);
+  opacity: 0;
+  transition: opacity var(--nv-motion-normal) var(--nv-ease-standard), transform var(--nv-motion-normal) var(--nv-ease-standard) !important;
+}
+
+.nv-media-card:hover .nv-media-card-play,
+.nv-media-card:focus-within .nv-media-card-play { transform: translateY(0); opacity: 1; }
+
+.nv-media-card-badge {
+  transition: opacity var(--nv-motion-fast) var(--nv-ease-standard);
+}
+
+.nv-media-card-title {
+  display: block;
+  overflow: hidden;
+  color: var(--nv-text-primary);
+  font-size: .8125rem;
+  font-weight: 560;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--nv-motion-fast) var(--nv-ease-standard);
+}
+
+.nv-media-card-title:hover { color: var(--nv-text-primary); }
+
+.nv-media-card-meta {
+  overflow: hidden;
+  color: var(--nv-text-tertiary);
+  font-size: .6875rem;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.nv-media-card-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: rgba(0, 0, 0, .30);
+}
+
+.nv-media-card-progress > span {
+  display: block;
+  height: 100%;
+  background: rgba(255, 255, 255, .76);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Modal / dialog                                                              */
+/* -------------------------------------------------------------------------- */
+
+.nv-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--nv-z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 20px;
+  background: var(--nv-bg-overlay);
+}
+
+.nv-modal-sheet {
+  position: relative;
+  width: 100%;
+  max-height: min(88vh, 900px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--nv-border-default);
+  border-radius: var(--nv-radius-modal);
+  background: var(--nv-bg-elevated);
+  color: var(--nv-text-primary);
+  box-shadow: var(--nv-shadow-elevated);
+}
+
+.nv-modal-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  flex: 0 0 auto;
+  padding: 16px 18px 13px;
+  border-bottom: 1px solid var(--nv-border-subtle);
+}
+
+.nv-modal-icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--nv-fill-hover);
+  color: var(--nv-text-secondary);
+}
+
+.nv-modal-title { margin: 0; color: var(--nv-text-primary); font-size: .9375rem; font-weight: 650; line-height: 1.35; }
+.nv-modal-description { margin-top: 3px; color: var(--nv-text-tertiary); font-size: .75rem; line-height: 1.5; }
+.nv-modal-body { min-height: 0; flex: 1 1 auto; overflow-y: auto; padding: 16px 18px; }
+.nv-modal-footer { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--nv-border-subtle); }
+
+/* Skeletons are low contrast and never neon. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--nv-radius-sm);
+  background: linear-gradient(90deg, var(--nv-bg-surface-soft) 24%, rgba(255,255,255,.045) 50%, var(--nv-bg-surface-soft) 76%);
+  background-size: 200% 100%;
+}
+
+:where(input, textarea, select):not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
+  border-radius: var(--nv-radius-control);
+}
+
+@media (max-width: 63.999rem) {
+  :root { --nv-grid-column: 176px; }
+}
+
+@media (max-width: 47.999rem) {
+  :root { --nv-page-gutter: 14px; --nv-section-gap: 24px; }
+
+  .nv-rail { display: none; }
+  .nv-topbar { min-height: 50px; padding-inline: 14px; }
+  .nv-topbar-title { font-size: .875rem; }
+  .nv-search { min-width: 0; width: min(52vw, 19rem); }
+  .nv-page-container { padding: 10px 14px calc(78px + env(safe-area-inset-bottom, 0px)); }
+  .nv-section-header { align-items: center; }
+  .nv-media-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 10px; }
+
+  .nv-mobile-nav {
+    position: fixed;
+    z-index: 55;
+    left: 8px;
+    right: 8px;
+    bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    height: 58px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: stretch;
+    padding: 4px;
+    border: 1px solid var(--nv-border-default);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--nv-bg-elevated) 94%, transparent);
+    box-shadow: var(--nv-shadow-elevated);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .nv-mobile-nav .nv-rail-item {
+    width: auto;
+    min-height: 48px;
+    border-radius: 11px;
+  }
+
+  .nv-modal-backdrop { align-items: flex-end; padding: 10px; }
+  .nv-modal-sheet { max-height: min(92vh, 900px); border-radius: var(--nv-radius-modal); }
+}
+
+@media (max-width: 29.999rem) {
+  .nv-search { width: min(48vw, 14rem); }
+  .nv-topbar-meta { display: none; }
+  .nv-media-grid { gap-inline: 9px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+
+/* ---- 来源: admin-design-system.css ---- */
+/* Nowen Video Admin visual contract
+ * Administration keeps its business density, but consumes the same restrained
+ * surface hierarchy as the media-facing application.
+ */
+
+.nv-admin-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-5);
+  color: var(--nv-text-primary);
+}
+
+.nv-admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nv-space-4);
+  min-height: 38px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--nv-border-subtle);
+}
+.nv-admin-header-copy { min-width: 0; }
+.nv-admin-title {
+  margin: 0;
+  color: var(--nv-text-primary);
+  font-family: var(--nv-font-sans);
+  font-size: var(--nv-type-h3);
+  font-weight: 650;
+  line-height: var(--nv-line-tight);
+  letter-spacing: var(--nv-tracking-tight);
+}
+.nv-admin-description {
+  margin-top: 3px;
+  color: var(--nv-text-tertiary);
+  font-size: var(--nv-type-caption);
+  line-height: 1.5;
+}
+.nv-admin-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+.nv-admin-panel {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--nv-border-subtle);
+  border-bottom: 1px solid var(--nv-border-subtle);
+  border-radius: 0;
+  box-shadow: none;
+}
+.nv-admin-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nv-space-3);
+  min-height: 42px;
+  padding: 10px 2px 9px;
+  border-bottom: 1px solid var(--nv-border-subtle);
+}
+.nv-admin-panel-body { padding: 12px 2px; }
+.nv-admin-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--nv-text-primary);
+  font-size: var(--nv-type-body-sm);
+  font-weight: 620;
+  line-height: var(--nv-line-title);
+}
+.nv-admin-section-title > svg { color: var(--nv-text-tertiary); }
+
+.nv-admin-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 22px;
+  padding: 2px 7px;
+  border: 1px solid var(--nv-border-subtle);
+  border-radius: 7px;
+  background: var(--nv-bg-control);
+  color: var(--nv-text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+.nv-admin-status[data-tone="connected"],
+.nv-admin-status[data-tone="success"] {
+  border-color: color-mix(in srgb, var(--nv-status-success) 24%, transparent);
+  background: color-mix(in srgb, var(--nv-status-success) 7%, transparent);
+  color: var(--nv-status-success);
+}
+.nv-admin-status[data-tone="active"] {
+  border-color: var(--nv-border-default);
+  background: var(--nv-fill-active);
+  color: var(--nv-text-primary);
+}
+.nv-admin-status[data-tone="warning"] {
+  border-color: color-mix(in srgb, var(--nv-status-warning) 24%, transparent);
+  background: color-mix(in srgb, var(--nv-status-warning) 7%, transparent);
+  color: var(--nv-status-warning);
+}
+.nv-admin-status[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--nv-status-danger) 24%, transparent);
+  background: color-mix(in srgb, var(--nv-status-danger) 7%, transparent);
+  color: var(--nv-status-danger);
+}
+
+.nv-admin-tab {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--nv-text-tertiary);
+  box-shadow: none;
+  font-family: var(--nv-font-sans);
+  font-size: var(--nv-type-caption);
+  font-weight: 580;
+  transition: background-color var(--nv-motion-fast) var(--nv-ease-standard), color var(--nv-motion-fast) var(--nv-ease-standard);
+}
+.nv-admin-tab:hover { background: var(--nv-fill-hover); color: var(--nv-text-primary); }
+.nv-admin-tab.is-active { background: var(--nv-fill-active); color: var(--nv-text-primary); }
+.nv-admin-tab.is-active::after { display: none; }
+.nv-admin-tab svg { flex: 0 0 auto; color: currentColor; }
+
+.nv-admin-content-enter { animation: nv-admin-content-in var(--nv-motion-fast) var(--nv-ease-standard); }
+@keyframes nv-admin-content-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-admin-tab, .nv-admin-content-enter { transition: none; animation: none; }
+}
+
+@media (max-width: 47.99rem) {
+  .nv-admin-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--nv-space-3);
+  }
+
+  .nv-admin-header-copy,
+  .nv-admin-toolbar {
+    width: 100%;
+  }
+
+  .nv-admin-panel-header {
+    flex-wrap: wrap;
+  }
+
+  .nv-admin-panel-header > .nv-admin-toolbar {
+    width: auto;
+    max-width: 100%;
+  }
+
+  .nv-admin-tab { min-height: 32px; padding-inline: 8px; }
+  .nv-admin-panel-header,
+  .nv-admin-panel-body { padding-inline: 0; }
+}
+
+
+/* ---- 来源: neo-aurora.css ---- */
+/* Nowen Video Neo Glass / Aurora visual layer.
+ *
+ * This file intentionally sits on top of the shared --nv-* design system so
+ * existing pages, light theme support and business components keep their
+ * semantic contracts. New visual work should continue consuming --nv-* roles
+ * rather than hard-coding page-local colors.
+ */
+
+:root,
+[data-theme="dark"] {
+  --nv-bg-canvas: #070b17;
+  --nv-bg-surface: rgba(12, 18, 38, .72);
+  --nv-bg-surface-soft: rgba(15, 22, 45, .66);
+  --nv-bg-elevated: rgba(20, 25, 52, .86);
+  --nv-bg-poster: #0d1428;
+  --nv-bg-control: rgba(16, 23, 48, .72);
+  --nv-bg-overlay: rgba(3, 6, 16, .78);
+  --nv-fill-hover: rgba(107, 91, 255, .10);
+  --nv-fill-active: rgba(108, 87, 255, .18);
+  --nv-bg-hover: var(--nv-fill-hover);
+  --nv-bg-active: var(--nv-fill-active);
+
+  --nv-text-primary: #f5f7ff;
+  --nv-text-secondary: rgba(230, 234, 255, .70);
+  --nv-text-tertiary: rgba(210, 216, 240, .47);
+  --nv-text-disabled: rgba(210, 216, 240, .28);
+  --nv-text-on-brand: #ffffff;
+
+  --nv-border-subtle: rgba(120, 105, 255, .11);
+  --nv-border-default: rgba(120, 105, 255, .18);
+  --nv-border-hover: rgba(140, 110, 255, .42);
+  --nv-border-strong: rgba(149, 124, 255, .58);
+
+  --nv-action-primary: #6d5dfc;
+  --nv-action-primary-hover: #7c63ff;
+  --nv-action-primary-active: #5747e8;
+  --nv-action-muted: #8b72ff;
+  --nv-action-muted-hover: #9b82ff;
+  --nv-focus-ring: rgba(124, 92, 255, .68);
+
+  --nv-status-rating: #f3c95f;
+  --nv-status-success: #66d8b8;
+  --nv-status-warning: #f0b86a;
+  --nv-status-danger: #ff7e9a;
+  --nv-status-info: #78b8ff;
+
+  --nv-shadow-card: 0 12px 34px rgba(0, 0, 0, .28);
+  --nv-shadow-card-hover: 0 18px 44px rgba(4, 6, 20, .46), 0 0 0 1px rgba(128, 100, 255, .11);
+  --nv-shadow-elevated: 0 24px 70px rgba(2, 4, 16, .54), 0 0 0 1px rgba(124, 95, 255, .10);
+  --nv-shadow-focus: 0 0 0 3px rgba(91, 82, 242, .18), 0 0 24px rgba(124, 58, 237, .12);
+
+  --nv-ambient-cyan: rgba(59, 130, 246, .18);
+  --nv-ambient-purple-soft: rgba(124, 58, 237, .22);
+  --nv-hero-scrim: linear-gradient(90deg, rgba(7,11,23,.98) 0%, rgba(7,11,23,.90) 29%, rgba(7,11,23,.58) 52%, rgba(7,11,23,.14) 80%, rgba(7,11,23,.06) 100%);
+  --nv-hero-bottom-scrim: linear-gradient(0deg, #070b17 0%, rgba(7,11,23,.90) 20%, rgba(7,11,23,.28) 52%, transparent 78%);
+
+  --nv-radius-control: 11px;
+  --nv-radius-card: 15px;
+  --nv-radius-container: 17px;
+  --nv-radius-popover: 17px;
+  --nv-radius-modal: 20px;
+  --nv-radius-hero: 20px;
+  --nv-content-max: 120rem;
+  --nv-content-wide-max: 120rem;
+  --nv-grid-column: 208px;
+  --nv-grid-gap-x: clamp(12px, 1vw, 18px);
+  --nv-grid-gap-y: clamp(18px, 1.5vw, 26px);
+  --nv-section-gap: clamp(24px, 2vw, 34px);
+}
+
+[data-theme="light"] {
+  --nv-action-primary: #6253ea;
+  --nv-action-primary-hover: #5545df;
+  --nv-action-primary-active: #4939cb;
+  --nv-action-muted: #725be8;
+  --nv-action-muted-hover: #634bd4;
+  --nv-border-default: rgba(91, 72, 186, .14);
+  --nv-border-hover: rgba(91, 72, 186, .28);
+  --nv-border-strong: rgba(91, 72, 186, .42);
+  --nv-focus-ring: rgba(91, 72, 186, .42);
+}
+
+body {
+  background:
+    radial-gradient(circle at 18% -8%, rgba(59, 130, 246, .10), transparent 34rem),
+    radial-gradient(circle at 84% 8%, rgba(124, 58, 237, .11), transparent 36rem),
+    var(--nv-bg-canvas);
+}
+
+[data-theme="light"] body {
+  background: var(--nv-bg-canvas);
+}
+
+.nv-app-shell,
+.nv-app-body,
+.nv-main-scroll {
+  background: transparent;
+}
+
+.nv-main-scroll::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 0 var(--nv-rail-width);
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(59,130,246,.055), transparent 30rem),
+    radial-gradient(circle at 80% 14%, rgba(124,58,237,.06), transparent 34rem);
+}
+
+[data-theme="light"] .nv-main-scroll::before { display: none; }
+
+.nv-page-container {
+  padding-top: 14px;
+  padding-bottom: 40px;
+}
+
+/* App rail */
+.nv-rail {
+  padding: 14px 8px 12px;
+  border-right-color: rgba(119, 104, 255, .18);
+  background: linear-gradient(180deg, rgba(8, 13, 29, .96), rgba(9, 13, 30, .86));
+  box-shadow: inset -1px 0 rgba(138, 109, 255, .05), 12px 0 40px rgba(1, 4, 14, .18);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+[data-theme="light"] .nv-rail {
+  background: color-mix(in srgb, var(--nv-bg-elevated) 92%, transparent);
+  border-right-color: var(--nv-border-default);
+  box-shadow: none;
+}
+
+.nv-rail-brand {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(128, 105, 255, .25);
+  border-radius: 15px;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(126, 92, 255, .18), transparent 64%),
+    rgba(9, 14, 31, .72);
+  color: #d9d8ff;
+  font-size: .94rem;
+  letter-spacing: -.035em;
+  text-shadow: 0 0 16px rgba(117, 90, 255, .68);
+  box-shadow: inset 0 1px rgba(255,255,255,.035), 0 8px 26px rgba(2,5,18,.26);
+}
+
+.nv-rail-item {
+  width: 56px;
+  min-height: 53px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: rgba(218, 224, 250, .52);
+}
+
+.nv-rail-item:hover {
+  border-color: rgba(122, 105, 255, .12);
+  background: rgba(105, 88, 236, .075);
+  color: var(--nv-text-primary);
+}
+
+.nv-rail-item[aria-current="page"],
+.nv-rail-item.is-active {
+  border-color: rgba(119, 101, 255, .36);
+  background: linear-gradient(135deg, rgba(59,130,246,.23), rgba(109,93,252,.28) 52%, rgba(168,85,247,.20));
+  color: #f6f7ff;
+  box-shadow: inset 0 1px rgba(255,255,255,.06), 0 0 26px rgba(90, 72, 255, .16);
+}
+
+.nv-rail-item[aria-current="page"] .nv-rail-icon,
+.nv-rail-item.is-active .nv-rail-icon {
+  filter: drop-shadow(0 0 7px rgba(117, 102, 255, .44));
+}
+
+.nv-rail-label { font-size: 9.5px; }
+.nv-rail-divider { background: rgba(126, 108, 255, .13); }
+
+/* Top bar / global search */
+.nv-topbar {
+  min-height: 60px;
+  border-bottom-color: rgba(121, 106, 255, .10);
+  background: linear-gradient(180deg, rgba(7,11,23,.94), rgba(7,11,23,.78));
+  box-shadow: 0 10px 34px rgba(2, 4, 15, .12);
+  backdrop-filter: blur(20px) saturate(125%);
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+}
+
+[data-theme="light"] .nv-topbar {
+  background: color-mix(in srgb, var(--nv-bg-canvas) 92%, transparent);
+  border-bottom-color: var(--nv-border-subtle);
+}
+
+.nv-topbar-title {
+  font-size: .9rem;
+  font-weight: 660;
+  color: rgba(244, 246, 255, .80);
+}
+
+.nv-search {
+  height: 38px;
+  width: min(34vw, 31rem);
+  padding-inline: 13px;
+  border-color: rgba(121, 104, 255, .20);
+  background: rgba(11, 17, 38, .72);
+  box-shadow: inset 0 1px rgba(255,255,255,.025), 0 8px 24px rgba(2,4,16,.10);
+}
+
+.nv-search:hover {
+  border-color: rgba(137, 113, 255, .31);
+}
+
+.nv-search:focus-within {
+  border-color: rgba(137, 113, 255, .52);
+  background: rgba(13, 20, 44, .86);
+  box-shadow: var(--nv-shadow-focus);
+}
+
+[data-theme="light"] .nv-search {
+  background: rgba(255,255,255,.68);
+  border-color: var(--nv-border-default);
+}
+
+/* Shared surfaces */
+.nv-surface {
+  border-color: var(--nv-border-default);
+  background: linear-gradient(180deg, rgba(17, 24, 49, .76), rgba(11, 17, 36, .72));
+  box-shadow: inset 0 1px rgba(255,255,255,.025), 0 12px 34px rgba(2,4,16,.12);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+[data-theme="light"] .nv-surface {
+  background: var(--nv-bg-surface);
+  box-shadow: var(--nv-shadow-card);
+}
+
+.nv-section-header { margin-bottom: 14px; }
+.nv-section-title { font-weight: 680; letter-spacing: -.018em; }
+
+/* Buttons / inputs / tags */
+.nv-button[data-variant="primary"] {
+  border-color: rgba(151, 124, 255, .50);
+  background: linear-gradient(135deg, #3b82f6 0%, #6d5dfc 48%, #a855f7 100%);
+  color: #fff;
+  box-shadow: inset 0 1px rgba(255,255,255,.13), 0 8px 22px rgba(83, 66, 238, .24), 0 0 18px rgba(124, 58, 237, .12);
+}
+
+.nv-button[data-variant="primary"]:hover {
+  border-color: rgba(174, 146, 255, .66);
+  background: linear-gradient(135deg, #4a8cff 0%, #7767ff 48%, #b05cff 100%);
+  box-shadow: inset 0 1px rgba(255,255,255,.15), 0 10px 28px rgba(83, 66, 238, .30), 0 0 24px rgba(124, 58, 237, .17);
+}
+
+.nv-button[data-variant="secondary"] {
+  border-color: rgba(122, 105, 255, .19);
+  background: rgba(18, 25, 51, .68);
+  color: var(--nv-text-secondary);
+  box-shadow: inset 0 1px rgba(255,255,255,.025);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.nv-button[data-variant="secondary"]:hover {
+  border-color: rgba(139, 114, 255, .42);
+  background: rgba(31, 36, 75, .72);
+}
+
+.nv-button[data-variant="ghost"]:hover {
+  background: rgba(106, 88, 237, .09);
+}
+
+.nv-input,
+.nv-textarea,
+.nv-select {
+  border-color: rgba(121, 103, 255, .18);
+  background: rgba(12, 18, 39, .70);
+}
+
+.nv-input:focus,
+.nv-textarea:focus,
+.nv-select:focus {
+  border-color: rgba(138, 112, 255, .48);
+  background: rgba(15, 22, 47, .88);
+}
+
+.nv-tag {
+  border-color: rgba(126, 109, 255, .16);
+  background: rgba(20, 27, 55, .66);
+}
+
+.nv-tag[data-tone="brand"] {
+  border-color: rgba(146, 104, 255, .35);
+  background: linear-gradient(135deg, rgba(59,130,246,.14), rgba(124,58,237,.17));
+  color: #c9c2ff;
+}
+
+.nv-tag[data-tone="quality"] {
+  border-color: rgba(148, 125, 255, .25);
+  background: rgba(5, 9, 22, .72);
+  color: rgba(245,247,255,.90);
+  backdrop-filter: blur(8px);
+}
+
+/* Media cards */
+.nv-media-card-poster {
+  border-color: rgba(119, 103, 255, .14);
+  border-radius: var(--nv-radius-card);
+  background: linear-gradient(180deg, rgba(15,22,45,.92), rgba(10,15,31,.95));
+  box-shadow: 0 10px 26px rgba(2,4,16,.21);
+}
+
+.nv-media-card:hover .nv-media-card-poster,
+.nv-media-card:focus-within .nv-media-card-poster {
+  transform: translateY(-3px) scale(1.012);
+  border-color: rgba(137, 110, 255, .42);
+  box-shadow: var(--nv-shadow-card-hover);
+}
+
+.nv-media-card-overlay {
+  background: linear-gradient(180deg, rgba(5,8,19,.05), rgba(5,8,19,.24) 55%, rgba(5,8,19,.58));
+}
+
+.nv-media-card-play {
+  box-shadow: 0 0 0 1px rgba(255,255,255,.11), 0 0 30px rgba(109, 93, 252, .34) !important;
+}
+
+.nv-media-card-title { font-size: .82rem; font-weight: 590; }
+.nv-media-card-meta { color: rgba(205, 213, 240, .49); }
+
+.nv-media-card-progress {
+  height: 3px;
+  background: rgba(7,10,24,.72);
+}
+
+.nv-media-card-progress > span {
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3b82f6, #7c3aed 70%, #c84dff);
+  box-shadow: 0 0 10px rgba(109,93,252,.38);
+}
+
+/* Home hero */
+.nv-hero-carousel,
+.nv-section-stack > section[aria-roledescription="carousel"] {
+  min-height: clamp(390px, 35vw, 560px) !important;
+  border-color: rgba(129, 103, 255, .30) !important;
+  border-radius: var(--nv-radius-hero) !important;
+  background: #0b1124 !important;
+  box-shadow: 0 20px 56px rgba(2, 4, 18, .36), 0 0 0 1px rgba(114, 94, 255, .08), 0 0 34px rgba(91, 75, 245, .08) !important;
+}
+
+.nv-hero-carousel::after,
+.nv-section-stack > section[aria-roledescription="carousel"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 1px rgba(255,255,255,.06), inset 0 -1px rgba(113, 91, 255, .12);
+}
+
+.nv-hero-carousel img { filter: saturate(1.05) contrast(1.02); }
+
+/* Continue watching cards: keep them cinematic, not poster-like. */
+.nv-section .scrollbar-hide > article > a > .relative.aspect-video {
+  border-color: rgba(122, 104, 255, .16) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 10px 24px rgba(2,4,16,.18);
+}
+
+.nv-section .scrollbar-hide > article:hover > a > .relative.aspect-video {
+  border-color: rgba(141, 114, 255, .40) !important;
+  box-shadow: var(--nv-shadow-card-hover) !important;
+}
+
+/* Browse page controls are already driven by real URL state; only regroup the chrome. */
+[aria-label="媒体类型"] {
+  gap: 6px !important;
+  padding: 4px 0 13px !important;
+  border-bottom-color: rgba(123, 106, 255, .13) !important;
+}
+
+[aria-label="媒体类型"] .nv-button[aria-pressed="true"] {
+  border-color: rgba(138, 111, 255, .42) !important;
+  background: linear-gradient(135deg, rgba(59,130,246,.18), rgba(124,58,237,.20)) !important;
+  color: var(--nv-text-primary) !important;
+  box-shadow: 0 0 18px rgba(102, 82, 244, .10);
+}
+
+[aria-label="视图模式"] {
+  border-color: rgba(122,105,255,.18) !important;
+  background: rgba(13,19,41,.58);
+  backdrop-filter: blur(12px);
+}
+
+[aria-label="视图模式"] button[aria-pressed="true"] {
+  border-color: rgba(137,111,255,.35) !important;
+  background: linear-gradient(135deg, rgba(59,130,246,.19), rgba(124,58,237,.22)) !important;
+  color: #f5f7ff !important;
+}
+
+/* Detail pages: the existing business components stay intact; this gives their
+ * stacked sections the same cinematic glass hierarchy as the target mockups. */
+.nv-page-container[data-width="wide"] > .relative > section.relative.border-b {
+  border-bottom-color: rgba(121, 104, 255, .14) !important;
+}
+
+.nv-page-container[data-width="wide"] > .relative > section.relative.border-b + * {
+  position: relative;
+}
+
+.nv-page-container[data-width="wide"] .divide-y.border-y {
+  overflow: hidden;
+  border: 1px solid rgba(121, 104, 255, .16) !important;
+  border-radius: var(--nv-radius-container);
+  background: linear-gradient(180deg, rgba(15,22,45,.62), rgba(10,16,34,.62));
+  box-shadow: inset 0 1px rgba(255,255,255,.02);
+}
+
+.nv-page-container[data-width="wide"] .divide-y.border-y > section,
+.nv-page-container[data-width="wide"] .divide-y.border-y > div {
+  padding-inline: clamp(14px, 1.4vw, 20px);
+}
+
+/* Pagination */
+nav[aria-label*="分页"] button[aria-current="page"],
+nav[aria-label*="pagination"] button[aria-current="page"] {
+  border-color: rgba(145,116,255,.50) !important;
+  background: linear-gradient(135deg, rgba(59,130,246,.25), rgba(124,58,237,.36)) !important;
+  box-shadow: 0 0 20px rgba(104,81,244,.16);
+}
+
+/* Mobile nav mirrors the rail glass. */
+.nv-mobile-nav {
+  border-color: rgba(124,107,255,.22);
+  background: rgba(9,14,31,.88);
+  box-shadow: 0 16px 46px rgba(2,4,16,.46), 0 0 0 1px rgba(112,94,255,.07);
+  backdrop-filter: blur(20px) saturate(125%);
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+}
+
+@media (max-width: 95rem) {
+  :root { --nv-grid-column: 192px; }
+}
+
+@media (max-width: 72rem) {
+  :root { --nv-grid-column: 176px; }
+  .nv-hero-carousel,
+  .nv-section-stack > section[aria-roledescription="carousel"] { min-height: 420px !important; }
+}
+
+@media (max-width: 47.999rem) {
+  :root { --nv-grid-column: 164px; }
+  .nv-topbar { min-height: 52px; }
+  .nv-search { height: 36px; width: min(58vw, 20rem); }
+  .nv-hero-carousel,
+  .nv-section-stack > section[aria-roledescription="carousel"] { min-height: 360px !important; border-radius: 16px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-media-card:hover .nv-media-card-poster,
+  .nv-media-card:focus-within .nv-media-card-poster { transform: none; }
+}
+
+
+/* ---- 来源: neo-aurora-components.css ---- */
+/* Nowen Video Neo Glass / Aurora component layer.
+ *
+ * Shared component chrome and media-flow styling live here. This consolidates
+ * the former polish + media-flows layers so secondary UI, series/episode flows,
+ * comments, recommendations, modals and toast notifications consume one stable
+ * --nv-* semantic design-system contract.
+ */
+
+/* -------------------------------------------------------------------------- */
+/* Shared popovers / modal hierarchy                                           */
+/* -------------------------------------------------------------------------- */
+
+.nv-menu,
+.nv-modal-sheet {
+  border-color: color-mix(in srgb, var(--nv-border-default) 90%, transparent);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--nv-bg-elevated) 94%, rgba(117, 92, 255, .035)),
+      color-mix(in srgb, var(--nv-bg-elevated) 98%, transparent));
+  box-shadow:
+    inset 0 1px color-mix(in srgb, var(--nv-text-primary) 4%, transparent),
+    var(--nv-shadow-elevated);
+  backdrop-filter: blur(22px) saturate(122%);
+  -webkit-backdrop-filter: blur(22px) saturate(122%);
+}
+
+.nv-modal-backdrop {
+  background:
+    radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--nv-action-muted) 7%, transparent), transparent 34rem),
+    color-mix(in srgb, var(--nv-bg-overlay) 94%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.nv-modal-header {
+  padding: 17px 20px 14px;
+  border-bottom-color: var(--nv-border-subtle);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--nv-bg-surface-soft) 55%, transparent), transparent);
+}
+
+.nv-modal-icon {
+  border: 1px solid color-mix(in srgb, var(--nv-action-muted) 22%, transparent);
+  background: color-mix(in srgb, var(--nv-action-muted) 11%, var(--nv-bg-surface));
+  color: var(--nv-action-muted-hover);
+  box-shadow: inset 0 1px color-mix(in srgb, var(--nv-text-primary) 4%, transparent);
+}
+
+.nv-modal-body { padding: 18px 20px 20px; }
+.nv-modal-footer {
+  padding: 13px 20px;
+  background: color-mix(in srgb, var(--nv-bg-surface-soft) 46%, transparent);
+}
+
+.nv-menu-item {
+  border-radius: var(--nv-radius-control);
+  transition:
+    background-color var(--nv-motion-fast) var(--nv-ease-standard),
+    color var(--nv-motion-fast) var(--nv-ease-standard),
+    transform var(--nv-motion-fast) var(--nv-ease-standard);
+}
+
+.nv-menu-item:hover,
+.nv-menu-item:focus-visible { transform: translateX(1px); }
+
+/* -------------------------------------------------------------------------- */
+/* Empty / loading states                                                      */
+/* -------------------------------------------------------------------------- */
+
+.nv-empty-state {
+  min-height: 230px;
+  border: 1px dashed color-mix(in srgb, var(--nv-border-default) 82%, transparent);
+  border-radius: var(--nv-radius-container);
+  background:
+    radial-gradient(circle at 50% 24%, color-mix(in srgb, var(--nv-action-muted) 7%, transparent), transparent 13rem),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--nv-bg-surface) 56%, transparent),
+      color-mix(in srgb, var(--nv-bg-surface-soft) 42%, transparent));
+  box-shadow: inset 0 1px color-mix(in srgb, var(--nv-text-primary) 2.5%, transparent);
+}
+
+.nv-empty-state-icon {
+  width: 44px !important;
+  height: 44px !important;
+  border: 1px solid color-mix(in srgb, var(--nv-action-muted) 20%, transparent);
+  background: color-mix(in srgb, var(--nv-action-muted) 10%, var(--nv-bg-surface)) !important;
+  color: var(--nv-action-muted-hover) !important;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--nv-action-muted) 7%, transparent);
+}
+
+.skeleton {
+  border: 1px solid color-mix(in srgb, var(--nv-border-subtle) 64%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--nv-bg-surface-soft) 88%, transparent) 22%,
+    color-mix(in srgb, var(--nv-text-primary) 5%, var(--nv-bg-surface-soft)) 50%,
+    color-mix(in srgb, var(--nv-bg-surface-soft) 88%, transparent) 78%
+  );
+  background-size: 210% 100%;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Home horizontal rows / continue watching                                    */
+/* -------------------------------------------------------------------------- */
+
+.nv-genre-card-slot {
+  width: clamp(150px, 10vw, 176px) !important;
+}
+
+.nv-genre-row-track {
+  scroll-padding-inline: 2px;
+  padding-top: 2px;
+}
+
+.nv-continue-card { min-width: 0; }
+
+.nv-continue-artwork {
+  border-color: color-mix(in srgb, var(--nv-border-default) 82%, transparent) !important;
+  background:
+    radial-gradient(circle at 74% 16%, color-mix(in srgb, var(--nv-action-muted) 8%, transparent), transparent 14rem),
+    var(--nv-bg-poster) !important;
+  box-shadow:
+    inset 0 1px color-mix(in srgb, var(--nv-text-primary) 3%, transparent),
+    0 10px 26px rgba(2, 4, 16, .18);
+}
+
+.nv-continue-card:hover .nv-continue-artwork,
+.nv-continue-card:focus-within .nv-continue-artwork {
+  border-color: var(--nv-border-hover) !important;
+  box-shadow: var(--nv-shadow-card-hover) !important;
+}
+
+.nv-continue-artwork > img { object-position: center 34%; }
+
+.nv-continue-overlay {
+  background: linear-gradient(180deg, rgba(3, 6, 18, .08), rgba(3, 6, 18, .34));
+}
+
+.nv-continue-overlay > span {
+  border: 1px solid rgba(255, 255, 255, .16);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, .12),
+    0 0 24px color-mix(in srgb, var(--nv-action-muted) 26%, transparent);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Browse filter chrome                                                        */
+/* -------------------------------------------------------------------------- */
+
+[aria-label="媒体类型"] ~ .nv-surface {
+  border-color: color-mix(in srgb, var(--nv-border-default) 92%, transparent);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--nv-bg-surface) 86%, transparent),
+      color-mix(in srgb, var(--nv-bg-surface-soft) 72%, transparent));
+  box-shadow:
+    inset 0 1px color-mix(in srgb, var(--nv-text-primary) 3%, transparent),
+    0 12px 32px rgba(2, 4, 16, .10);
+}
+
+[aria-label="媒体类型"] ~ .nv-surface .nv-button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--nv-action-muted) 38%, transparent) !important;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--nv-status-info) 14%, transparent),
+    color-mix(in srgb, var(--nv-action-muted) 20%, transparent)) !important;
+  color: var(--nv-text-primary) !important;
+  box-shadow: inset 0 1px color-mix(in srgb, var(--nv-text-primary) 4%, transparent);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Detail recommendations                                                      */
+/* -------------------------------------------------------------------------- */
+
+.nv-recommendation-section {
+  min-width: 0;
+  padding: 15px 16px 13px;
+  border: 1px solid var(--nv-border-default);
+  border-radius: var(--nv-radius-container);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--nv-bg-surface) 74%, transparent),
+      color-mix(in srgb, var(--nv-bg-surface-soft) 60%, transparent));
+  box-shadow:
+    inset 0 1px color-mix(in srgb, var(--nv-text-primary) 3%, transparent),
+    0 12px 32px rgba(2, 4, 16, .08);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.nv-recommendation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 13px;
+}
+
+.nv-recommendation-row {
+  display: flex;
+  gap: 13px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scroll-snap-type: x proximity;
+  padding: 2px 1px 4px;
+}
+
+.nv-recommendation-item {
+  width: clamp(138px, 9.5vw, 166px);
+  flex: 0 0 auto;
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+.nv-recommendation-item .nv-media-card-title { font-size: .75rem; }
+.nv-recommendation-item .nv-media-card-meta { font-size: .625rem; }
+
+/* -------------------------------------------------------------------------- */
+/* Detail comments                                                             */
+/* -------------------------------------------------------------------------- */
+
+.nv-comment-section {
+  padding: 16px;
+  border: 1px solid var(--nv-border-default);
+  border-radius: var(--nv-radius-container);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--nv-bg-surface) 72%, transparent),
+      color-mix(in srgb, var(--nv-bg-surface-soft) 58%, transparent));
+  box-shadow: inset 0 1px color-mix(in srgb, var(--nv-text-primary) 3%, transparent);
+}
+
+#comment-section-title {
+  font-size: var(--nv-type-h2) !important;
+  letter-spacing: var(--nv-tracking-tight);
+}
+
+.nv-comment-composer {
+  border-color: color-mix(in srgb, var(--nv-border-default) 86%, transparent);
+  background: color-mix(in srgb, var(--nv-bg-elevated) 52%, transparent);
+  box-shadow: inset 0 1px color-mix(in srgb, var(--nv-text-primary) 2.5%, transparent);
+}
+
+.nv-comment-list > article.nv-surface {
+  transition:
+    border-color var(--nv-motion-normal) var(--nv-ease-standard),
+    background-color var(--nv-motion-normal) var(--nv-ease-standard),
+    transform var(--nv-motion-normal) var(--nv-ease-standard);
+}
+
+.nv-comment-list > article.nv-surface:hover {
+  transform: translateY(-1px);
+  border-color: var(--nv-border-hover);
+  background: color-mix(in srgb, var(--nv-bg-elevated) 72%, transparent);
+}
+
+.nv-comment-avatar {
+  border: 1px solid color-mix(in srgb, var(--nv-action-muted) 35%, transparent);
+  background: linear-gradient(135deg, var(--nv-status-info), var(--nv-action-primary) 55%, var(--nv-action-muted)) !important;
+  color: var(--nv-text-on-brand) !important;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--nv-action-muted) 14%, transparent);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Subtitle manager                                                            */
+/* -------------------------------------------------------------------------- */
+
+.nv-modal-backdrop[aria-label="字幕管理"] .nv-modal-sheet {
+  width: min(92vw, 880px);
+  max-width: 880px;
+}
+
+.nv-modal-backdrop[aria-label="字幕管理"] .nv-modal-body > section {
+  padding: 14px;
+  border: 1px solid var(--nv-border-subtle);
+  border-radius: var(--nv-radius-card);
+  background: color-mix(in srgb, var(--nv-bg-surface) 48%, transparent);
+}
+
+.nv-modal-backdrop[aria-label="字幕管理"] .nv-modal-body > section label,
+.nv-modal-backdrop[aria-label="字幕管理"] .nv-modal-body > section .nv-surface {
+  box-shadow: inset 0 1px color-mix(in srgb, var(--nv-text-primary) 2.5%, transparent);
+}
+
+.nv-modal-backdrop[aria-label="字幕管理"] input[type="checkbox"] {
+  border-radius: 5px;
+  accent-color: var(--nv-action-primary);
+}
+
+.nv-modal-backdrop[aria-label="字幕管理"] .h-2.overflow-hidden.rounded-full > div {
+  background: linear-gradient(90deg, var(--nv-status-info), var(--nv-action-primary) 58%, var(--nv-action-muted)) !important;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--nv-action-muted) 20%, transparent);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Toast                                                                        */
+/* -------------------------------------------------------------------------- */
+
+.nv-toast-stack { gap: 8px !important; }
+
+.nv-toast {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--nv-border-default) 94%, transparent) !important;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--nv-bg-elevated) 94%, transparent),
+      color-mix(in srgb, var(--nv-bg-elevated) 88%, var(--nv-bg-surface))) !important;
+  box-shadow:
+    inset 0 1px color-mix(in srgb, var(--nv-text-primary) 4%, transparent),
+    0 18px 48px rgba(2, 4, 16, .34) !important;
+  backdrop-filter: blur(20px) saturate(120%);
+  -webkit-backdrop-filter: blur(20px) saturate(120%);
+}
+
+.nv-toast::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--nv-action-muted);
+}
+
+.nv-toast[data-tone="success"]::before { background: var(--nv-status-success); }
+.nv-toast[data-tone="error"]::before { background: var(--nv-status-danger); }
+.nv-toast[data-tone="warning"]::before { background: var(--nv-status-warning); }
+.nv-toast[data-tone="info"]::before { background: var(--nv-status-info); }
+
+/* -------------------------------------------------------------------------- */
+/* Series hero                                                                 */
+/* -------------------------------------------------------------------------- */
+
+.nv-series-hero {
+  isolation: isolate;
+  overflow: hidden;
+  border-bottom-color: color-mix(in srgb, var(--nv-border-default) 74%, transparent) !important;
+  background: transparent !important;
+}
+
+.nv-series-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto var(--nv-page-gutter) 0;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--nv-action-muted) 28%, transparent), transparent);
+  opacity: .72;
+}
+
+.nv-series-backdrop { background: var(--nv-bg-poster); }
+.nv-series-backdrop > img { filter: saturate(1.05) contrast(1.025); }
+
+.nv-series-poster {
+  border-color: color-mix(in srgb, var(--nv-border-hover) 88%, transparent) !important;
+  background: linear-gradient(180deg, var(--nv-bg-poster), var(--nv-bg-surface-soft)) !important;
+  box-shadow:
+    0 24px 60px rgba(2, 4, 16, .42),
+    0 0 0 1px color-mix(in srgb, var(--nv-action-muted) 10%, transparent),
+    0 0 32px color-mix(in srgb, var(--nv-action-muted) 8%, transparent) !important;
+}
+
+.nv-series-hero-content .nv-tag {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.nv-series-hero-content > div:last-child .nv-button[data-variant="secondary"] {
+  background: color-mix(in srgb, var(--nv-bg-elevated) 70%, transparent);
+}
+
+.nv-series-hero + div { position: relative; }
+
+.nv-series-hero + div > .nv-section > .border-y {
+  overflow: hidden;
+  padding: 16px 18px !important;
+  border: 1px solid var(--nv-border-default) !important;
+  border-radius: var(--nv-radius-container);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--nv-bg-surface) 78%, transparent),
+      color-mix(in srgb, var(--nv-bg-surface-soft) 64%, transparent));
+  box-shadow:
+    inset 0 1px color-mix(in srgb, var(--nv-text-primary) 3%, transparent),
+    0 12px 30px rgba(2, 4, 16, .08);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.nv-series-hero + div > .nv-section > .grid.border-y { gap: 18px; }
+
+/* -------------------------------------------------------------------------- */
+/* Episode browser                                                             */
+/* -------------------------------------------------------------------------- */
+
+.nv-series-episode-browser {
+  padding: 15px;
+  border: 1px solid var(--nv-border-default);
+  border-radius: var(--nv-radius-container);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--nv-bg-surface) 76%, transparent),
+      color-mix(in srgb, var(--nv-bg-surface-soft) 58%, transparent));
+  box-shadow:
+    inset 0 1px color-mix(in srgb, var(--nv-text-primary) 3%, transparent),
+    0 12px 32px rgba(2, 4, 16, .08);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.nv-series-episode-toolbar {
+  margin: -2px -2px 0;
+  padding: 4px 2px 14px;
+  border-bottom-color: color-mix(in srgb, var(--nv-border-default) 72%, transparent) !important;
+}
+
+.nv-season-chip {
+  min-height: 36px;
+  border-color: color-mix(in srgb, var(--nv-border-default) 88%, transparent) !important;
+  background: color-mix(in srgb, var(--nv-bg-elevated) 48%, transparent) !important;
+  box-shadow: inset 0 1px color-mix(in srgb, var(--nv-text-primary) 2.5%, transparent);
+}
+
+.nv-season-chip:hover {
+  border-color: var(--nv-border-hover) !important;
+  background: var(--nv-fill-hover) !important;
+}
+
+.nv-season-chip[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--nv-action-muted) 48%, transparent) !important;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--nv-status-info) 16%, transparent),
+    color-mix(in srgb, var(--nv-action-muted) 22%, transparent)) !important;
+  color: var(--nv-text-primary) !important;
+  box-shadow:
+    inset 0 1px color-mix(in srgb, var(--nv-text-primary) 4%, transparent),
+    0 0 18px color-mix(in srgb, var(--nv-action-muted) 8%, transparent);
+}
+
+.nv-episode-list-card,
+.nv-episode-slide-card {
+  border-color: color-mix(in srgb, var(--nv-border-default) 86%, transparent) !important;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--nv-bg-elevated) 54%, transparent),
+      color-mix(in srgb, var(--nv-bg-surface) 68%, transparent)) !important;
+  box-shadow: inset 0 1px color-mix(in srgb, var(--nv-text-primary) 2.5%, transparent);
+}
+
+.nv-episode-list-card:hover,
+.nv-episode-list-card:focus-visible,
+.nv-episode-slide-card:hover,
+.nv-episode-slide-card:focus-visible {
+  border-color: var(--nv-border-hover) !important;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--nv-bg-elevated) 70%, transparent),
+      color-mix(in srgb, var(--nv-bg-surface) 78%, transparent)) !important;
+}
+
+.nv-episode-thumb {
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 70% 20%, color-mix(in srgb, var(--nv-action-muted) 7%, transparent), transparent 11rem),
+    var(--nv-bg-poster) !important;
+}
+
+.nv-episode-thumb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nv-text-primary) 3%, transparent);
+}
+
+.nv-episode-progress > div {
+  background: linear-gradient(90deg, var(--nv-status-info), var(--nv-action-primary) 58%, var(--nv-action-muted)) !important;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--nv-action-muted) 24%, transparent);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Trailer modal                                                               */
+/* -------------------------------------------------------------------------- */
+
+.nv-modal-sheet.nv-trailer-modal {
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--nv-border-hover) 82%, transparent);
+  background: #050812;
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, .58),
+    0 0 0 1px color-mix(in srgb, var(--nv-action-muted) 11%, transparent),
+    0 0 42px color-mix(in srgb, var(--nv-action-muted) 10%, transparent);
+}
+
+.nv-trailer-modal-header {
+  border-bottom-color: color-mix(in srgb, var(--nv-border-default) 72%, transparent) !important;
+  background: linear-gradient(180deg, rgba(10, 15, 32, .92), rgba(7, 11, 24, .78)) !important;
+}
+
+.nv-trailer-modal-body { background: #02040a; }
+
+.nv-trailer-stage {
+  background:
+    radial-gradient(circle at 50% 36%, rgba(69, 57, 151, .16), transparent 36rem),
+    #02040a;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Desktop geometry                                                            */
+/* -------------------------------------------------------------------------- */
+
+@media (min-width: 80rem) {
+  [aria-label="媒体类型"] ~ .nv-surface { padding: 13px 15px !important; }
+  [aria-label="媒体类型"] ~ .nv-surface > div { column-gap: 12px; }
+
+  .nv-recommendation-section { padding: 16px 18px 14px; }
+  .nv-recommendation-row { gap: 14px; }
+  .nv-comment-section { padding: 18px; }
+
+  .nv-modal-backdrop[aria-label="字幕管理"] .nv-modal-body {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 14px;
+  }
+
+  .nv-modal-backdrop[aria-label="字幕管理"] .nv-modal-body > .space-y-6,
+  .nv-modal-backdrop[aria-label="字幕管理"] .nv-modal-body > section:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .nv-series-hero-inner {
+    min-height: clamp(34rem, 41vw, 39rem) !important;
+    grid-template-columns: minmax(230px, 260px) minmax(0, 1fr) !important;
+    align-items: center !important;
+    gap: clamp(28px, 2.2vw, 42px) !important;
+    padding-top: 76px !important;
+    padding-bottom: 40px !important;
+  }
+
+  .nv-series-poster {
+    width: 100%;
+    max-width: 260px;
+  }
+
+  .nv-series-hero-content {
+    max-width: 62rem;
+    padding-bottom: 0 !important;
+  }
+
+  .nv-series-hero-content h1 { max-width: 26ch !important; }
+  .nv-series-episode-browser { padding: 17px 18px 18px; }
+  .nv-episode-slide-card { width: clamp(216px, 14vw, 250px) !important; }
+  .nv-continue-card { width: clamp(226px, 15vw, 252px) !important; }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Light / mobile                                                              */
+/* -------------------------------------------------------------------------- */
+
+[data-theme="light"] .nv-recommendation-section,
+[data-theme="light"] .nv-comment-section,
+[data-theme="light"] [aria-label="媒体类型"] ~ .nv-surface,
+[data-theme="light"] .nv-empty-state,
+[data-theme="light"] .nv-toast,
+[data-theme="light"] .nv-series-hero + div > .nv-section > .border-y,
+[data-theme="light"] .nv-series-episode-browser,
+[data-theme="light"] .nv-episode-list-card,
+[data-theme="light"] .nv-episode-slide-card,
+[data-theme="light"] .nv-continue-artwork {
+  box-shadow: var(--nv-shadow-card) !important;
+}
+
+[data-theme="light"] .nv-modal-sheet.nv-trailer-modal { background: #0a0d16; }
+
+@media (max-width: 47.999rem) {
+  .nv-modal-header { padding: 15px 15px 12px; }
+  .nv-modal-body { padding: 14px 15px 16px; }
+  .nv-modal-footer { padding: 12px 15px; }
+
+  .nv-recommendation-section,
+  .nv-comment-section {
+    margin-inline: -2px;
+    padding: 13px;
+    border-radius: 15px;
+  }
+
+  .nv-recommendation-item { width: 138px; }
+
+  .nv-modal-backdrop[aria-label="字幕管理"] .nv-modal-body > section { padding: 12px; }
+
+  .nv-toast-stack {
+    left: 10px;
+    right: 10px !important;
+    top: 10px !important;
+    max-width: none !important;
+    align-items: stretch !important;
+  }
+
+  .nv-toast { max-width: none !important; }
+
+  .nv-series-hero::after { inset-inline: 14px; }
+
+  .nv-series-hero-inner {
+    min-height: 30rem !important;
+    padding-top: 76px !important;
+    padding-bottom: 28px !important;
+  }
+
+  .nv-series-hero + div { padding-top: 24px !important; }
+
+  .nv-series-hero + div > .nv-section > .border-y {
+    padding: 13px !important;
+    border-radius: 15px;
+  }
+
+  .nv-series-episode-browser {
+    margin-inline: -2px;
+    padding: 13px;
+    border-radius: 15px;
+  }
+
+  .nv-series-episode-toolbar { padding-bottom: 12px; }
+
+  .nv-season-chip {
+    min-height: 34px;
+    padding-inline: 11px !important;
+    font-size: .75rem !important;
+  }
+
+  .nv-episode-slide-card { width: 13rem !important; }
+
+  .nv-modal-sheet.nv-trailer-modal {
+    border-radius: 16px 16px var(--nv-radius-modal) var(--nv-radius-modal);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-menu-item:hover,
+  .nv-menu-item:focus-visible,
+  .nv-comment-list > article.nv-surface:hover,
+  .nv-episode-list-card,
+  .nv-episode-slide-card,
+  .nv-continue-artwork,
+  .nv-series-poster {
+    transform: none !important;
+  }
+}
+
+
+/* ---- 来源: legacy-ui-foundation.css ---- */
+/* Nowen Video · Legacy UI foundation compatibility
+ *
+ * Temporary compatibility entrypoint while Nowen UI 2.0 replaces the historical
+ * Neo Aurora foundation. Do not add new page styles here. New visual work belongs
+ * in ui-system.css or a shared component under web/src/ui.
+ */
+
+

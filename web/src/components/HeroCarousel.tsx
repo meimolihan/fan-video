@@ -106,11 +106,13 @@ function isSeriesProxy(media: Media) {
 }
 
 function getHeroPoster(media: Media): string | null {
-  if (media.series_id && (media.series?.poster_path || isSeriesProxy(media))) {
+  // 剧集代理行（id === series_id）用剧集海报；真实分集一律用自身海报端点，
+  // 由后端按「同名图 > 子目录同名图 > 首帧」返回独立封面。
+  if (isSeriesProxy(media)) {
     return streamApi.getSeriesPosterUrl(media.series_id)
   }
+  if (media.series_id) return streamApi.getPosterUrl(media.id)
   if (media.poster_path) return streamApi.getPosterUrl(media.id)
-  if (media.series_id && media.series?.poster_path) return streamApi.getSeriesPosterUrl(media.series_id)
   return null
 }
 

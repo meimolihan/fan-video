@@ -1,10 +1,1146 @@
+/* ============================================================
+ * player.css — 播放器全套样式（控制栏/面板/字幕）
+ * 由原相关样式按全局级联顺序合并而来（方案一 · CSS 大扫除）
+ * 内容除剥离 @import 外逐字保留，勿在此文件内再使用 @import
+ * ============================================================ */
+
+/* ---- 来源: player-cinema.css ---- */
+/* Cinema layout only. Visual values come from --nv-player-* semantic roles. */
+.group\/player {
+  --nv-player-side: clamp(14px, 2vw, 30px);
+  --nv-player-side-l: max(clamp(14px, 2vw, 30px), env(safe-area-inset-left, 0px));
+  --nv-player-side-r: max(clamp(14px, 2vw, 30px), env(safe-area-inset-right, 0px));
+  --nv-player-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  --nv-player-control-size: 40px;
+  isolation: isolate;
+}
+
+.group\/player > video {
+  display: block;
+  object-fit: contain;
+  background: var(--nv-player-canvas);
+}
+
+.group\/player:has(.player-controls.opacity-0) > video { cursor: none; }
+
+/* Runtime diagnostics belong to the same chrome lifecycle as the player's own
+   controls. They remain real playback state, but no longer stay pinned over a
+   clean video frame after the control UI has auto-hidden. */
+.group\/player > .nv-player-runtime-status {
+  top: max(16px, env(safe-area-inset-top, 0px)) !important;
+  right: var(--nv-player-side-r) !important;
+  max-width: min(38vw, 420px);
+  opacity: 1;
+  transition: opacity var(--nv-motion-normal) var(--nv-ease-standard), transform var(--nv-motion-normal) var(--nv-ease-standard) !important;
+}
+.group\/player:has(.player-controls.opacity-0) > .nv-player-runtime-status {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-3px);
+}
+
+.group\/player .player-controls {
+  inset: 0 !important;
+  padding: 0 !important;
+  pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgba(3,7,17,.72), rgba(3,7,17,.18) 25%, transparent 40%),
+    linear-gradient(to top, rgba(3,7,17,.90), rgba(3,7,17,.45) 18%, transparent 42%) !important;
+  transition: opacity var(--nv-motion-normal) var(--nv-ease-standard) !important;
+}
+.group\/player .player-controls > * { pointer-events: auto; }
+
+/* Top chrome keeps the real title/mode controls, but presents them as a quiet
+   glass toolbar rather than drawing attention away from the video. */
+.group\/player .player-controls > .absolute.left-4.top-4 {
+  top: max(16px, env(safe-area-inset-top, 0px)) !important;
+  left: var(--nv-player-side-l) !important;
+  right: var(--nv-player-side-r) !important;
+  width: auto;
+  min-width: 0;
+  gap: 9px !important;
+}
+.group\/player .player-controls > .absolute.left-4.top-4 > h2 {
+  min-width: 0;
+  max-width: min(58vw, 820px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--nv-font-sans) !important;
+  font-size: clamp(14px, 1.1vw, 17px) !important;
+  font-weight: 590 !important;
+  letter-spacing: -.01em !important;
+  color: var(--nv-player-text-primary) !important;
+  text-shadow: 0 2px 14px rgba(0,0,0,.45);
+}
+.group\/player .player-controls > .absolute.left-4.top-4 > button:first-child {
+  width: var(--nv-player-control-size);
+  min-width: var(--nv-player-control-size);
+  height: var(--nv-player-control-size);
+  padding: 0 !important;
+  border: 1px solid var(--nv-player-border) !important;
+  border-radius: var(--nv-player-radius-control) !important;
+  background: var(--nv-player-surface-soft) !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.04), 0 8px 24px rgba(0,0,0,.20) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+.group\/player .player-controls > .absolute.left-4.top-4 > button:first-child:hover {
+  border-color: var(--nv-player-border-hover) !important;
+  background: var(--nv-player-surface-hover) !important;
+}
+
+/* Timeline sits above the glass control dock. Resting state is intentionally
+   quiet: only the rail and played fill stay visible. The scrubber becomes a
+   circular handle on hover/press, avoiding the square marker that previously
+   remained visible at 0% progress. */
+.group\/player .player-controls > .progress-bar {
+  position: absolute !important;
+  left: calc(var(--nv-player-side-l) + 12px) !important;
+  right: calc(var(--nv-player-side-r) + 12px) !important;
+  bottom: calc(var(--nv-player-bottom) + 66px) !important;
+  width: auto !important;
+  height: 4px !important;
+  margin: 0 !important;
+  overflow: visible !important;
+  cursor: pointer;
+  touch-action: none;
+  border-radius: var(--nv-radius-pill) !important;
+  background: rgba(235,238,255,.16) !important;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.28);
+  transition:
+    height var(--nv-motion-fast) var(--nv-ease-standard),
+    background-color var(--nv-motion-fast) var(--nv-ease-standard) !important;
+}
+.group\/player .player-controls > .progress-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 18px;
+  transform: translateY(-50%);
+}
+.group\/player .player-controls > .progress-bar:hover,
+.group\/player .player-controls > .progress-bar:focus-visible,
+.group\/player .player-controls > .progress-bar:active {
+  height: 6px !important;
+  background: rgba(235,238,255,.22) !important;
+}
+.group\/player .progress-bar-fill {
+  position: absolute !important;
+  inset: 0 auto 0 0 !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  pointer-events: none;
+  border-radius: inherit !important;
+  background: linear-gradient(90deg, var(--nv-player-accent-blue), var(--nv-player-accent) 56%, var(--nv-player-accent-pink)) !important;
+  box-shadow: 0 0 12px rgba(109,93,252,.36) !important;
+}
+.group\/player .progress-bar-thumb {
+  position: absolute !important;
+  top: 50% !important;
+  width: 12px !important;
+  height: 12px !important;
+  pointer-events: none;
+  border: 2px solid rgba(255,255,255,.96) !important;
+  border-radius: 999px !important;
+  background: var(--nv-player-accent) !important;
+  opacity: 0 !important;
+  transform: translate(-50%, -50%) scale(.72) !important;
+  box-shadow: 0 0 0 3px rgba(117,100,255,.14), 0 0 14px rgba(117,100,255,.50) !important;
+  transition:
+    opacity var(--nv-motion-fast) var(--nv-ease-standard),
+    transform var(--nv-motion-fast) var(--nv-ease-standard),
+    box-shadow var(--nv-motion-fast) var(--nv-ease-standard) !important;
+}
+.group\/player .progress-bar:hover .progress-bar-thumb,
+.group\/player .progress-bar:focus-visible .progress-bar-thumb,
+.group\/player .progress-bar:active .progress-bar-thumb {
+  opacity: 1 !important;
+  transform: translate(-50%, -50%) scale(1) !important;
+}
+.group\/player .progress-bar:active .progress-bar-thumb {
+  transform: translate(-50%, -50%) scale(1.14) !important;
+  box-shadow: 0 0 0 5px rgba(117,100,255,.16), 0 0 18px rgba(117,100,255,.62) !important;
+}
+
+/* Bottom dock: preserve the existing control tree and interaction handlers. */
+.group\/player .player-controls > .flex.items-center.gap-1 {
+  position: absolute !important;
+  left: var(--nv-player-side-l) !important;
+  right: var(--nv-player-side-r) !important;
+  bottom: var(--nv-player-bottom) !important;
+  min-width: 0;
+  min-height: 54px;
+  gap: 2px !important;
+  align-items: center !important;
+  padding: 6px 10px !important;
+  border: 1px solid var(--nv-player-border) !important;
+  border-radius: 16px !important;
+  background: rgba(9,14,31,.68) !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.035), 0 18px 46px rgba(0,0,0,.25), 0 0 0 1px rgba(110,90,255,.035) !important;
+  backdrop-filter: blur(20px) saturate(125%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(125%) !important;
+}
+.group\/player .player-controls > .flex.items-center.gap-1 > button,
+.group\/player .player-controls > .flex.items-center.gap-1 > div.relative > button {
+  min-width: var(--nv-player-control-size);
+  height: var(--nv-player-control-size);
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 9px !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--nv-player-radius-control) !important;
+  line-height: 1 !important;
+  color: var(--nv-player-text-secondary) !important;
+}
+.group\/player .player-controls > .flex.items-center.gap-1 > button:hover,
+.group\/player .player-controls > .flex.items-center.gap-1 > div.relative > button:hover {
+  border-color: var(--nv-player-border-subtle) !important;
+  background: var(--nv-player-accent-soft) !important;
+  color: var(--nv-player-text-primary) !important;
+}
+.group\/player .player-controls > .flex.items-center.gap-1 > div.relative,
+.group\/player .player-controls > .flex.items-center.gap-1 > .group\/vol {
+  display: inline-flex;
+  min-height: var(--nv-player-control-size);
+  align-items: center;
+}
+
+/* The primary play/pause affordance may live at different indices depending on
+   playback mode, so select it by the Lucide glyph rather than DOM position. */
+.group\/player .player-controls > .flex.items-center.gap-1 > button:has(svg.lucide-play),
+.group\/player .player-controls > .flex.items-center.gap-1 > button:has(svg.lucide-pause) {
+  width: 46px;
+  min-width: 46px;
+  height: 46px;
+  margin-inline: 3px;
+  border-color: rgba(151,124,255,.46) !important;
+  border-radius: 999px !important;
+  background: linear-gradient(135deg, #3b82f6 0%, #6d5dfc 52%, #a855f7 100%) !important;
+  color: #fff !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.14), 0 0 26px rgba(109,93,252,.34) !important;
+}
+.group\/player .player-controls > .flex.items-center.gap-1 > button:has(svg.lucide-play):hover,
+.group\/player .player-controls > .flex.items-center.gap-1 > button:has(svg.lucide-pause):hover {
+  transform: translateY(-1px) scale(1.015);
+  box-shadow: inset 0 1px rgba(255,255,255,.17), 0 0 32px rgba(109,93,252,.44) !important;
+}
+
+/* Desktop cinema composition: the play/pause control is visually centered like
+   the reference while the existing buttons stay in their real React handlers.
+   Reordering is CSS-only, so playback behavior and keyboard handling are not
+   duplicated or replaced. */
+@media (min-width: 56.25rem) {
+  .group\/player .player-controls > .flex.items-center.gap-1 > button:has(svg.lucide-play),
+  .group\/player .player-controls > .flex.items-center.gap-1 > button:has(svg.lucide-pause) {
+    position: absolute !important;
+    left: 50%;
+    top: 50%;
+    z-index: 3;
+    margin: 0;
+    transform: translate(-50%, -50%);
+  }
+
+  .group\/player .player-controls > .flex.items-center.gap-1 > button:has(svg.lucide-play):hover,
+  .group\/player .player-controls > .flex.items-center.gap-1 > button:has(svg.lucide-pause):hover {
+    transform: translate(-50%, calc(-50% - 1px)) scale(1.015);
+  }
+
+  /* Keep the volume button in its DOM position. Muting swaps the Lucide glyph,
+     so glyph-dependent ordering would make the control jump horizontally. */
+  .group\/player .player-controls > .flex.items-center.gap-1 > button:has(svg.lucide-skip-back) { order: -3; }
+  .group\/player .player-controls > .flex.items-center.gap-1 > button:has(svg.lucide-skip-forward) { order: -2; }
+  .group\/player .player-controls > .flex.items-center.gap-1 > button:has(svg.lucide-chevron-right) { order: -1; }
+}
+
+.group\/player .group\/vol input[type='range'] {
+  width: 0 !important;
+  margin: 0 !important;
+  opacity: 0;
+  pointer-events: none;
+  transition: width var(--nv-motion-normal) var(--nv-ease-standard), opacity var(--nv-motion-fast) var(--nv-ease-standard) !important;
+}
+.group\/player .group\/vol:hover input[type='range'],
+.group\/player .group\/vol:focus-within input[type='range'] { width: 76px !important; opacity: 1; pointer-events: auto; }
+
+.group\/player .player-controls [class*='bottom-full'] {
+  border-color: var(--nv-player-border) !important;
+  border-radius: var(--nv-player-radius-panel) !important;
+  background: var(--nv-player-surface) !important;
+  box-shadow: var(--nv-player-shadow) !important;
+  backdrop-filter: blur(20px) saturate(120%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(120%) !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Mobile ergonomics                                                            */
+/* On phones the dock can hold up to ~13 buttons; a single non-wrapping row     */
+/* overflows and cuts off the trailing controls (PiP / fullscreen).             */
+/*  - Timeline + dock are stacked in normal flow, so if the dock wraps to a     */
+/*    second row the timeline is pushed up instead of being overlapped.         */
+/*  - Buttons shrink slightly while keeping ≥38px touch targets.                */
+/*  - Left/right safe-area insets are respected (landscape notch / curved       */
+/*    edges) instead of a fixed 10px gutter.                                    */
+/* -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  .group\/player {
+    --nv-player-side: 10px;
+    --nv-player-side-l: max(10px, env(safe-area-inset-left, 0px));
+    --nv-player-side-r: max(10px, env(safe-area-inset-right, 0px));
+    --nv-player-bottom: max(24px, env(safe-area-inset-bottom, 0px));
+    --nv-player-control-size: 38px;
+  }
+  .group\/player > .nv-player-runtime-status {
+    top: max(9px, env(safe-area-inset-top, 0px)) !important;
+    right: var(--nv-player-side-r) !important;
+    max-width: 44vw;
+    transform-origin: top right;
+  }
+  .group\/player .player-controls > .absolute.left-4.top-4 {
+    top: max(9px, env(safe-area-inset-top, 0px)) !important;
+    left: var(--nv-player-side-l) !important;
+    right: var(--nv-player-side-r) !important;
+  }
+  .group\/player .player-controls > .absolute.left-4.top-4 > h2 { max-width: 46vw; }
+
+  /* Flow layout: progress rail sits directly above the dock in column flow.
+     The wrapper itself must become a full-size absolute overlay — as a static
+     div it would sit below the <video> in normal flow and push the dock
+     (now in-flow children) off-screen. */
+  .group\/player .player-controls {
+    position: absolute !important;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    height: 100% !important;
+    padding-left: var(--nv-player-side-l) !important;
+    padding-right: var(--nv-player-side-r) !important;
+    padding-bottom: var(--nv-player-bottom) !important;
+    overflow: hidden !important;
+  }
+  .group\/player .player-controls > .progress-bar {
+    position: relative !important;
+    inset: auto !important;
+    width: auto !important;
+    margin: 0 8px 10px !important;
+  }
+
+  /* Dock: allow wrapping so every control stays visible and tappable. */
+  .group\/player .player-controls > div.flex.items-center.gap-1 {
+    position: static !important;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-content: flex-start;
+    row-gap: 4px;
+    min-height: 50px !important;
+    padding: 8px 10px 12px !important;
+    border-radius: 14px !important;
+    overflow: hidden !important;
+  }
+  .group\/player .player-controls > div.flex.items-center.gap-1 > button,
+  .group\/player .player-controls > div.flex.items-center.gap-1 > div.relative > button {
+    min-height: var(--nv-player-control-size);
+    padding: 0 7px !important;
+  }
+  .group\/player .group\/vol input[type='range'] { display: none !important; }
+  .group\/player .player-controls > div.flex.items-center.gap-1 > span { display: none !important; }
+  .group\/player .player-controls > div.flex.items-center.gap-1 > button:has(svg.lucide-play),
+  .group\/player .player-controls > div.flex.items-center.gap-1 > button:has(svg.lucide-pause) {
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group\/player .player-controls,
+  .group\/player .progress-bar,
+  .group\/player .player-controls button,
+  .group\/player .group\/vol input[type='range'],
+  .group\/player > .nv-player-runtime-status { transition-duration: .01ms !important; }
+
+  .group\/player .player-controls > .flex.items-center.gap-1 > button:has(svg.lucide-play):hover,
+  .group\/player .player-controls > .flex.items-center.gap-1 > button:has(svg.lucide-pause):hover { transform: none; }
+
+  @media (min-width: 56.25rem) {
+    .group\/player .player-controls > .flex.items-center.gap-1 > button:has(svg.lucide-play),
+    .group\/player .player-controls > .flex.items-center.gap-1 > button:has(svg.lucide-pause),
+    .group\/player .player-controls > .flex.items-center.gap-1 > button:has(svg.lucide-play):hover,
+    .group\/player .player-controls > .flex.items-center.gap-1 > button:has(svg.lucide-pause):hover {
+      transform: translate(-50%, -50%);
+    }
+  }
+}
+
+/* CSS 伪全屏兜底：当浏览器不支持任何全屏 API 时（如 iPhone 上的非 video 元素），
+ * 由 usePlayerFullscreen 添加此类实现铺满视口的全屏效果。 */
+.player-fake-fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483000 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  background: #000;
+}
+
+
+/* ---- 来源: player-overlay-panels.css ---- */
+/* ============================================================
+   PLAYER-UI · Shared Overlay Panels
+   ------------------------------------------------------------
+   投屏、字幕内容搜索等共享浮层直接消费 --nv-player-*。
+   VideoPlayer 自身菜单已由组件语义 class 管理，不再需要旧 DOM 兼容选择器。
+   ============================================================ */
+
+.group\/player .player-overlay-panel {
+  overflow: hidden;
+  border: 1px solid var(--nv-player-border) !important;
+  border-radius: var(--nv-player-radius-panel) !important;
+  background: var(--nv-player-surface) !important;
+  color: var(--nv-player-text-primary);
+  box-shadow: var(--nv-player-shadow) !important;
+  backdrop-filter: blur(22px) saturate(135%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(135%) !important;
+}
+
+.group\/player .player-overlay-panel-header {
+  display: flex;
+  min-height: 56px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--nv-player-border-subtle);
+}
+
+.group\/player .player-overlay-panel-heading { min-width: 0; }
+
+.group\/player .player-overlay-panel-title {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  color: var(--nv-player-text-primary);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.group\/player .player-overlay-panel-title > svg {
+  flex: 0 0 auto;
+  color: var(--nv-player-accent);
+}
+
+.group\/player .player-overlay-panel-subtitle {
+  margin-top: 4px;
+  color: var(--nv-player-text-tertiary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.group\/player .player-overlay-inline-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.group\/player .player-overlay-close,
+.group\/player .player-overlay-toolbar-btn {
+  display: inline-flex;
+  height: 32px;
+  min-width: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 9px;
+  border-radius: var(--nv-player-radius-control);
+  background: transparent;
+  color: var(--nv-player-text-tertiary);
+  font-size: 11px;
+  line-height: 1;
+  transition: background-color var(--nv-motion-normal) var(--nv-ease-standard), color var(--nv-motion-normal) var(--nv-ease-standard);
+}
+
+.group\/player .player-overlay-close { padding: 0; }
+
+.group\/player .player-overlay-close:hover,
+.group\/player .player-overlay-toolbar-btn:hover {
+  background: var(--nv-player-surface-hover);
+  color: var(--nv-player-text-primary);
+}
+
+.group\/player .player-overlay-toolbar-btn:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.group\/player .player-overlay-chip {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 1px solid var(--nv-player-border-subtle);
+  border-radius: var(--nv-radius-pill);
+  background: var(--nv-player-surface-subtle);
+  color: var(--nv-player-text-tertiary);
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.group\/player .player-overlay-chip kbd {
+  color: var(--nv-player-accent);
+  font: inherit;
+  font-weight: 700;
+}
+
+.group\/player .player-overlay-body { padding: 14px 16px 16px; }
+
+.group\/player .player-overlay-section-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+  color: var(--nv-player-text-faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.group\/player .player-overlay-input-wrap {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border: 1px solid var(--nv-player-border-subtle);
+  border-radius: calc(var(--nv-player-radius-control) + 3px);
+  background: var(--nv-player-surface-soft);
+  transition: border-color var(--nv-motion-normal) var(--nv-ease-standard), box-shadow var(--nv-motion-normal) var(--nv-ease-standard), background-color var(--nv-motion-normal) var(--nv-ease-standard);
+}
+
+.group\/player .player-overlay-input-wrap:focus-within {
+  border-color: var(--nv-player-border-hover);
+  background: var(--nv-player-surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nv-player-accent) 7%, transparent);
+}
+
+.group\/player .player-overlay-input-wrap > svg {
+  flex: 0 0 auto;
+  color: var(--nv-player-text-faint);
+}
+
+.group\/player .player-overlay-input-wrap input {
+  min-width: 0;
+  height: 44px;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--nv-player-text-primary);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.group\/player .player-overlay-input-wrap input::placeholder { color: var(--nv-player-text-faint); }
+
+.group\/player .player-overlay-input-action,
+.group\/player .player-overlay-input-clear {
+  display: inline-flex;
+  height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--nv-player-radius-control);
+}
+
+.group\/player .player-overlay-input-clear {
+  width: 28px;
+  color: var(--nv-player-text-faint);
+}
+
+.group\/player .player-overlay-input-clear:hover {
+  background: var(--nv-player-surface-hover);
+  color: var(--nv-player-text-primary);
+}
+
+.group\/player .player-overlay-input-action {
+  padding: 0 10px;
+  border: 1px solid var(--nv-player-accent-border);
+  background: var(--nv-player-accent-soft);
+  color: var(--nv-player-accent);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.group\/player .player-overlay-input-action:hover:not(:disabled) {
+  border-color: var(--nv-player-border-hover);
+  background: var(--nv-player-accent-soft-hover);
+}
+
+.group\/player .player-overlay-input-action:disabled {
+  cursor: not-allowed;
+  border-color: var(--nv-player-border-subtle);
+  background: var(--nv-player-surface-subtle);
+  color: var(--nv-player-text-faint);
+  opacity: .6;
+}
+
+.group\/player .player-overlay-helper {
+  padding: 18px 10px 2px;
+  color: var(--nv-player-text-tertiary);
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.group\/player .player-overlay-empty {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 8px 2px;
+}
+
+.group\/player .player-overlay-empty-inner {
+  display: flex;
+  max-width: 260px;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.group\/player .player-overlay-empty-icon {
+  display: flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2px;
+  border: 1px solid var(--nv-player-border-subtle);
+  border-radius: var(--nv-player-radius-panel);
+  background: var(--nv-player-surface-subtle);
+  color: var(--nv-player-text-tertiary);
+}
+
+.group\/player .player-overlay-empty-title {
+  color: var(--nv-player-text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.group\/player .player-overlay-empty-desc {
+  color: var(--nv-player-text-tertiary);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.group\/player .player-overlay-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.group\/player .player-overlay-item {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid transparent;
+  border-radius: calc(var(--nv-player-radius-control) + 2px);
+  background: transparent;
+  color: var(--nv-player-text-secondary);
+  text-align: left;
+  transition: background-color var(--nv-motion-normal) var(--nv-ease-standard), border-color var(--nv-motion-normal) var(--nv-ease-standard), color var(--nv-motion-normal) var(--nv-ease-standard);
+}
+
+.group\/player .player-overlay-item:hover {
+  background: var(--nv-player-surface-hover);
+  color: var(--nv-player-text-primary);
+}
+
+.group\/player .player-overlay-item.is-active {
+  border-color: var(--nv-player-accent-border);
+  background: var(--nv-player-accent-soft);
+  color: var(--nv-player-accent);
+}
+
+.group\/player .player-overlay-item:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.group\/player .player-overlay-item-primary {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 9px;
+}
+
+.group\/player .player-overlay-item-icon {
+  display: flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--nv-player-border-subtle);
+  border-radius: calc(var(--nv-player-radius-control) + 1px);
+  background: var(--nv-player-surface-subtle);
+  color: var(--nv-player-text-secondary);
+}
+
+.group\/player .player-overlay-item.is-active .player-overlay-item-icon {
+  border-color: var(--nv-player-accent-border);
+  background: var(--nv-player-accent-soft);
+  color: var(--nv-player-accent);
+}
+
+.group\/player .player-overlay-item-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.group\/player .player-overlay-item-title {
+  overflow: hidden;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 540;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group\/player .player-overlay-item-desc,
+.group\/player .player-overlay-item-meta {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--nv-player-text-faint);
+  font-size: 10px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group\/player .player-overlay-item-meta {
+  margin-top: 0;
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.group\/player .player-overlay-divider {
+  height: 1px;
+  margin: 10px 0;
+  background: var(--nv-player-border-subtle);
+}
+
+.group\/player .player-overlay-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--nv-player-text-tertiary);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.group\/player .player-overlay-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--nv-radius-pill);
+  background: var(--nv-player-success);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--nv-player-success) 38%, transparent);
+}
+
+.group\/player .player-overlay-alert {
+  margin-top: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--nv-player-danger-border);
+  border-radius: calc(var(--nv-player-radius-control) + 1px);
+  background: var(--nv-player-danger-soft);
+  color: color-mix(in srgb, var(--nv-player-danger) 55%, var(--nv-player-text-primary));
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.group\/player .player-overlay-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--nv-player-accent) 20%, transparent) transparent;
+}
+
+.group\/player .player-overlay-scroll::-webkit-scrollbar { width: 6px; }
+.group\/player .player-overlay-scroll::-webkit-scrollbar-track { background: transparent; }
+.group\/player .player-overlay-scroll::-webkit-scrollbar-thumb {
+  border-radius: var(--nv-radius-pill);
+  background: color-mix(in srgb, var(--nv-player-accent) 20%, transparent);
+}
+
+@media (max-width: 768px) {
+  .group\/player .player-overlay-panel-header {
+    min-height: 52px;
+    padding: 12px 14px;
+  }
+
+  .group\/player .player-overlay-body { padding: 12px 14px 14px; }
+  .group\/player .player-overlay-chip { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group\/player .player-overlay-panel * {
+    transition-duration: .01ms !important;
+  }
+}
+
+
+/* ---- 来源: player-design-system.css ---- */
+.group\/player {
+  --nv-player-canvas: #030711;
+  --nv-player-surface: rgba(12, 18, 38, .84);
+  --nv-player-surface-soft: rgba(8, 13, 29, .74);
+  --nv-player-surface-subtle: rgba(119, 101, 255, .07);
+  --nv-player-surface-hover: rgba(126, 104, 255, .13);
+  --nv-player-text-primary: #f7f8ff;
+  --nv-player-text-secondary: rgba(234, 237, 255, .76);
+  --nv-player-text-tertiary: rgba(218, 224, 248, .52);
+  --nv-player-text-faint: rgba(218, 224, 248, .34);
+  --nv-player-text-on-accent: #ffffff;
+  --nv-player-border-subtle: rgba(121, 103, 255, .11);
+  --nv-player-border: rgba(126, 107, 255, .20);
+  --nv-player-border-strong: rgba(145, 118, 255, .48);
+  --nv-player-border-hover: rgba(145, 118, 255, .38);
+  --nv-player-accent: #7564ff;
+  --nv-player-accent-blue: #3b82f6;
+  --nv-player-accent-purple: #7c3aed;
+  --nv-player-accent-pink: #c84dff;
+  --nv-player-accent-soft: rgba(109, 93, 252, .13);
+  --nv-player-accent-soft-hover: rgba(124, 92, 255, .20);
+  --nv-player-accent-border: rgba(145, 119, 255, .36);
+  --nv-player-success: var(--nv-status-success);
+  --nv-player-warning: var(--nv-status-warning);
+  --nv-player-danger: var(--nv-status-danger);
+  --nv-player-danger-soft: color-mix(in srgb, var(--nv-player-danger) 9%, transparent);
+  --nv-player-danger-border: color-mix(in srgb, var(--nv-player-danger) 24%, transparent);
+  --nv-player-focus: rgba(137, 111, 255, .72);
+  --nv-player-shadow: 0 24px 72px rgba(0, 0, 0, .50), 0 0 0 1px rgba(112, 92, 255, .08);
+  --nv-player-radius-control: 11px;
+  --nv-player-radius-panel: 18px;
+}
+
+.group\/player :where(button, input, select, textarea, [role='button'], [role='menuitem']):focus-visible {
+  outline: 2px solid var(--nv-player-focus);
+  outline-offset: 2px;
+}
+
+/* Keep every playback engine's back affordance visually identical to the
+   media-detail back button: 40px circular glass button with the same ArrowLeft
+   glyph, hover scale and contrast. The more-specific selector also overrides
+   the cinema layout's top-toolbar button rule. */
+.group\/player button[aria-label='返回'],
+.group\/player .player-controls > .absolute.left-4.top-4 > button[aria-label='返回']:first-child {
+  width: 2.5rem !important;
+  min-width: 2.5rem !important;
+  height: 2.5rem !important;
+  min-height: 2.5rem !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, .15) !important;
+  border-radius: 9999px !important;
+  background: rgba(0, 0, 0, .45) !important;
+  color: #fff !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, .18), 0 4px 6px -4px rgba(0, 0, 0, .18) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  font-size: 0;
+  line-height: 1;
+  transition: background-color 160ms var(--nv-ease-standard), transform 160ms var(--nv-ease-standard) !important;
+}
+
+.group\/player button[aria-label='返回'] > svg,
+.group\/player .player-controls > .absolute.left-4.top-4 > button[aria-label='返回']:first-child > svg {
+  display: none !important;
+}
+
+.group\/player button[aria-label='返回']::before,
+.group\/player .player-controls > .absolute.left-4.top-4 > button[aria-label='返回']:first-child::before {
+  content: '';
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  background: center / 18px 18px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12 19-7-7 7-7'/%3E%3Cpath d='M19 12H5'/%3E%3C/svg%3E");
+}
+
+.group\/player button[aria-label='返回']:hover,
+.group\/player .player-controls > .absolute.left-4.top-4 > button[aria-label='返回']:first-child:hover {
+  background: rgba(0, 0, 0, .60) !important;
+  transform: scale(1.03) !important;
+}
+
+.group\/player button[aria-label='返回']:active,
+.group\/player .player-controls > .absolute.left-4.top-4 > button[aria-label='返回']:first-child:active {
+  transform: scale(.98) !important;
+}
+
+.group\/player [role='menu'],
+.group\/player [role='dialog'] {
+  font-family: var(--nv-font-sans);
+}
+
+.group\/player .nv-player-timeline {
+  position: relative;
+  height: 4px;
+  cursor: pointer;
+  border-radius: var(--nv-radius-pill);
+  background: rgba(235, 238, 255, .16);
+}
+
+.group\/player .nv-player-timeline-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--nv-player-accent-blue), var(--nv-player-accent) 56%, var(--nv-player-accent-pink));
+  box-shadow: 0 0 12px rgba(109, 93, 252, .32);
+}
+
+.group\/player .nv-player-timeline-thumb {
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  border-radius: var(--nv-radius-pill);
+  background: var(--nv-player-text-primary);
+  box-shadow: 0 0 0 3px rgba(117, 100, 255, .18), 0 0 14px rgba(117, 100, 255, .54);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity var(--nv-motion-fast) var(--nv-ease-standard);
+}
+
+.group\/player .nv-player-timeline:hover .nv-player-timeline-thumb,
+.group\/player .nv-player-timeline:focus-within .nv-player-timeline-thumb {
+  opacity: 1;
+}
+
+.group\/player :where(.player-volume-slider, .player-cast-volume-slider) {
+  height: 3px;
+  border-radius: var(--nv-radius-pill);
+  outline: none;
+  accent-color: var(--nv-player-accent);
+}
+
+.group\/player :where(.player-volume-slider, .player-cast-volume-slider)::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  appearance: none;
+  border: 2px solid var(--nv-player-text-primary);
+  border-radius: var(--nv-radius-pill);
+  background: var(--nv-player-accent);
+  box-shadow: 0 0 12px rgba(117, 100, 255, .42);
+}
+
+.group\/player :where(.player-volume-slider, .player-cast-volume-slider)::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--nv-player-text-primary);
+  border-radius: var(--nv-radius-pill);
+  background: var(--nv-player-accent);
+  box-shadow: 0 0 12px rgba(117, 100, 255, .42);
+}
+
+.group\/player :where(.nv-player-chrome, [role='menu'], [role='dialog']) {
+  --nv-motion-fast: 120ms;
+  --nv-motion-normal: 180ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group\/player *,
+  .group\/player *::before,
+  .group\/player *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+
+/* ---- 来源: player-subtitles.css ---- */
+/* ============================================================
+   PLAYER SUBTITLE PRESENTATION
+   ------------------------------------------------------------
+   Native WebVTT cues should read like cinema subtitles, not UI cards:
+   - no opaque/boxed background
+   - white text with a restrained dark optical outline
+   - responsive size tuned for desktop, TV and mobile viewing distances
+   - high contrast without covering the picture with a black rectangle
+
+   Keep this layer visual-only. Subtitle selection/loading remains owned by
+   VideoPlayer and the browser TextTrack implementation.
+   ============================================================ */
+
+.group\/player {
+  --nv-subtitle-color: rgba(255, 255, 255, 0.98);
+  --nv-subtitle-size: clamp(24px, 3.2vh, 48px);
+  --nv-subtitle-weight: 600;
+  --nv-subtitle-line-height: 1.24;
+  --nv-subtitle-shadow:
+    0 2px 3px rgba(0, 0, 0, 0.98),
+    1px 0 1px rgba(0, 0, 0, 0.92),
+    -1px 0 1px rgba(0, 0, 0, 0.92),
+    0 1px 1px rgba(0, 0, 0, 0.96),
+    0 -1px 1px rgba(0, 0, 0, 0.88),
+    2px 2px 5px rgba(0, 0, 0, 0.72);
+}
+
+/*
+ * Chromium/WebKit ship a dark cue box by default. Explicitly remove it so
+ * subtitles sit directly on the image. Readability is provided by the optical
+ * outline/shadow instead of a panel behind the whole sentence.
+ */
+.group\/player > video::cue {
+  color: var(--nv-subtitle-color);
+  background: transparent !important;
+  background-color: transparent !important;
+  font-family:
+    "Noto Sans CJK SC",
+    "Noto Sans SC",
+    "PingFang SC",
+    "Microsoft YaHei",
+    "Hiragino Sans GB",
+    "Noto Sans",
+    system-ui,
+    sans-serif;
+  font-size: var(--nv-subtitle-size);
+  font-weight: var(--nv-subtitle-weight);
+  line-height: var(--nv-subtitle-line-height);
+  text-shadow: var(--nv-subtitle-shadow);
+}
+
+/* Compact windows and phones need a slightly denser subtitle scale. */
+@media (max-width: 900px), (max-height: 620px) {
+  .group\/player {
+    --nv-subtitle-size: clamp(18px, 3.6vh, 32px);
+    --nv-subtitle-weight: 600;
+    --nv-subtitle-line-height: 1.22;
+  }
+}
+
+/* On large living-room / fullscreen surfaces keep text readable without
+   letting it grow into oversized title-card typography. */
+@media (min-width: 1800px) and (min-height: 900px) {
+  .group\/player {
+    --nv-subtitle-size: clamp(34px, 3.4vh, 52px);
+  }
+}
+
+
+/* ---- 来源: player-navi.css ---- */
+/* Final player visual contract. Loaded after historical player layout CSS. */
+.group\/player .player-controls [class*='bottom-full'],
+.group\/player .player-overlay-panel {
+  border-color: var(--nv-player-border) !important;
+  background: var(--nv-player-surface) !important;
+  box-shadow: var(--nv-player-shadow) !important;
+  backdrop-filter: blur(20px) saturate(120%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(120%) !important;
+}
+
+.group\/player .player-controls > .absolute.left-4.top-4 > button:first-child {
+  border: 1px solid var(--nv-player-border) !important;
+  border-radius: var(--nv-player-radius-control) !important;
+  background: var(--nv-player-surface-soft) !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.04), 0 8px 24px rgba(0,0,0,.20) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  transform: none !important;
+}
+
+.group\/player .player-controls > .progress-bar {
+  height: 4px !important;
+  background: rgba(235,238,255,.16) !important;
+}
+.group\/player .player-controls > .progress-bar:hover { height: 5px !important; }
+.group\/player .progress-bar-fill {
+  background: linear-gradient(90deg, var(--nv-player-accent-blue), var(--nv-player-accent) 56%, var(--nv-player-accent-pink)) !important;
+  box-shadow: 0 0 12px rgba(109,93,252,.36) !important;
+}
+.group\/player .progress-bar-thumb {
+  width: 11px !important;
+  height: 11px !important;
+  background: var(--nv-player-text-primary) !important;
+  box-shadow: 0 0 0 3px rgba(117,100,255,.16), 0 0 14px rgba(117,100,255,.56) !important;
+}
+
+.group\/player .player-overlay-panel-title > svg,
+.group\/player .player-overlay-chip kbd,
+.group\/player .player-overlay-input-action,
+.group\/player .player-overlay-item.is-active,
+.group\/player .player-overlay-item.is-active .player-overlay-item-icon {
+  color: #c8c2ff !important;
+}
+
+.group\/player .player-overlay-input-action,
+.group\/player .player-overlay-item.is-active,
+.group\/player .player-overlay-item.is-active .player-overlay-item-icon {
+  border-color: var(--nv-player-accent-border) !important;
+  background: var(--nv-player-accent-soft) !important;
+}
+
+.group\/player .player-overlay-item:hover,
+.group\/player .player-overlay-input-action:hover {
+  border-color: var(--nv-player-border-hover) !important;
+  background: var(--nv-player-accent-soft-hover) !important;
+}
+
+.group\/player .player-overlay-status-dot {
+  box-shadow: 0 0 10px color-mix(in srgb, currentColor 44%, transparent) !important;
+}
+.group\/player .player-overlay-scroll {
+  scrollbar-color: rgba(128,108,255,.24) transparent !important;
+}
+
+.group\/player :where(button, [role='button']) {
+  transition:
+    background-color var(--nv-motion-fast) var(--nv-ease-standard),
+    color var(--nv-motion-fast) var(--nv-ease-standard),
+    border-color var(--nv-motion-fast) var(--nv-ease-standard),
+    box-shadow var(--nv-motion-fast) var(--nv-ease-standard),
+    transform var(--nv-motion-fast) var(--nv-ease-standard),
+    opacity var(--nv-motion-fast) var(--nv-ease-standard) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group\/player *, .group\/player *::before, .group\/player *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+
+/* ---- 来源: player.css ---- */
 /* Nowen Video · Player style entrypoint
  * Keep player-specific geometry and overlays isolated from the application UI.
  * The player can migrate independently without leaking rules into page chrome.
  */
 
-@import './player-cinema.css';
-@import './player-overlay-panels.css';
-@import './player-design-system.css';
-@import './player-subtitles.css';
-@import './player-navi.css';
+

@@ -154,13 +154,13 @@ export default function LibraryPage() {
         const probe = await mediaApi.listMixed({ page: 1, size: 1, library_id: id })
         const totalCount = probe.data.total || 0
         const shouldPaginateOnServer = totalCount > MAX_CLIENT_ITEMS
-        const [mixedRes, seriesRes] = await Promise.all([
+        const [mixedRes, seriesList] = await Promise.all([
           mediaApi.listMixed({ page: shouldPaginateOnServer ? page : 1, size: shouldPaginateOnServer ? size : Math.max(totalCount, 1), library_id: id }),
-          seriesApi.list({ library_id: id }),
+          seriesApi.listAll({ library_id: id }),
         ])
         if (cancelled) return
         setMixedItems(mixedRes.data.data || [])
-        setSeriesList(seriesRes.data.data || [])
+        setSeriesList(seriesList)
         setTotal(totalCount)
         setServerPaginated(shouldPaginateOnServer)
       } catch {
@@ -405,8 +405,9 @@ function LibraryListItem({ item, series: seriesProp }: { item?: MixedItem; serie
   const genreList = genres ? genres.split(',').map((genre) => genre.trim()).filter(Boolean) : []
   const visibleTags = tagsExpanded ? genreList : genreList.slice(0, 3)
   const linkTo = series ? `/series/${series.id}` : media?.series_id ? `/series/${media.series_id}` : `/media/${media?.id}`
-  const posterUrl = series ? streamApi.getSeriesPosterUrl(series.id) : media?.series_id ? streamApi.getSeriesPosterUrl(media.series_id) : streamApi.getPosterUrl(media?.id || '')
-  const hasPoster = series ? !!series.poster_path : media?.series_id ? !!media.series?.poster_path || !!media.poster_path : !!media?.poster_path
+  // 分集与电影一律请求自身海报端点（同名图 > 子目录同名图 > 首帧），不共享剧集海报
+  const posterUrl = series ? streamApi.getSeriesPosterUrl(series.id) : streamApi.getPosterUrl(media?.id || '')
+  const hasPoster = series ? !!series.poster_path : !!media?.poster_path || !!media?.series_id
 
   return (
     <Link to={linkTo} className="group flex items-center gap-3 px-1 py-2.5 transition-colors hover:bg-[var(--nv-fill-hover)]">
@@ -435,8 +436,8 @@ function LibraryPosterItem({ item, series: seriesProp }: { item?: MixedItem; ser
   const title = series?.title || media?.title || ''
   const rating = series?.rating || media?.rating || 0
   const linkTo = series ? `/series/${series.id}` : media?.series_id ? `/series/${media.series_id}` : `/media/${media?.id}`
-  const posterUrl = series ? streamApi.getSeriesPosterUrl(series.id) : media?.series_id ? streamApi.getSeriesPosterUrl(media.series_id) : streamApi.getPosterUrl(media?.id || '')
-  const hasPoster = series ? !!series.poster_path : media?.series_id ? !!media.series?.poster_path || !!media.poster_path : !!media?.poster_path
+  const posterUrl = series ? streamApi.getSeriesPosterUrl(series.id) : streamApi.getPosterUrl(media?.id || '')
+  const hasPoster = series ? !!series.poster_path : !!media?.poster_path || !!media?.series_id
 
   return (
     <Link to={linkTo} className="group block min-w-0" aria-label={title}>

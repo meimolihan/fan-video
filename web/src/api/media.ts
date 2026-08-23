@@ -48,6 +48,7 @@ export const mediaApi = {
     year_to?: number
     sort?: 'added' | 'title' | 'year' | 'rating'
     order?: 'asc' | 'desc'
+    include_episodes?: boolean
   }) =>
     api.get<PaginatedResponse<MixedItem> & { movie_count: number; series_count: number }>('/media/mixed', { params }),
 

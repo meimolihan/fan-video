@@ -460,7 +460,7 @@ export interface AggregatedRecentResponse {
 
 // ==================== 混合列表（Emby风格） ====================
 export interface MixedItem {
-  type: 'movie' | 'series'
+  type: 'movie' | 'series' | 'episode'
   media?: Media
   series?: Series
 }

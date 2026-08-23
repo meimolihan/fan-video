@@ -78,10 +78,11 @@ interface BrowseData {
 const getItemTitle = (item: MixedItem) => item.type === 'series' ? (item.series?.title || '') : (item.media?.title || '')
 const getItemOrigTitle = (item: MixedItem) => item.type === 'series' ? (item.series?.orig_title || '') : (item.media?.orig_title || '')
 const getItemOverview = (item: MixedItem) => item.type === 'series' ? (item.series?.overview || '') : (item.media?.overview || '')
-const getItemGenres = (item: MixedItem) => item.type === 'series' ? (item.series?.genres || '') : (item.media?.genres || '')
-const getItemCountry = (item: MixedItem) => item.type === 'series' ? (item.series?.country || '') : (item.media?.country || '')
-const getItemYear = (item: MixedItem) => item.type === 'series' ? (item.series?.year || 0) : (item.media?.year || 0)
-const getItemRating = (item: MixedItem) => item.type === 'series' ? (item.series?.rating || 0) : (item.media?.rating || 0)
+// 分集自身缺元数据时回退到所属剧集（后端 Preload 提供）
+const getItemGenres = (item: MixedItem) => item.type === 'series' ? (item.series?.genres || '') : (item.media?.genres || item.media?.series?.genres || '')
+const getItemCountry = (item: MixedItem) => item.type === 'series' ? (item.series?.country || '') : (item.media?.country || item.media?.series?.country || '')
+const getItemYear = (item: MixedItem) => item.type === 'series' ? (item.series?.year || 0) : (item.media?.year || item.media?.series?.year || 0)
+const getItemRating = (item: MixedItem) => item.type === 'series' ? (item.series?.rating || 0) : (item.media?.rating || item.media?.series?.rating || 0)
 const getItemTime = (item: MixedItem) => item.type === 'series' ? (item.series?.created_at || '') : (item.media?.created_at || '')
 
 function parseServerSort(value: string): { sort: MixedSort; order: SortOrder } {
@@ -94,13 +95,14 @@ function hasItemPoster(item: MixedItem): boolean {
   if (item.type === 'series') return !!item.series?.poster_path
   const media = item.media
   if (!media) return false
-  if (media.series_id) return !!media.series?.poster_path || !!media.poster_path
+  // 分集乐观视为有海报：后端海报端点自带同名图/首帧兜底，保证每个视频独立封面
+  if (media.series_id) return true
   return !!media.poster_path
 }
 
 function getItemPosterUrl(item: MixedItem, version: number): string {
   if (item.type === 'series' && item.series) return streamApi.getSeriesPosterUrl(item.series.id, version)
-  if (item.media?.series_id) return streamApi.getSeriesPosterUrl(item.media.series_id, version)
+  // 分集与电影一律用各自的海报端点，禁止回退到剧集共享海报
   return streamApi.getPosterUrl(item.media?.id || '', version)
 }
 
@@ -200,7 +202,7 @@ export default function BrowsePage() {
   const { data: probeData, loading: probeLoading, refetch: refetchProbe } = usePageCache<BrowseProbe>(
     `browse:probe:lib=${libraryKey}`,
     async () => {
-      const probe = await mediaApi.listMixed({ page: 1, size: 1, library_id: selectedLibrary || undefined })
+      const probe = await mediaApi.listMixed({ page: 1, size: 1, library_id: selectedLibrary || undefined, include_episodes: true })
       return {
         libraryKey,
         total: probe.data.total || 0,
@@ -239,14 +241,14 @@ export default function BrowsePage() {
       const libraryId = selectedLibrary || undefined
 
       if (!serverPaginated) {
-        const [mixedRes, seriesRes] = await Promise.all([
-          mediaApi.listMixed({ page: 1, size: MAX_CLIENT_ITEMS, library_id: libraryId }),
-          seriesApi.list({ library_id: libraryId }),
+        const [mixedRes, seriesList] = await Promise.all([
+          mediaApi.listMixed({ page: 1, size: MAX_CLIENT_ITEMS, library_id: libraryId, include_episodes: true }),
+          seriesApi.listAll({ library_id: libraryId }),
         ])
         return {
           scopeKey: browseKey,
           mixedItems: mixedRes.data.data || [],
-          seriesList: seriesRes.data.data || [],
+          seriesList,
           totalCount: mixedRes.data.total || probeData.total,
           serverPaginated: false,
         }
@@ -263,6 +265,7 @@ export default function BrowsePage() {
         year_to: yearRange.max || undefined,
         sort: serverSort.sort,
         order: serverSort.order,
+        include_episodes: !mediaType,
       })
       return {
         scopeKey: browseKey,
@@ -346,7 +349,11 @@ export default function BrowsePage() {
     if (serverPaginated) return mixedItems
     let items = [...mixedItems]
     if (mediaType === 'movie') items = items.filter((item) => item.type === 'movie')
-    else if (mediaType === 'series') items = items.filter((item) => item.type === 'series')
+    else if (mediaType === 'series') {
+      // 客户端模式的混合列表按「全部」展平（电影+分集，无剧集卡），
+      // 剧集标签改用独立剧集列表重建卡片。
+      items = seriesList.map((series) => ({ type: 'series' as const, series }))
+    }
 
     if (searchQuery.trim()) {
       const query = searchQuery.trim().toLowerCase()
@@ -379,7 +386,7 @@ export default function BrowsePage() {
       return direction === 'desc' ? -comparison : comparison
     })
     return items
-  }, [serverPaginated, mixedItems, mediaType, searchQuery, selectedGenres, selectedCountry, yearRange, minRating, sortValue])
+  }, [serverPaginated, mixedItems, seriesList, mediaType, searchQuery, selectedGenres, selectedCountry, yearRange, minRating, sortValue])
 
   const totalPages = serverPaginated ? Math.ceil(totalCount / size) : Math.ceil(filteredItems.length / size)
   const pagedItems = useMemo(() => {
@@ -412,10 +419,9 @@ export default function BrowsePage() {
       return { movieCount: probeData.movieCount, seriesCount: probeData.seriesCount, total: probeData.total }
     }
     let movieCount = 0
-    let seriesCount = 0
-    mixedItems.forEach((item) => { if (item.type === 'movie') movieCount++; else if (item.type === 'series') seriesCount++ })
-    return { movieCount, seriesCount, total: mixedItems.length }
-  }, [mixedItems, serverPaginated, probeData])
+    mixedItems.forEach((item) => { if (item.type === 'movie') movieCount++ })
+    return { movieCount, seriesCount: seriesList.length, total: mixedItems.length }
+  }, [mixedItems, seriesList, serverPaginated, probeData])
 
   const hasSearchOrFilters = mediaType !== '' || !!searchQuery || activeFilterCount > 0
 
@@ -563,7 +569,13 @@ export default function BrowsePage() {
         <MediaGrid>
           {pagedItems.map((item) => item.type === 'series' && item.series
             ? <MediaCard key={`s-${item.series.id}`} series={item.series} />
-            : item.media ? <MediaCard key={`m-${item.media.id}`} media={item.media} /> : null)}
+            : item.media ? (
+              <MediaCard
+                key={`${item.type}-${item.media.id}`}
+                media={item.media}
+                eyebrow={item.type === 'episode' ? item.media.series?.title : undefined}
+              />
+            ) : null)}
         </MediaGrid>
       ) : viewMode === 'list' ? (
         <div className="nv-browse-list divide-y divide-[var(--nv-border-subtle)] border-y border-[var(--nv-border-subtle)]">
@@ -634,7 +646,7 @@ function BrowseListItem({ item }: { item: MixedItem }) {
         fallback={isSeries ? <Tv size={15} aria-hidden="true" /> : <Film size={15} aria-hidden="true" />}
       />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2"><h3 className="truncate text-xs font-medium text-[var(--nv-text-primary)]">{title}</h3>{isSeries && <SemanticTag>剧集</SemanticTag>}</div>
+        <div className="flex items-center gap-2"><h3 className="truncate text-xs font-medium text-[var(--nv-text-primary)]">{title}</h3>{isSeries && <SemanticTag>剧集</SemanticTag>}{!isSeries && item.type === 'episode' && media?.series?.title && <SemanticTag tone="quality" className="shrink-0">{media.series.title}</SemanticTag>}</div>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] text-[var(--nv-text-tertiary)]">
           {year > 0 && <span>{year}</span>}{country && <span>{country}</span>}{durationLabel && <span>{durationLabel}</span>}{isSeries && series && <span>{series.season_count} 季 · {series.episode_count} 集</span>}
         </div>

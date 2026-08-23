@@ -306,6 +306,17 @@ func (r *MediaRepo) RecentNonEpisodeAll(libraryID string) ([]model.Media, error)
 	return media, err
 }
 
+// RecentEpisodesAll 返回库内全部分集（含预加载的所属剧集，供海报/元数据回退）。
+func (r *MediaRepo) RecentEpisodesAll(libraryID string) ([]model.Media, error) {
+	var media []model.Media
+	query := r.db.Preload("Series").Where("media_type = 'episode' AND library_id != ''")
+	if libraryID != "" {
+		query = query.Where("library_id = ?", libraryID)
+	}
+	err := query.Order("created_at DESC").Find(&media).Error
+	return media, err
+}
+
 func (r *MediaRepo) ListNonEpisode(page, size int, libraryID string) ([]model.Media, int64, error) {
 	var media []model.Media
 	var total int64

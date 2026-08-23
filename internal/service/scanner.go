@@ -1022,10 +1022,12 @@ func (s *ScannerService) scanMovieLibrary(library *model.Library) (int, error) {
 			s.scanExternalSubtitles(pm.media)
 
 			// 回填缺失的海报/背景图：老库或此前匹配失败的记录，
-			// 在重新扫描时补跑本地图片匹配（含视频首帧兜底）
-			if pm.media.PosterPath == "" || pm.media.BackdropPath == "" {
+			// 在重新扫描时补跑本地图片匹配（含视频首帧兜底）。
+			// 旧版共享的通用命名封面也一并重算，保证每个视频独立海报。
+			if pm.media.PosterPath == "" || s.nfoService.IsLegacySharedCover(pm.media.PosterPath) || pm.media.BackdropPath == "" {
+				healPoster := pm.media.PosterPath != "" && s.nfoService.IsLegacySharedCover(pm.media.PosterPath)
 				if poster, backdrop := s.nfoService.FindLocalImagesForMedia(pm.path); poster != "" || backdrop != "" {
-					if poster != "" && pm.media.PosterPath == "" {
+					if poster != "" && (pm.media.PosterPath == "" || healPoster) {
 						pm.media.PosterPath = poster
 						s.logger.Debugf("回填本地海报: %s -> %s", pm.path, poster)
 					}
@@ -1367,7 +1369,7 @@ func (s *ScannerService) scanMixedLibrary(library *model.Library) (int, error) {
 		}
 
 		sameDirGrouped := mr.Depth > 0 && !rootIsSeriesFolder && !rootHasSeriesEvidence &&
-			!hasDominantContentSubdir && (s.isSameDirVideoGroup(root) || s.hasDatedVideo(root))
+			!hasDominantContentSubdir && s.isSameDirOrDatedGroup(root)
 
 		if rootIsSeriesFolder || rootHasSeriesEvidence || sameDirGrouped {
 			rootBase := filepath.Base(root)
@@ -1415,7 +1417,8 @@ func (s *ScannerService) scanMixedLibrary(library *model.Library) (int, error) {
 			// 归类优先级：明确剧集证据（季号/Season子目录/剧集命名）> 同目录多视频归组 > 日期命名（个人视频）> 电影。
 			// 同一目录下的多个视频视为一部剧集的分集，即使文件名没有剧集命名特征；
 			// 人名目录下仅有一个日期命名的视频也应归组为合集（个人视频场景）。
-			if s.isTVShowFolder(folderPath) || s.isSameDirVideoGroup(folderPath) || s.hasDatedVideo(folderPath) {
+			// 多视频组包装层（多个子目录各自含多视频）不整体归组，放行下钻逐个归类。
+			if s.isTVShowFolder(folderPath) || s.isSameDirOrDatedGroup(folderPath) {
 				normalizedName := s.normalizeSeriesName(dirName)
 				if normalizedName == "" {
 					// 防御：纯季号目录名（如 "Season 01"）出现在分类目录下属于异常结构，
@@ -1667,6 +1670,52 @@ func (s *ScannerService) isTVShowFolder(folderPath string) bool {
 func (s *ScannerService) isSameDirVideoGroup(folderPath string) bool {
 	videoFiles, _ := s.collectSeriesEvidence(folderPath)
 	return len(videoFiles) >= 2
+}
+
+// hasMultiVideoBearingSubdirs 判断目录是否为「多视频组的包装层」：
+// 存在 ≥2 个含视频的内容子目录，且其中至少一个含 ≥2 个视频。
+// 这种结构（如 演员/作品A/a1.mp4+a2.mp4 与 演员/作品B/b1.mp4 并列）
+// 说明当前目录只是分类/包装层——若整体归组会把多个独立作品折叠成
+// 一个以包装层命名的错误大剧集。应返回 false 放行下钻，
+// 让各子目录按各自身份独立归组。
+//
+// 对比：单包装链（人名/合集/多个视频）与嵌套单视频集合
+// （Nina/Nina-01/x.mp4 + Nina-02/y.mp4，各子目录恰好 1 个视频）
+// 不命中本判定，维持原有「收编为一部剧集」的行为。
+func (s *ScannerService) hasMultiVideoBearingSubdirs(folderPath string) bool {
+	entries, err := s.readDirLibraryPath(folderPath)
+	if err != nil {
+		return false
+	}
+	bearingSubdirs := 0
+	hasMulti := false
+	for _, e := range entries {
+		if !e.IsDir() || isXiaoyaSkipDir(e.Name()) || extrasExcludeDirs[strings.ToLower(e.Name())] {
+			continue
+		}
+		subVideos, _ := s.collectSeriesEvidence(vfsJoin(folderPath, e.Name()))
+		switch {
+		case len(subVideos) >= 2:
+			bearingSubdirs++
+			hasMulti = true
+		case len(subVideos) == 1:
+			bearingSubdirs++
+		}
+		if bearingSubdirs >= 2 && hasMulti {
+			return true
+		}
+	}
+	return false
+}
+
+// isSameDirOrDatedGroup 同目录归组的统一入口：多个无命名视频、或日期命名的
+// 个人视频，在【非】多视频组包装层的前提下归组为一部剧集。
+// 根级归组与逐目录归类共用本判定，保证两层行为一致。
+func (s *ScannerService) isSameDirOrDatedGroup(folderPath string) bool {
+	if s.hasMultiVideoBearingSubdirs(folderPath) {
+		return false
+	}
+	return s.isSameDirVideoGroup(folderPath) || s.hasDatedVideo(folderPath)
 }
 
 // isNestedSingleVideoCollection 判断目录的各内容子目录是否各自只含一个视频。
@@ -2528,10 +2577,12 @@ func (s *ScannerService) scanMultiSeasonSeries(library *model.Library, seriesTit
 					existing.EpisodeNum = ep.EpisodeNum
 					needUpdate = true
 				}
-				// [海报回填] 同 scanSeriesFolder：旧数据缺本地封面时重扫补齐。
-				if existing.PosterPath == "" || existing.BackdropPath == "" {
+				// [海报回填] 同 scanSeriesFolder：旧数据缺本地封面时重扫补齐；
+				// 旧版共享的通用命名封面也一并重算，保证每个视频独立海报。
+				healPoster := existing.PosterPath != "" && s.nfoService.IsLegacySharedCover(existing.PosterPath)
+				if existing.PosterPath == "" || healPoster || existing.BackdropPath == "" {
 					poster, backdrop := s.nfoService.FindLocalImagesForMedia(ep.FilePath)
-					if poster != "" && existing.PosterPath == "" {
+					if poster != "" && (existing.PosterPath == "" || healPoster) {
 						existing.PosterPath = poster
 						needUpdate = true
 					}
@@ -2718,9 +2769,11 @@ func (s *ScannerService) scanSeriesFolder(library *model.Library, folderPath, se
 			}
 			// [海报回填] 旧数据可能没有挂本地封面图，重扫时补齐，
 			// 避免用户必须清库重扫才能看到海报。
-			if existing.PosterPath == "" || existing.BackdropPath == "" {
+			// 旧版共享的通用命名封面也一并重算，保证每个视频独立海报。
+			healPoster := existing.PosterPath != "" && s.nfoService.IsLegacySharedCover(existing.PosterPath)
+			if existing.PosterPath == "" || healPoster || existing.BackdropPath == "" {
 				poster, backdrop := s.nfoService.FindLocalImagesForMedia(ep.FilePath)
-				if poster != "" && existing.PosterPath == "" {
+				if poster != "" && (existing.PosterPath == "" || healPoster) {
 					existing.PosterPath = poster
 					needUpdate = true
 				}

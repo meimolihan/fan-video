@@ -45,26 +45,22 @@ export default function MediaCard({
   const title = series ? series.title : media!.title
   const year = series ? series.year : media!.year
   const rating = series ? series.rating : media!.rating
+  // 海报独立性：只有「剧集卡」才用剧集海报接口；
+  // 分集/电影等具体视频一律请求自身海报端点（后端按
+  // 同名图 > 子目录同名图 > 首帧兜底返回，每个视频独立）。
+  // 分集乐观视为有海报：后端无本地图时会懒生成首帧。
   const posterUrl = series
     ? streamApi.getSeriesPosterUrl(series.id, posterVersion)
-    : media!.series_id
-      ? streamApi.getSeriesPosterUrl(media!.series_id, posterVersion)
-      : streamApi.getPosterUrl(media!.id, posterVersion)
+    : streamApi.getPosterUrl(media!.id, posterVersion)
   const hasPoster = series
     ? !!series.poster_path
-    : media!.series_id
-      ? !!media!.series?.poster_path || !!media!.poster_path
-      : !!media!.poster_path
+    : !!media!.poster_path || !!media!.series_id
   const backdropUrl = series
     ? streamApi.getSeriesBackdropUrl(series.id)
-    : media!.series_id
-      ? streamApi.getSeriesBackdropUrl(media!.series_id)
-      : streamApi.getBackdropUrl(media!.id)
+    : streamApi.getBackdropUrl(media!.id)
   const hasBackdrop = series
     ? !!series.backdrop_path
-    : media!.series_id
-      ? !!media!.series?.backdrop_path || !!media!.backdrop_path
-      : !!media!.backdrop_path
+    : !!media!.backdrop_path
   const artworkUrl = isLandscape && hasBackdrop ? backdropUrl : posterUrl
   const hasArtwork = isLandscape && hasBackdrop ? true : hasPoster
 

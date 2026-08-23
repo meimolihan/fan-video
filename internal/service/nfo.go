@@ -656,6 +656,25 @@ func (s *NFOService) IsFirstFrameCachePath(path string) bool {
 	return strings.HasPrefix(abs, cacheRoot+string(filepath.Separator))
 }
 
+// legacyGenericCoverBases 通用命名封面的文件名主干（去扩展名后小写比对）。
+// 这类命名指向「目录级」封面，在多视频目录中被旧版逻辑共享错配。
+var legacyGenericCoverBases = map[string]bool{
+	"poster": true, "cover": true, "folder": true, "thumb": true,
+	"movie": true, "show": true, "fanart": true, "banner": true,
+}
+
+// IsLegacySharedCover 判断已入库的海报路径是否为通用命名封面。
+// 多视频目录中，这类封面通常是旧版匹配逻辑共享给同目录所有视频的，
+// 重扫时应重算（同名图片 > 子目录同名图 > 首帧），保证每个视频独立海报。
+// 单视频目录不受影响：通用封面在该场景下唯一对应唯一视频，无需重算。
+func (s *NFOService) IsLegacySharedCover(posterPath string) bool {
+	if posterPath == "" || s.IsFirstFrameCachePath(posterPath) {
+		return false
+	}
+	base := strings.ToLower(strings.TrimSuffix(filepath.Base(posterPath), filepath.Ext(posterPath)))
+	return legacyGenericCoverBases[base]
+}
+
 // firstFrameCacheKey 生成防碰撞、随文件内容变化自动失效的缓存键
 func firstFrameCacheKey(videoPath string, info os.FileInfo) string {
 	absPath := videoPath
