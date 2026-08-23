@@ -108,6 +108,12 @@ func registerCoreAPI(
 	api.DELETE("/media/:id/highlights", guardByMediaID, middleware.AdminOnly(), mediaAnalysis.DeleteHighlights)
 	api.POST("/media/:id/ai/highlights", guardByMediaID, middleware.AdminOnly(), mediaAnalysis.AnalyzeHighlightsDistributed)
 
+	// 精彩片段导出：导出与删除仅管理员；列表与下载沿用媒体访问权限（可分享）。
+	api.GET("/media/:id/highlights/exports", guardByMediaID, mediaAnalysis.ListHighlightExports)
+	api.GET("/media/:id/highlights/:highlightId/export", guardByMediaID, mediaAnalysis.DownloadHighlightExport)
+	api.POST("/media/:id/highlights/:highlightId/export", guardByMediaID, middleware.AdminOnly(), mediaAnalysis.ExportHighlight)
+	api.DELETE("/media/:id/highlights/:highlightId/export", guardByMediaID, middleware.AdminOnly(), mediaAnalysis.DeleteHighlightExport)
+
 	// 章节继续复用 Web V3 的历史 URL，但执行链已经接管为 Media Compute Node V2 chapter_detect_v1。
 	api.GET("/media/:id/chapters", guardByMediaID, mediaAnalysis.ListChapters)
 	api.POST("/media/:id/ai/chapters", guardByMediaID, middleware.AdminOnly(), mediaAnalysis.GenerateChaptersDistributed)

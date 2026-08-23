@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, ChevronUp, Clapperboard, Clock3, Loader2, Play, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
+import { ChevronRight, ChevronUp, Clapperboard, Clock3, Download, Loader2, Play, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 import { Button, EmptyState } from '@/components/design-system'
 import { useToast } from '@/components/Toast'
 import { streamApi } from '@/api'
@@ -84,6 +84,7 @@ export default function MediaHighlightsPanel({ mediaId, isAdmin }: MediaHighligh
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [exportingIds, setExportingIds] = useState<Set<string>>(new Set())
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [collapsedCount, setCollapsedCount] = useState(4)
@@ -256,6 +257,31 @@ export default function MediaHighlightsPanel({ mediaId, isAdmin }: MediaHighligh
     }
   }
 
+  const handleExport = async (item: MediaHighlight) => {
+    if (exportingIds.has(item.id)) return
+    setExportingIds((current) => new Set(current).add(item.id))
+    try {
+      await mediaAnalysisApi.exportHighlight(mediaId, item.id)
+      // 切片完成后自动触发浏览器下载（文件同时保留在服务器 data/exports/highlights/ 下）
+      const url = assetUrl(`/api/media/${mediaId}/highlights/${item.id}/export`)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = ''
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      toast.success('片段已导出为 mp4，开始下载')
+    } catch (error) {
+      toast.error(formatErrMsg(error, '导出片段失败'))
+    } finally {
+      setExportingIds((current) => {
+        const next = new Set(current)
+        next.delete(item.id)
+        return next
+      })
+    }
+  }
+
   const progress = Math.max(0, Math.min(100, task?.progress || 0))
   const stageLabel = stageLabels[task?.stage || ''] || task?.stage || '精彩片段分析'
   const orderedHighlights = useMemo(
@@ -417,6 +443,20 @@ export default function MediaHighlightsPanel({ mediaId, isAdmin }: MediaHighligh
                 <div className="nv-highlight-card-meta mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--nv-text-tertiary)]">
                   <span className="inline-flex items-center gap-1"><Clock3 size={12} />{formatTime(item.start_time)} → {formatTime(item.end_time)}</span>
                   <span>{analysisLabel(item.analysis_method)}</span>
+                  {isAdmin && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label="导出片段为 mp4"
+                      title="导出片段为独立 mp4 文件"
+                      className="ml-auto inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--nv-border-subtle)] px-2 py-0.5 font-medium text-[var(--nv-text-secondary)] transition hover:border-[var(--nv-accent)]/50 hover:text-[var(--nv-accent)]"
+                      onClick={(event) => { event.stopPropagation(); void handleExport(item) }}
+                      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); void handleExport(item) } }}
+                    >
+                      {exportingIds.has(item.id) ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                      导出
+                    </span>
+                  )}
                 </div>
               </div>
             </button>

@@ -28,6 +28,16 @@ export interface MediaHighlightList {
   stale: boolean
 }
 
+export interface HighlightExport {
+  highlight_id: string
+  media_id: string
+  title: string
+  file_name: string
+  size_bytes: number
+  duration: number
+  exported_at: string
+}
+
 export interface MediaAnalysisTask {
   id: string
   media_id: string
@@ -195,6 +205,16 @@ export const mediaAnalysisApi = {
 
   deleteHighlights: (mediaId: string) =>
     api.delete<{ message: string }>(`/media/${mediaId}/highlights`),
+
+  // 导出精彩片段为独立 mp4（同步切片，短片段秒级完成）
+  exportHighlight: (mediaId: string, highlightId: string) =>
+    api.post<{ data: HighlightExport; message: string }>(`/media/${mediaId}/highlights/${highlightId}/export`),
+
+  listHighlightExports: (mediaId: string) =>
+    api.get<{ data: HighlightExport[] }>(`/media/${mediaId}/highlights/exports`),
+
+  deleteHighlightExport: (mediaId: string, highlightId: string) =>
+    api.delete<{ message: string }>(`/media/${mediaId}/highlights/${highlightId}/export`),
 
   getWorkerConfig: () =>
     api.get<{ data: MediaAnalysisWorkerConfig }>('/admin/media-analysis/config'),

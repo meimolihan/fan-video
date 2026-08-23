@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/fan-video/fan-video/internal/model"
@@ -148,4 +150,66 @@ func (h *MediaAnalysisHandler) Preview(c *gin.Context) {
 func (h *MediaAnalysisHandler) serveFile(c *gin.Context, path string) {
 	c.Header("Cache-Control", "private, max-age=86400")
 	c.File(path)
+}
+
+// ==================== 精彩片段导出（独立 mp4） ====================
+
+// ExportHighlight 将一个精彩片段切片导出为独立 mp4（同步执行，短片段秒级完成）。
+// POST /api/media/:id/highlights/:highlightId/export
+func (h *MediaAnalysisHandler) ExportHighlight(c *gin.Context) {
+	mediaID := c.Param("id")
+	highlightID := c.Param("highlightId")
+	export, err := h.analysis.ExportHighlightClip(mediaID, highlightID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		switch {
+		case errors.Is(err, service.ErrMediaNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, service.ErrHighlightNotFound):
+			status = http.StatusNotFound
+		case strings.Contains(err.Error(), "无效") || strings.Contains(err.Error(), "超过"):
+			status = http.StatusBadRequest
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": export, "message": "导出成功"})
+}
+
+// ListHighlightExports 列出某媒体已导出的片段文件。
+// GET /api/media/:id/highlights/exports
+func (h *MediaAnalysisHandler) ListHighlightExports(c *gin.Context) {
+	exports, err := h.analysis.ListHighlightExports(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取导出列表失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": exports})
+}
+
+// DownloadHighlightExport 以下载附件形式返回导出的 mp4。
+// GET /api/media/:id/highlights/:highlightId/export
+func (h *MediaAnalysisHandler) DownloadHighlightExport(c *gin.Context) {
+	mediaID := c.Param("id")
+	highlightID := c.Param("highlightId")
+	path, err := h.analysis.FindHighlightExportPath(mediaID, highlightID)
+	if err != nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	c.FileAttachment(path, filepath.Base(path))
+}
+
+// DeleteHighlightExport 删除导出的片段文件（不影响源视频与精彩片段记录）。
+// DELETE /api/media/:id/highlights/:highlightId/export
+func (h *MediaAnalysisHandler) DeleteHighlightExport(c *gin.Context) {
+	if err := h.analysis.DeleteHighlightExport(c.Param("id"), c.Param("highlightId")); err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, service.ErrHighlightNotFound) {
+			status = http.StatusNotFound
+		}
+		c.JSON(status, gin.H{"error": "删除导出文件失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "导出文件已删除"})
 }
