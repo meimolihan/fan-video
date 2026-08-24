@@ -3043,8 +3043,14 @@
     height: 32px;
   }
 
-  /* 小屏下顶栏动作全部隐藏（观看历史 / 我的收藏 / 主题切换），与底部导航配合 */
-  .nv-page-header-actions .nv-page-header-action:nth-child(-n+3) {
+  /* 小屏下隐藏带文字的动作（观看历史 / 我的收藏，入口在底部导航“我的”），
+     主题切换为纯图标 32px，保留在右上角 */
+  .nv-page-header-actions .nv-page-header-action:nth-child(-n+2) {
+    display: none;
+  }
+
+  /* 首页已有轮播占满视觉，小屏下隐藏右上角主题切换（其余页面保留） */
+  body:has(.nv-home-page) .nv-page-header-actions .nv-page-header-action:nth-child(3) {
     display: none;
   }
 
