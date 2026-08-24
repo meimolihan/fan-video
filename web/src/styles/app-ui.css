@@ -3043,7 +3043,8 @@
     height: 32px;
   }
 
-  .nv-page-header-actions .nv-page-header-action:nth-child(-n+2) {
+  /* 小屏下顶栏动作全部隐藏（观看历史 / 我的收藏 / 主题切换），与底部导航配合 */
+  .nv-page-header-actions .nv-page-header-action:nth-child(-n+3) {
     display: none;
   }
 
