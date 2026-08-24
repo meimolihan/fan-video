@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { mediaApi, streamApi, seriesApi } from '@/api'
+import { mediaApi, streamApi, seriesApi, userApi } from '@/api'
 import type { Media, MediaPlayInfo } from '@/types'
 import AdaptiveWebVideoPlayer, { type BrowserPlaybackMode, type PlaybackTransition } from '@/components/AdaptiveWebVideoPlayer'
 import WebCodecsPlayerShell from '@/components/WebCodecsPlayerShell'
@@ -81,11 +81,22 @@ export default function PlayerPage() {
     setWebcodecsFailed(false)
     setRuntimeMode(null)
     clipEndedRef.current = false
-    Promise.all([mediaApi.detail(id), streamApi.getPlayInfo(id)])
-      .then(([mediaRes, playInfoRes]) => {
+    // 进度拉取失败不应阻断进入播放页：降级为从头播放
+    const progressTask = userApi.getProgress(id).catch(() => ({ data: { data: null } }))
+    Promise.all([mediaApi.detail(id), streamApi.getPlayInfo(id), progressTask])
+      .then(([mediaRes, playInfoRes, progressRes]) => {
         const mediaData = mediaRes.data.data
         setMedia(mediaData)
         setPlayInfo(playInfoRes.data.data)
+        // 续播：恢复已保存的观看进度（看完/精彩片段模式除外）
+        if (!highlightMode) {
+          const history = progressRes.data?.data
+          if (history && !history.completed && history.position > 0) {
+            // 时长缺失时不裁剪；否则夹到片尾前 1 秒，避免从结尾黑屏恢复
+            const max = history.duration > 1 ? history.duration - 1 : history.position
+            setSwitchPosition(Math.min(history.position, max))
+          }
+        }
         if (mediaData.media_type === 'episode' && mediaData.series_id) {
           seriesApi.nextEpisode(mediaData.series_id, mediaData.season_num, mediaData.episode_num)
             .then((res) => { if (res.data.data) setNextEpisode(res.data.data) })
