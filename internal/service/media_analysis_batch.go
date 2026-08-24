@@ -351,6 +351,216 @@ func (s *MediaAnalysisService) GetHighlightStorageStats() (*HighlightStorageStat
 	return stats, nil
 }
 
+// HighlightPendingVideo 尚未拥有精彩片段的本地视频明细。
+type HighlightPendingVideo struct {
+	MediaID string `json:"media_id"`
+	Title   string `json:"title"` // 视频标题；为空时回退为文件名
+	File    string `json:"file"`  // 文件名（不含路径）
+}
+
+// GetPendingHighlightVideos 返回库内尚未生成任何精彩片段的本地视频清单，
+// 口径与 GetHighlightStorageStats 的 LocalVideos-HighlightMedia 一致：
+// 包含从未分析、分析失败/超时，以及启动时被过滤（不支持格式、文件缺失、
+// strm 远程流）的视频。数据实时取自数据库，服务重启后依然准确。
+func (s *MediaAnalysisService) GetPendingHighlightVideos() ([]HighlightPendingVideo, error) {
+	videos, err := s.mediaRepo.ListAllLocalVideos()
+	if err != nil {
+		return nil, err
+	}
+	highlighted, err := s.highlightRepo.ListAllMediaIDs()
+	if err != nil {
+		return nil, err
+	}
+	hasHighlight := make(map[string]bool, len(highlighted))
+	for _, id := range highlighted {
+		hasHighlight[id] = true
+	}
+	pending := make([]HighlightPendingVideo, 0)
+	for _, m := range videos {
+		if hasHighlight[m.ID] {
+			continue
+		}
+		file := filepath.Base(m.FilePath)
+		title := m.Title
+		if title == "" {
+			title = file
+		}
+		pending = append(pending, HighlightPendingVideo{MediaID: m.ID, Title: title, File: file})
+	}
+	return pending, nil
+}
+
+// HighlightAuditItem 完整性检查发现的单个问题媒体。
+type HighlightAuditItem struct {
+	MediaID    string `json:"media_id"`
+	Title      string `json:"title"`
+	File       string `json:"file"`       // 源视频文件名（不含路径）；媒体记录缺失时为空
+	Highlights int    `json:"highlights"` // 该媒体的片段条数
+	Detail     string `json:"detail"`     // 具体说明（缺失的文件等）
+}
+
+// HighlightAuditReport 全库片段完整性检查报告。
+type HighlightAuditReport struct {
+	TotalVideos    int                  `json:"total_videos"`    // 库内本地视频总数（含尚未生成片段的）
+	WithHighlights int                  `json:"with_highlights"` // 已生成片段、纳入本次完整性检查的媒体数
+	SourceMissing  []HighlightAuditItem `json:"source_missing"`  // 源视频已删除/媒体记录不存在
+	AssetsMissing  []HighlightAuditItem `json:"assets_missing"` // 片段缩略图/预览文件缺失
+	OrphanCaches   []HighlightAuditItem `json:"orphan_caches"`  // 磁盘缓存目录无对应片段记录（失败残留/媒体已删除）
+}
+
+// GetHighlightAudit 检查全库已生成片段的完整性：
+// 1) 源视频文件是否仍存在（strm/远程流跳过本地检查）；
+// 2) 每条片段引用的缩略图/预览产物文件是否仍在磁盘上；
+// 3) 反向扫描磁盘缓存目录，找出没有任何片段记录的孤儿目录。
+// 检查对象是"拥有片段"的媒体；尚未生成片段的视频不在范围内，
+// 通过 TotalVideos-WithHighlights 可得缺口数（与覆盖统计口径一致）。
+// 只读不改库；修复请调用 CleanBrokenHighlights。
+func (s *MediaAnalysisService) GetHighlightAudit() (*HighlightAuditReport, error) {
+	report := &HighlightAuditReport{
+		SourceMissing: make([]HighlightAuditItem, 0),
+		AssetsMissing: make([]HighlightAuditItem, 0),
+		OrphanCaches:  make([]HighlightAuditItem, 0),
+	}
+	videos, err := s.mediaRepo.ListAllLocalVideos()
+	if err != nil {
+		return nil, err
+	}
+	report.TotalVideos = len(videos)
+	mediaIDs, err := s.highlightRepo.ListAllMediaIDs()
+	if err != nil {
+		return nil, err
+	}
+	report.WithHighlights = len(mediaIDs)
+
+	for _, id := range mediaIDs {
+		media, mediaErr := s.mediaRepo.FindByID(id)
+		highlights, hlErr := s.highlightRepo.ListByMediaID(id)
+		if hlErr != nil {
+			// 读取片段列表失败：本轮跳过该媒体，避免误报
+			continue
+		}
+		count := len(highlights)
+
+		if mediaErr != nil {
+			// 片段还在但媒体行已被删除：孤儿片段，归入源缺失
+			report.SourceMissing = append(report.SourceMissing, HighlightAuditItem{
+				MediaID: id, Highlights: count,
+				Detail: "媒体记录不存在（孤儿片段）",
+			})
+			continue
+		}
+
+		file := filepath.Base(media.FilePath)
+		title := media.Title
+		if title == "" {
+			title = file
+		}
+
+		// 本地视频才检查源文件；strm/远程流没有本地路径概念
+		if media.StreamURL == "" && !strings.EqualFold(filepath.Ext(media.FilePath), ".strm") {
+			if info, statErr := os.Stat(media.FilePath); statErr != nil || info.IsDir() {
+				detail := "源视频文件不存在或不可访问"
+				if statErr != nil {
+					detail = "源视频文件不存在或不可访问: " + statErr.Error()
+				}
+				report.SourceMissing = append(report.SourceMissing, HighlightAuditItem{
+					MediaID: id, Title: title, File: file, Highlights: count, Detail: detail,
+				})
+				continue
+			}
+		}
+
+		// 产物完整性：缩略图/动态预览任一引用路径缺失即视为不完整
+		missing := make([]string, 0)
+		for _, h := range highlights {
+			for _, p := range []string{h.Thumbnail, h.PreviewPath, h.GifPath} {
+				if p == "" {
+					continue
+				}
+				if _, statErr := os.Stat(p); statErr != nil {
+					missing = append(missing, filepath.Base(p))
+				}
+			}
+		}
+		if len(missing) > 0 {
+			detail := fmt.Sprintf("缺失 %d 个产物文件: %s", len(missing), strings.Join(missing, ", "))
+			report.AssetsMissing = append(report.AssetsMissing, HighlightAuditItem{
+				MediaID: id, Title: title, File: file, Highlights: count, Detail: detail,
+			})
+		}
+	}
+
+	// 反向扫描：磁盘缓存目录里存在、但数据库没有任何片段记录的孤儿目录。
+	// 典型成因：分析失败/超时中断后的残留产物、媒体已删除但缓存未清。
+	cacheRoot := filepath.Join(s.cfg.Cache.CacheDir, "media-analysis")
+	entries, dirErr := os.ReadDir(cacheRoot)
+	if dirErr != nil {
+		if !errors.Is(dirErr, os.ErrNotExist) {
+			s.logger.Warnf("scan highlight cache dir %s: %v", cacheRoot, dirErr)
+		}
+	} else {
+		highlightSet := make(map[string]bool, len(mediaIDs))
+		for _, id := range mediaIDs {
+			highlightSet[id] = true
+		}
+		localSet := make(map[string]bool, len(videos))
+		for _, m := range videos {
+			localSet[m.ID] = true
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			id := entry.Name()
+			if highlightSet[id] {
+				continue
+			}
+			item := HighlightAuditItem{MediaID: id}
+			if localSet[id] {
+				item.Detail = "缓存目录残留：该视频在库中但没有片段记录（分析失败/中断）"
+			} else {
+				item.Detail = "缓存目录残留：对应媒体已不在库中"
+			}
+			report.OrphanCaches = append(report.OrphanCaches, item)
+		}
+	}
+	return report, nil
+}
+
+// CleanBrokenHighlights 删除完整性检查发现的问题片段记录与产物：
+// 源视频已丢失的、孤儿缓存目录的始终清理；includeAssetIssues 为 true 时
+// 同时清理产物缺失的，下次「一键生成」会对其中仍有源文件的媒体自动补齐。
+// 有正在进行的分析任务的媒体会被跳过，避免误删写到一半的产物。
+// 返回成功清理的媒体数。
+func (s *MediaAnalysisService) CleanBrokenHighlights(includeAssetIssues bool) (int, error) {
+	report, err := s.GetHighlightAudit()
+	if err != nil {
+		return 0, err
+	}
+	targets := make([]HighlightAuditItem, 0, len(report.SourceMissing)+len(report.AssetsMissing)+len(report.OrphanCaches))
+	targets = append(targets, report.SourceMissing...)
+	targets = append(targets, report.OrphanCaches...)
+	if includeAssetIssues {
+		targets = append(targets, report.AssetsMissing...)
+	}
+	cleaned := 0
+	for _, item := range targets {
+		// 安全护栏：该媒体仍有进行中的分析任务时跳过，避免删除在写一半的产物
+		if active, activeErr := s.taskRepo.FindActiveByMediaAndType(item.MediaID, mediaHighlightTaskType); activeErr == nil && active != nil {
+			s.logger.Infof("clean broken highlights: skip media=%s (analysis task active)", item.MediaID)
+			continue
+		}
+		if err := s.DeleteHighlights(item.MediaID); err != nil {
+			s.logger.Warnf("clean broken highlights media=%s: %v", item.MediaID, err)
+			continue
+		}
+		cleaned++
+	}
+	s.logger.Infof("clean broken highlights: total=%d with_highlights=%d cleaned=%d source_missing=%d orphan_caches=%d assets_missing=%d",
+		report.TotalVideos, report.WithHighlights, cleaned, len(report.SourceMissing), len(report.OrphanCaches), len(report.AssetsMissing))
+	return cleaned, nil
+}
+
 // ClearAllHighlights 清空全库所有精彩片段记录与产物文件。返回受影响的媒体数与删除的片段数。
 func (s *MediaAnalysisService) ClearAllHighlights() (mediaCount int, highlightCount int64, err error) {
 	count, err := s.highlightRepo.CountAll()

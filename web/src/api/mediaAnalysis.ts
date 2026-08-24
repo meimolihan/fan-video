@@ -219,6 +219,30 @@ export interface HighlightStorageStats {
   highlight_tasks: number
 }
 
+// 尚未生成精彩片段的本地视频（覆盖缺口明细，实时取自数据库）
+export interface HighlightPendingVideo {
+  media_id: string
+  title: string
+  file: string
+}
+
+// 完整性检查发现的问题媒体
+export interface HighlightAuditItem {
+  media_id: string
+  title?: string
+  file?: string
+  highlights: number
+  detail?: string
+}
+
+export interface HighlightAuditReport {
+  total_videos: number
+  with_highlights: number
+  source_missing: HighlightAuditItem[]
+  assets_missing: HighlightAuditItem[]
+  orphan_caches: HighlightAuditItem[]
+}
+
 export const mediaAnalysisApi = {
   getHighlights: (mediaId: string) =>
     api.get<{ data: MediaHighlightList }>(`/media/${mediaId}/highlights`),
@@ -247,6 +271,20 @@ export const mediaAnalysisApi = {
 
   getHighlightStorageStats: () =>
     api.get<HighlightStorageStats>('/admin/media-analysis/highlights-stats'),
+
+  // 未生成精彩片段的视频清单（覆盖口径：本地视频 - 已有片段媒体）
+  getPendingHighlightVideos: () =>
+    api.get<{ data: HighlightPendingVideo[] }>('/admin/media-analysis/highlights-pending'),
+
+  // 片段完整性检查（源视频缺失 / 缩略图预览产物缺失）
+  getHighlightAudit: () =>
+    api.get<{ data: HighlightAuditReport }>('/admin/media-analysis/highlights-audit'),
+
+  // 清理检查出的问题片段；includeAssetIssues 同时清理产物缺失项
+  cleanBrokenHighlights: (includeAssetIssues: boolean) =>
+    api.post<{ cleaned: number; message: string }>('/admin/media-analysis/highlights-audit/clean', {
+      include_asset_issues: includeAssetIssues,
+    }),
 
   // 导出精彩片段为独立 mp4（同步切片，短片段秒级完成）
   exportHighlight: (mediaId: string, highlightId: string) =>

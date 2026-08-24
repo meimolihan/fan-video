@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -276,4 +277,44 @@ func (h *MediaAnalysisHandler) HighlightStorageStats(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, stats)
+}
+
+// PendingHighlightVideos 返回尚未生成精彩片段的本地视频清单（覆盖缺口明细）。
+// GET /api/admin/media-analysis/highlights-pending
+func (h *MediaAnalysisHandler) PendingHighlightVideos(c *gin.Context) {
+	list, err := h.analysis.GetPendingHighlightVideos()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取未处理视频清单失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": list})
+}
+
+// HighlightAudit 返回全库片段完整性检查报告（源视频缺失/产物文件缺失）。
+// GET /api/admin/media-analysis/highlights-audit
+func (h *MediaAnalysisHandler) HighlightAudit(c *gin.Context) {
+	report, err := h.analysis.GetHighlightAudit()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取完整性报告失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": report})
+}
+
+// CleanBrokenHighlights 删除完整性检查发现的问题片段。
+// POST /api/admin/media-analysis/highlights-audit/clean  body: {"include_asset_issues": true}
+func (h *MediaAnalysisHandler) CleanBrokenHighlights(c *gin.Context) {
+	var req struct {
+		IncludeAssetIssues bool `json:"include_asset_issues"`
+	}
+	_ = c.ShouldBindJSON(&req) // 空 body 时按 false 处理
+	cleaned, err := h.analysis.CleanBrokenHighlights(req.IncludeAssetIssues)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "清理失效精彩片段失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"cleaned": cleaned,
+		"message": fmt.Sprintf("已清理 %d 个视频的失效精彩片段", cleaned),
+	})
 }

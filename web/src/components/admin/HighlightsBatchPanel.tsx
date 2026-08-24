@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Gauge, Rocket, Sparkles, Square, Trash2 } from 'lucide-react'
+import { Gauge, RefreshCw, Rocket, Sparkles, Square, Trash2 } from 'lucide-react'
 import { AdminPanel } from '@/components/admin/AdminPrimitives'
 import { Button, Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/design-system'
 import ConfirmDialog from '@/components/design-system/ConfirmDialog'
 import { useToast } from '@/components/Toast'
-import { mediaAnalysisApi, type BatchHighlightMode, type BatchHighlightStatus, type HighlightStorageStats } from '@/api/mediaAnalysis'
+import { mediaAnalysisApi, type BatchHighlightMode, type BatchHighlightStatus, type HighlightAuditItem, type HighlightAuditReport, type HighlightPendingVideo, type HighlightStorageStats } from '@/api/mediaAnalysis'
 import { formatErrMsg } from '@/utils/error'
 import { invalidateMediaListCaches } from '@/utils/invalidateMediaCaches'
 
@@ -36,6 +36,44 @@ const BATCH_MODES: Array<{
   },
 ]
 
+// 完整性检查报告中的问题分区（纯文本，无图片）
+function AuditIssueSection({ title, emptyText, items }: { title: string; emptyText: string; items: HighlightAuditItem[] }) {
+  return (
+    <div>
+      <h4 className={`text-sm font-semibold ${items.length > 0 ? 'text-[var(--nv-status-danger)]' : 'text-[var(--nv-text-secondary)]'}`}>
+        {title}
+      </h4>
+      {items.length === 0 ? (
+        <p className="mt-1 text-xs text-[var(--nv-text-tertiary)]">{emptyText}</p>
+      ) : (
+        <ul className="mt-1.5 max-h-[35vh] space-y-1.5 overflow-y-auto pr-1 sm:max-h-44">
+          {items.map((item) => {
+            const hasName = !!(item.file || item.title)
+            const fileName = item.file || item.title || '(未知文件)'
+            return (
+              <li key={item.media_id} className="rounded-[var(--nv-radius-control)] border border-[var(--nv-border)] px-3 py-2">
+                <p className="truncate text-sm font-medium text-[var(--nv-text-primary)]" title={fileName}>
+                  {fileName}
+                </p>
+                {!hasName && (
+                  <p className="mt-0.5 truncate text-xs text-[var(--nv-text-tertiary)]">ID: {item.media_id}</p>
+                )}
+                {item.title && item.file && item.title !== item.file && (
+                  <p className="mt-0.5 truncate text-xs text-[var(--nv-text-tertiary)]">{item.title}</p>
+                )}
+                <p className="mt-0.5 break-all text-xs leading-5 text-[var(--nv-status-danger)]">
+                  {item.detail || '完整性异常'}
+                  {item.highlights > 0 ? ` · 片段 ${item.highlights} 条` : ''}
+                </p>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export default function HighlightsBatchPanel() {
   const toast = useToast()
   const [status, setStatus] = useState<BatchHighlightStatus | null>(null)
@@ -47,7 +85,59 @@ export default function HighlightsBatchPanel() {
   const [clearing, setClearing] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [stats, setStats] = useState<HighlightStorageStats | null>(null)
+  const [showPending, setShowPending] = useState(false)
+  const [pendingList, setPendingList] = useState<HighlightPendingVideo[]>([])
+  const [pendingLoading, setPendingLoading] = useState(false)
+  const [showAudit, setShowAudit] = useState(false)
+  const [auditReport, setAuditReport] = useState<HighlightAuditReport | null>(null)
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [auditCleaning, setAuditCleaning] = useState(false)
+  const [includeAssets, setIncludeAssets] = useState(true)
   const pollRef = useRef<number | null>(null)
+
+  // 打开弹窗时实时拉取未处理清单（数据库口径，服务重启后依然准确）
+  const openPending = async () => {
+    setShowPending(true)
+    setPendingLoading(true)
+    try {
+      const response = await mediaAnalysisApi.getPendingHighlightVideos()
+      setPendingList(response.data.data || [])
+    } catch {
+      setPendingList([])
+    } finally {
+      setPendingLoading(false)
+    }
+  }
+
+  // 完整性检查：源视频缺失 + 片段产物文件缺失
+  const openAudit = async () => {
+    setShowAudit(true)
+    setAuditLoading(true)
+    try {
+      const response = await mediaAnalysisApi.getHighlightAudit()
+      setAuditReport(response.data.data || { total_videos: 0, with_highlights: 0, source_missing: [], assets_missing: [], orphan_caches: [] })
+    } catch (error: any) {
+      toast.error(formatErrMsg(error, '完整性检查失败'))
+      setShowAudit(false)
+    } finally {
+      setAuditLoading(false)
+    }
+  }
+
+  const handleCleanBroken = async () => {
+    if (!auditReport) return
+    setAuditCleaning(true)
+    try {
+      const response = await mediaAnalysisApi.cleanBrokenHighlights(includeAssets)
+      toast.success(response.data.message || '清理完成')
+      setShowAudit(false)
+      await refreshStats()
+    } catch (error: any) {
+      toast.error(formatErrMsg(error, '清理失败'))
+    } finally {
+      setAuditCleaning(false)
+    }
+  }
 
   const refreshStats = useCallback(async () => {
     try {
@@ -157,21 +247,37 @@ export default function HighlightsBatchPanel() {
         icon={<Sparkles size={18} />}
         actions={(
           <>
-            {running ? (
+            {/* 刷新：完整性检查 */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void openAudit()}
+              disabled={running}
+              aria-label="检查完整性"
+              title={running ? '批量运行期间不可用' : '检查已生成片段的完整性（源视频缺失 / 产物文件缺失 / 孤儿缓存目录）'}
+            >
+              <RefreshCw size={14} className={auditLoading ? 'animate-spin' : undefined} />
+              <span className="hidden md:inline">检查完整性</span>
+            </Button>
+            {running && (
               <Button variant="danger" size="sm" onClick={() => setShowStopConfirm(true)} disabled={stopping}>
                 <Square size={14} />
                 停止
               </Button>
-            ) : (
-              <Button variant="danger" size="sm" onClick={() => setShowClearConfirm(true)}>
-                <Trash2 size={14} />
-                清空所有精彩片段
-              </Button>
             )}
+            {/* 生成片段：主操作 */}
             <Button variant="primary" size="sm" onClick={() => setShowStartConfirm(true)} disabled={running} loading={starting}>
               <Sparkles size={15} />
-              一键生成精彩片段
+              <span className="md:hidden">生成片段</span>
+              <span className="hidden md:inline">一键生成精彩片段</span>
             </Button>
+            {/* 删除：清空所有片段，仅空闲时可用 */}
+            {!running && (
+              <Button variant="danger" size="sm" onClick={() => setShowClearConfirm(true)} title="清空所有精彩片段" aria-label="清空所有精彩片段">
+                <Trash2 size={14} />
+                <span className="hidden md:inline">清空所有精彩片段</span>
+              </Button>
+            )}
           </>
         )}
       >
@@ -180,17 +286,17 @@ export default function HighlightsBatchPanel() {
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold text-[var(--nv-text-primary)]">全局进度</h3>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--nv-text-secondary)]">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-[var(--nv-text-secondary)]">
                   {status?.mode === 'performance' && (
                     <span className="rounded-full border border-[color-mix(in_srgb,var(--nv-accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--nv-accent)_10%,transparent)] px-2 py-0.5 text-xs text-[var(--nv-accent)]">
                       性能模式{status?.parallelism && status.parallelism > 1 ? ` · ${status.parallelism} 并行` : ''}
                     </span>
                   )}
-                  <span>视频总数 <b className="text-[var(--nv-text-primary)]">{total}</b></span>
-                  <span>已生成 <b className="text-[var(--nv-status-success)]">{processed}</b></span>
-                  <span>未处理 <b className="text-[var(--nv-text-primary)]">{remaining}</b></span>
+                  <span className="whitespace-nowrap">视频总数 <b className="text-[var(--nv-text-primary)]">{total}</b></span>
+                  <span className="whitespace-nowrap">已生成 <b className="text-[var(--nv-status-success)]">{processed}</b></span>
+                  <span className="whitespace-nowrap">未处理 <b className="text-[var(--nv-text-primary)]">{remaining}</b></span>
                   {(skipped > 0 || failed > 0) && (
-                    <span className="text-[var(--nv-text-tertiary)]">
+                    <span className="whitespace-nowrap text-[var(--nv-text-tertiary)]">
                       跳过 {skipped}
                       {failed > 0 && <> · 失败 {failed}</>}
                     </span>
@@ -228,10 +334,23 @@ export default function HighlightsBatchPanel() {
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold text-[var(--nv-text-primary)]">库内覆盖情况</h3>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--nv-text-secondary)]">
-                  <span>视频总数 <b className="text-[var(--nv-text-primary)]">{stats.local_videos}</b></span>
-                  <span>已生成 <b className="text-[var(--nv-status-success)]">{stats.highlight_media}</b></span>
-                  <span>未处理 <b className="text-[var(--nv-text-primary)]">{coverageRemaining}</b></span>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-[var(--nv-text-secondary)]">
+                  <span className="whitespace-nowrap">视频总数 <b className="text-[var(--nv-text-primary)]">{stats.local_videos}</b></span>
+                  <span className="whitespace-nowrap">已生成 <b className="text-[var(--nv-status-success)]">{stats.highlight_media}</b></span>
+                  <span className="whitespace-nowrap">
+                    未处理{' '}
+                    {coverageRemaining > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => void openPending()}
+                        className="font-medium text-[var(--nv-status-danger)] hover:underline"
+                      >
+                        {coverageRemaining}
+                      </button>
+                    ) : (
+                      <b className="text-[var(--nv-text-primary)]">{coverageRemaining}</b>
+                    )}
+                  </span>
                 </div>
               </div>
               <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--nv-surface-elevated)]">
@@ -318,6 +437,122 @@ export default function HighlightsBatchPanel() {
           onClose={() => setShowStopConfirm(false)}
           loading={stopping}
         />
+      )}
+
+      {showPending && (
+        <Modal open size="md" ariaLabel="未处理视频清单" onClose={() => setShowPending(false)}>
+          <ModalHeader
+            title={`未处理视频（${pendingList.length}）`}
+            description="这些视频还没有精彩片段：可能从未生成、上次生成失败或超时，也可能是不支持的格式/文件缺失。重新执行「一键生成」会尝试处理其中受支持的视频。"
+            onClose={() => setShowPending(false)}
+          />
+          <ModalBody>
+            {pendingLoading ? (
+              <p className="text-sm text-[var(--nv-text-tertiary)]">加载中…</p>
+            ) : pendingList.length === 0 ? (
+              <p className="text-sm text-[var(--nv-text-tertiary)]">没有未处理的视频。</p>
+            ) : (
+              <ul className="max-h-[45vh] space-y-2 overflow-y-auto pr-1 sm:max-h-80">
+                {pendingList.map((video) => {
+                  const fileName = video.file || video.title
+                  return (
+                    <li
+                      key={video.media_id}
+                      className="rounded-[var(--nv-radius-control)] border border-[var(--nv-border)] px-3 py-2"
+                    >
+                      <p className="truncate text-sm font-medium text-[var(--nv-text-primary)]" title={fileName}>
+                        {fileName}
+                      </p>
+                      {video.title && video.file && video.title !== video.file && (
+                        <p className="mt-0.5 truncate text-xs text-[var(--nv-text-tertiary)]" title={video.title}>
+                          {video.title}
+                        </p>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" size="sm" onClick={() => setShowPending(false)}>
+              关闭
+            </Button>
+          </ModalFooter>
+        </Modal>
+      )}
+
+      {showAudit && (
+        <Modal open size="md" ariaLabel="片段完整性检查" onClose={() => { if (!auditCleaning) setShowAudit(false) }}>
+          <ModalHeader
+            title="片段完整性检查"
+            description="检查已生成片段的完整性：源视频是否仍存在、缩略图/预览文件是否缺失、磁盘缓存目录是否有残留。发现的问题可一键清理，下次「一键生成」会自动补齐。"
+            onClose={() => setShowAudit(false)}
+          />
+          <ModalBody>
+            {auditLoading ? (
+              <p className="text-sm text-[var(--nv-text-tertiary)]">正在扫描全库片段…</p>
+            ) : !auditReport ? (
+              <p className="text-sm text-[var(--nv-text-tertiary)]">暂无检查结果。</p>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs leading-5 text-[var(--nv-text-tertiary)]">
+                  库内共 {auditReport.total_videos} 个本地视频，其中 {auditReport.with_highlights} 个已生成片段并纳入本次完整性检查。
+                  {auditReport.total_videos > auditReport.with_highlights && (
+                    <>其余 {auditReport.total_videos - auditReport.with_highlights} 个尚未生成片段，不在本报告范围内，可执行「一键生成」补齐。</>
+                  )}
+                </p>
+
+                <AuditIssueSection
+                  title={`源视频已删除（${auditReport.source_missing.length}）`}
+                  emptyText="没有源视频缺失的问题。"
+                  items={auditReport.source_missing}
+                />
+                <AuditIssueSection
+                  title={`片段文件缺失（${auditReport.assets_missing.length}）`}
+                  emptyText="没有产物文件缺失的问题。"
+                  items={auditReport.assets_missing}
+                />
+                <AuditIssueSection
+                  title={`孤儿缓存目录（${auditReport.orphan_caches.length}）`}
+                  emptyText="没有孤儿缓存目录。"
+                  items={auditReport.orphan_caches}
+                />
+
+                {(auditReport.source_missing.length > 0 || auditReport.orphan_caches.length > 0 || auditReport.assets_missing.length > 0) && (
+                  <label className="flex cursor-pointer items-start gap-2 rounded-[var(--nv-radius-control)] border border-[var(--nv-border)] p-3">
+                    <input
+                      type="checkbox"
+                      checked={includeAssets}
+                      onChange={(e) => setIncludeAssets(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-[var(--nv-accent)]"
+                      disabled={auditCleaning}
+                    />
+                    <span className="text-xs leading-5 text-[var(--nv-text-secondary)]">
+                      同时清理「片段文件缺失」项（推荐）
+                      ——删除其片段记录后，下次批量生成会自动重新生成完整内容。
+                    </span>
+                  </label>
+                )}
+              </div>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" size="sm" onClick={() => setShowAudit(false)} disabled={auditCleaning}>
+              关闭
+            </Button>
+            {auditReport && (auditReport.source_missing.length > 0 || auditReport.orphan_caches.length > 0 || (includeAssets && auditReport.assets_missing.length > 0)) && (
+              <Button
+                variant="danger"
+                size="sm"
+                loading={auditCleaning}
+                onClick={() => void handleCleanBroken()}
+              >
+                清理失效片段
+              </Button>
+            )}
+          </ModalFooter>
+        </Modal>
       )}
 
       {showClearConfirm && (
