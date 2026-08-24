@@ -5,11 +5,49 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/fan-video/fan-video/internal/model"
 )
+
+// 批量生成模式。均衡模式完全保持旧行为（一次一部）；
+// 性能模式允许多部影片并行分析，吞吐更高但资源占用更大。
+const (
+	BatchHighlightModeBalanced    = "balanced"
+	BatchHighlightModePerformance = "performance"
+
+	// batchHighlightMaxPerformanceWorkers 性能模式的最大并行影片数，
+	// 适配 4 核级 NAS 配额，避免把转码/播放在线体验挤死。
+	batchHighlightMaxPerformanceWorkers = 3
+)
+
+// NormalizeBatchHighlightMode 归一化模式参数：空值/未知值一律回退均衡模式。
+func NormalizeBatchHighlightMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case BatchHighlightModePerformance:
+		return BatchHighlightModePerformance
+	default:
+		return BatchHighlightModeBalanced
+	}
+}
+
+// batchHighlightWorkers 计算指定模式的并行影片数（同时分析的电影上限）。
+func batchHighlightWorkers(mode string) int {
+	if mode != BatchHighlightModePerformance {
+		return 1
+	}
+	n := runtime.NumCPU() / 2
+	if n < 2 {
+		n = 2
+	}
+	if n > batchHighlightMaxPerformanceWorkers {
+		n = batchHighlightMaxPerformanceWorkers
+	}
+	return n
+}
 
 // batchHighlightPollInterval 批处理轮询单媒体任务状态的间隔。
 const batchHighlightPollInterval = 800 * time.Millisecond
@@ -23,11 +61,12 @@ var ErrBatchNotFound = errors.New("当前没有正在进行的批量任务")
 // BatchHighlightStatus 批量生成精彩片段的全局进度快照。
 type BatchHighlightStatus struct {
 	Running       bool       `json:"running"`
+	Mode          string     `json:"mode"`        // balanced / performance（最近一次启动所用模式）
+	Parallelism   int        `json:"parallelism"` // 本模式的并行影片数
 	StopRequested bool       `json:"stop_requested"`
 	Total         int        `json:"total"`
-	Processed     int        `json:"processed"` // 本轮成功生成
+	Processed     int        `json:"processed"` // 本轮成功生成（含停止时保存的当前任务）
 	Skipped       int        `json:"skipped"`   // 已有片段/不支持/文件缺失
-	Discarded     int        `json:"discarded"` // 停止时被放弃并删除结果的视频
 	Failed        int        `json:"failed"`
 	Remaining     int        `json:"remaining"`
 	CurrentMediaID  string     `json:"current_media_id"`
@@ -41,11 +80,12 @@ type BatchHighlightStatus struct {
 type batchHighlightState struct {
 	mu              sync.Mutex
 	running         bool
+	mode            string
+	parallelism     int
 	stopRequested   bool
 	total           int
 	processed       int
 	skipped         int
-	discarded       int
 	failed          int
 	currentMediaID  string
 	currentTitle    string
@@ -58,14 +98,15 @@ func (s *MediaAnalysisService) snapshotBatch() BatchHighlightStatus {
 	st := &s.batch
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	done := st.processed + st.skipped + st.discarded + st.failed
+	done := st.processed + st.skipped + st.failed
 	return BatchHighlightStatus{
 		Running:         st.running,
+		Mode:            st.mode,
+		Parallelism:     st.parallelism,
 		StopRequested:   st.stopRequested,
 		Total:           st.total,
 		Processed:       st.processed,
 		Skipped:         st.skipped,
-		Discarded:       st.discarded,
 		Failed:          st.failed,
 		Remaining:       st.total - done,
 		CurrentMediaID:  st.currentMediaID,
@@ -82,8 +123,12 @@ func (s *MediaAnalysisService) SnapshotBatchHighlights() BatchHighlightStatus {
 }
 
 // StartBatchHighlights 启动「全库视频批量生成精彩片段」。
+// mode 为 balanced（均衡：一次一部，旧行为）或 performance（性能：多部并行）。
 // 已有精彩片段的视频自动跳过；如需全部重新生成请先调用 ClearAllHighlights。
-func (s *MediaAnalysisService) StartBatchHighlights() (BatchHighlightStatus, error) {
+func (s *MediaAnalysisService) StartBatchHighlights(mode string) (BatchHighlightStatus, error) {
+	mode = NormalizeBatchHighlightMode(mode)
+	workers := batchHighlightWorkers(mode)
+
 	s.batch.mu.Lock()
 	if s.batch.running {
 		s.batch.mu.Unlock()
@@ -112,11 +157,12 @@ func (s *MediaAnalysisService) StartBatchHighlights() (BatchHighlightStatus, err
 
 	now := time.Now()
 	s.batch.running = true
+	s.batch.mode = mode
+	s.batch.parallelism = workers
 	s.batch.stopRequested = false
 	s.batch.total = len(ids)
 	s.batch.processed = 0
 	s.batch.skipped = 0
-	s.batch.discarded = 0
 	s.batch.failed = 0
 	s.batch.currentMediaID = ""
 	s.batch.currentTitle = ""
@@ -125,58 +171,84 @@ func (s *MediaAnalysisService) StartBatchHighlights() (BatchHighlightStatus, err
 	s.batch.finishedAt = nil
 	s.batch.mu.Unlock()
 
-	go s.runBatchHighlights(ids)
+	// 并行度与全局分析信号量同步放大；结束时 finishBatch 恢复为 1。
+	// 必须在派发任务前设置，保证 worker 池能真正并发拿到槽位。
+	s.setAnalysisCapacity(workers)
+
+	go s.runBatchHighlights(ids, workers)
 	return s.snapshotBatch(), nil
 }
 
-func (s *MediaAnalysisService) runBatchHighlights(videos []model.Media) {
+func (s *MediaAnalysisService) runBatchHighlights(videos []model.Media, workers int) {
 	defer func() {
 		if r := recover(); r != nil {
 			s.logger.Errorf("batch highlights panic: %v", r)
 			s.finishBatch()
 		}
 	}()
+
+	var wg sync.WaitGroup
+	jobs := make(chan model.Media)
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for m := range jobs {
+				// 收到停止请求后不再领取新视频；已在处理中的视频会
+				// 照常分析到完成并保留结果（processOneBatchMedia 不感知停止）。
+				if s.isStopRequested() {
+					continue
+				}
+
+				s.batch.mu.Lock()
+				s.batch.currentMediaID = m.ID
+				s.batch.currentTitle = m.Title
+				s.batch.currentProgress = 0
+				s.batch.mu.Unlock()
+
+				done := s.processOneBatchMedia(m.ID)
+
+				s.batch.mu.Lock()
+				switch done {
+				case "completed":
+					s.batch.processed++
+				case "skipped":
+					s.batch.skipped++
+				default:
+					s.batch.failed++
+				}
+				if s.batch.currentMediaID == m.ID {
+					s.batch.currentProgress = 100
+				}
+				s.batch.mu.Unlock()
+			}
+		}()
+	}
 	for _, m := range videos {
-		s.batch.mu.Lock()
-		if s.batch.stopRequested {
-			s.batch.mu.Unlock()
+		if s.isStopRequested() {
 			break
 		}
-		s.batch.currentMediaID = m.ID
-		s.batch.currentTitle = m.Title
-		s.batch.currentProgress = 0
-		s.batch.mu.Unlock()
-
-		done := s.processOneBatchMedia(m.ID)
-
-		s.batch.mu.Lock()
-		switch done {
-		case "completed":
-			s.batch.processed++
-		case "skipped":
-			s.batch.skipped++
-		case "discarded":
-			s.batch.discarded++
-		default:
-			s.batch.failed++
-		}
-		s.batch.currentProgress = 100
-		s.batch.mu.Unlock()
+		jobs <- m
 	}
+	close(jobs)
+	wg.Wait()
+
 	s.finishBatch()
 	snap := s.snapshotBatch()
-	s.logger.Infof("batch highlights finished total=%d processed=%d skipped=%d discarded=%d failed=%d",
-		snap.Total, snap.Processed, snap.Skipped, snap.Discarded, snap.Failed)
+	s.logger.Infof("batch highlights finished mode=%s workers=%d total=%d processed=%d skipped=%d failed=%d",
+		snap.Mode, workers, snap.Total, snap.Processed, snap.Skipped, snap.Failed)
 }
 
 func (s *MediaAnalysisService) finishBatch() {
 	s.batch.mu.Lock()
-	defer s.batch.mu.Unlock()
 	now := time.Now()
 	s.batch.running = false
 	s.batch.stopRequested = false
 	s.batch.currentProgress = 0
 	s.batch.finishedAt = &now
+	s.batch.mu.Unlock()
+	// 恢复 NAS 安全默认值：一次一部。在途任务按原 channel 归还槽位，安全。
+	s.setAnalysisCapacity(1)
 }
 
 // isStopRequested 返回是否已请求停止批量任务。
@@ -187,12 +259,10 @@ func (s *MediaAnalysisService) isStopRequested() bool {
 }
 
 // processOneBatchMedia 调度单个视频的精彩片段分析并等待其终态。
-// 返回 "completed" / "skipped" / "discarded" / "failed"。
-// 等待期间收到停止请求时视为「放弃当前视频」：等任务到终态后删除该视频
-// 已持久化的片段记录与产物文件（用户要求：停止后不保留未生成完毕的结果），
-// 返回 "discarded" 单独计数，不计入已生成。
+// 返回 "completed" / "skipped" / "failed"。
+// 停止请求不改变单个视频的处理结果：正在分析的视频会照常完成并保留
+// 片段（用户要求：停止时保存当前任务），只是不再领取后续任务。
 func (s *MediaAnalysisService) processOneBatchMedia(mediaID string) string {
-	abandoned := false
 	// 已有片段 → 跳过（重新生成需先清空）
 	if existing, err := s.highlightRepo.ListByMediaID(mediaID); err == nil && len(existing) > 0 {
 		return "skipped"
@@ -216,10 +286,6 @@ func (s *MediaAnalysisService) processOneBatchMedia(mediaID string) string {
 
 	deadline := time.Now().Add(batchHighlightPerMediaTimeout)
 	for {
-		if s.isStopRequested() {
-			abandoned = true
-		}
-
 		current, err := s.taskRepo.FindByID(task.ID)
 		if err != nil {
 			return "failed"
@@ -228,22 +294,10 @@ func (s *MediaAnalysisService) processOneBatchMedia(mediaID string) string {
 		s.batch.currentProgress = current.Progress
 		s.batch.mu.Unlock()
 
-		// 停止时不立刻返回：必须等当前视频任务到达终态，
-		// 否则其分析协程在删除之后仍可能把结果写回数据库。
 		switch current.Status {
 		case "completed":
-			if abandoned {
-				// 用户要求：确认停止后，未生成完毕（含刚完成但未及保留）的结果一律丢弃
-				if delErr := s.DeleteHighlights(mediaID); delErr != nil {
-					s.logger.Warnf("discard highlights for stopped media %s: %v", mediaID, delErr)
-				}
-				return "discarded"
-			}
 			return "completed"
 		case "failed", "interrupted":
-			if abandoned {
-				return "discarded"
-			}
 			return "failed"
 		}
 		if time.Now().After(deadline) {
@@ -253,7 +307,8 @@ func (s *MediaAnalysisService) processOneBatchMedia(mediaID string) string {
 	}
 }
 
-// StopBatchHighlights 请求停止批量任务（当前视频会继续完成到安全点）。
+// StopBatchHighlights 请求停止批量任务。
+// 停止语义：剩余视频不再处理；正在分析的视频照常完成并保留结果。
 func (s *MediaAnalysisService) StopBatchHighlights() (BatchHighlightStatus, error) {
 	s.batch.mu.Lock()
 	if !s.batch.running {

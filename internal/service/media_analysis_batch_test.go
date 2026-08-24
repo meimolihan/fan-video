@@ -58,12 +58,15 @@ func TestBatchHighlightsAndClearAll(t *testing.T) {
 
 	svc := NewMediaAnalysisService(cfg, repos.Media, repos.VideoHighlight, repos.AIAnalysisTask, zap.NewNop().Sugar())
 
-	status, err := svc.StartBatchHighlights()
+	status, err := svc.StartBatchHighlights(BatchHighlightModeBalanced)
 	if err != nil {
 		t.Fatalf("启动批处理失败: %v", err)
 	}
 	if status.Total != 3 {
 		t.Fatalf("总数应为 3，实际 %d", status.Total)
+	}
+	if status.Mode != BatchHighlightModeBalanced || status.Parallelism != 1 {
+		t.Fatalf("均衡模式应为 balanced/1，实际 %s/%d", status.Mode, status.Parallelism)
 	}
 
 	final := waitBatchIdle(t, svc)

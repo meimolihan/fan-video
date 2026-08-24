@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Sparkles, Square, Trash2 } from 'lucide-react'
+import { Gauge, Rocket, Sparkles, Square, Trash2 } from 'lucide-react'
 import { AdminPanel } from '@/components/admin/AdminPrimitives'
-import { Button } from '@/components/design-system'
+import { Button, Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/design-system'
 import ConfirmDialog from '@/components/design-system/ConfirmDialog'
 import { useToast } from '@/components/Toast'
-import { mediaAnalysisApi, type BatchHighlightStatus, type HighlightStorageStats } from '@/api/mediaAnalysis'
+import { mediaAnalysisApi, type BatchHighlightMode, type BatchHighlightStatus, type HighlightStorageStats } from '@/api/mediaAnalysis'
 import { formatErrMsg } from '@/utils/error'
 import { invalidateMediaListCaches } from '@/utils/invalidateMediaCaches'
 
@@ -13,10 +13,34 @@ function clampPercent(value: number) {
   return Math.max(0, Math.min(100, value))
 }
 
+const BATCH_MODES: Array<{
+  value: BatchHighlightMode
+  label: string
+  icon: typeof Gauge
+  desc: string
+  detail: string
+}> = [
+  {
+    value: 'balanced',
+    label: '均衡模式',
+    icon: Gauge,
+    desc: '一次分析一部影片，资源占用低',
+    detail: '适合边播放边生成，NAS 友好；整体耗时较长。',
+  },
+  {
+    value: 'performance',
+    label: '性能模式',
+    icon: Rocket,
+    desc: '多部影片并行分析，速度提升 2~3 倍',
+    detail: 'CPU 与磁盘占用明显升高，批量期间在线播放可能卡顿。',
+  },
+]
+
 export default function HighlightsBatchPanel() {
   const toast = useToast()
   const [status, setStatus] = useState<BatchHighlightStatus | null>(null)
   const [showStartConfirm, setShowStartConfirm] = useState(false)
+  const [selectedMode, setSelectedMode] = useState<BatchHighlightMode>('balanced')
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [showStopConfirm, setShowStopConfirm] = useState(false)
   const [starting, setStarting] = useState(false)
@@ -68,7 +92,7 @@ export default function HighlightsBatchPanel() {
   const handleStart = async () => {
     setStarting(true)
     try {
-      const response = await mediaAnalysisApi.startBatchHighlights()
+      const response = await mediaAnalysisApi.startBatchHighlights(selectedMode)
       setStatus(response.data.data || null)
       toast.success(response.data.message || '批量任务已启动')
       setShowStartConfirm(false)
@@ -85,7 +109,7 @@ export default function HighlightsBatchPanel() {
       const response = await mediaAnalysisApi.stopBatchHighlights()
       setStatus(response.data.data || null)
       setShowStopConfirm(false)
-      toast.info('已请求停止，剩余视频不再处理；当前视频完成后其结果将被丢弃')
+      toast.info('已请求停止：剩余视频不再处理，当前视频会正常完成并保留结果')
     } catch (error: any) {
       toast.error(formatErrMsg(error, '停止失败'))
     } finally {
@@ -113,10 +137,9 @@ export default function HighlightsBatchPanel() {
   const total = status?.total || 0
   const processed = status?.processed || 0
   const skipped = status?.skipped || 0
-  const discarded = status?.discarded || 0
   const failed = status?.failed || 0
   const remaining = status?.remaining ?? 0
-  const done = processed + skipped + discarded + failed
+  const done = processed + skipped + failed
   const globalPercent = total > 0 ? clampPercent((done / total) * 100) : 0
   const currentTitle = status?.current_title || ''
   const currentPercent = clampPercent(status?.current_progress || 0)
@@ -158,13 +181,17 @@ export default function HighlightsBatchPanel() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold text-[var(--nv-text-primary)]">全局进度</h3>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--nv-text-secondary)]">
+                  {status?.mode === 'performance' && (
+                    <span className="rounded-full border border-[color-mix(in_srgb,var(--nv-accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--nv-accent)_10%,transparent)] px-2 py-0.5 text-xs text-[var(--nv-accent)]">
+                      性能模式{status?.parallelism && status.parallelism > 1 ? ` · ${status.parallelism} 并行` : ''}
+                    </span>
+                  )}
                   <span>视频总数 <b className="text-[var(--nv-text-primary)]">{total}</b></span>
                   <span>已生成 <b className="text-[var(--nv-status-success)]">{processed}</b></span>
                   <span>未处理 <b className="text-[var(--nv-text-primary)]">{remaining}</b></span>
-                  {(skipped > 0 || discarded > 0 || failed > 0) && (
+                  {(skipped > 0 || failed > 0) && (
                     <span className="text-[var(--nv-text-tertiary)]">
                       跳过 {skipped}
-                      {discarded > 0 && <> · 放弃 {discarded}</>}
                       {failed > 0 && <> · 失败 {failed}</>}
                     </span>
                   )}
@@ -218,7 +245,6 @@ export default function HighlightsBatchPanel() {
             {status?.finished_at && (
               <p className="text-xs text-[var(--nv-text-tertiary)]">
                 上次批量完成于 {new Date(status.finished_at).toLocaleString('zh-CN')}：成功 {processed} · 跳过 {skipped}
-                {discarded > 0 && <> · 放弃（已删除）{discarded}</>}
                 {failed > 0 && <> · 失败 {failed}</>}
               </p>
             )}
@@ -231,22 +257,62 @@ export default function HighlightsBatchPanel() {
       </AdminPanel>
 
       {showStartConfirm && (
-        <ConfirmDialog
-          title="批量生成精彩片段"
-          description={`将为媒体库中的所有本地视频（约 ${stats ? stats.local_videos : total > 0 ? total : '全部'} 个）逐个分析并生成精彩片段。`}
-          hint="已有精彩片段的视频会自动跳过；如需全部重新生成，请先使用「清空所有精彩片段」。过程耗时较长，可随时停止。"
-          confirmLabel="开始生成"
-          onConfirm={handleStart}
-          onClose={() => setShowStartConfirm(false)}
-          loading={starting}
-        />
+        <Modal open size="sm" ariaLabel="选择批量生成模式" onClose={() => { if (!starting) setShowStartConfirm(false) }}>
+          <ModalHeader
+            title="批量生成精彩片段"
+            description={`将为媒体库中的所有本地视频（约 ${stats ? stats.local_videos : total > 0 ? total : '全部'} 个）生成精彩片段。`}
+            onClose={() => setShowStartConfirm(false)}
+          />
+          <ModalBody>
+            <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="生成模式">
+              {BATCH_MODES.map((mode) => {
+                const active = selectedMode === mode.value
+                const Icon = mode.icon
+                return (
+                  <button
+                    key={mode.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    disabled={starting}
+                    onClick={() => setSelectedMode(mode.value)}
+                    className={`rounded-[var(--nv-radius-control)] border p-3 text-left transition-colors ${
+                      active
+                        ? 'border-[var(--nv-accent)] bg-[color-mix(in_srgb,var(--nv-accent)_10%,transparent)]'
+                        : 'border-[var(--nv-border)] hover:bg-[var(--nv-fill-hover)]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Icon size={16} className={active ? 'text-[var(--nv-accent)]' : 'text-[var(--nv-text-tertiary)]'} />
+                      <span className="text-sm font-medium text-[var(--nv-text-primary)]">{mode.label}</span>
+                      {active && <span className="ml-auto h-2 w-2 rounded-full bg-[var(--nv-accent)]" aria-hidden="true" />}
+                    </div>
+                    <p className="mt-1.5 text-xs text-[var(--nv-text-secondary)]">{mode.desc}</p>
+                    <p className="mt-1 text-xs leading-4 text-[var(--nv-text-tertiary)]">{mode.detail}</p>
+                  </button>
+                )
+              })}
+            </div>
+            <p className="mt-3 text-xs leading-5 text-[var(--nv-text-tertiary)]">
+              已有精彩片段的视频会自动跳过；如需全部重新生成，请先使用「清空所有精彩片段」。过程耗时较长，可随时停止。
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" size="sm" onClick={() => setShowStartConfirm(false)} disabled={starting}>
+              取消
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleStart} loading={starting}>
+              开始生成
+            </Button>
+          </ModalFooter>
+        </Modal>
       )}
 
       {showStopConfirm && (
         <ConfirmDialog
           title="停止批量任务"
           tone="danger"
-          description="将停止处理剩余视频。已生成完毕的片段会保留；当前正在分析的视频不会保留结果。"
+          description="将停止处理剩余视频。当前正在分析的视频会正常完成并保留结果，之后不再开始新任务。"
           confirmLabel="确认停止"
           onConfirm={handleStop}
           onClose={() => setShowStopConfirm(false)}

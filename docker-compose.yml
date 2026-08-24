@@ -15,4 +15,9 @@ services:
          - /vol2/1000/mydisk/Video:/media:ro
       devices:
          - /dev/dri:/dev/dri
+      deploy:
+         resources:
+            limits:
+               cpus: "4"
+               memory: 4G
       restart: unless-stopped

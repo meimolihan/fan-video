@@ -544,8 +544,8 @@ func (s *MediaAnalysisService) persistChapterResult(task *model.AIAnalysisTask, 
 }
 
 func (s *MediaAnalysisService) runChapterDetectServerTask(taskID, mediaID string) {
-	s.semaphore <- struct{}{}
-	defer func() { <-s.semaphore }()
+	slot := s.acquireAnalysisSlot()
+	defer func() { s.releaseAnalysisSlot(slot) }()
 
 	task, err := s.taskRepo.FindByID(taskID)
 	if err != nil {

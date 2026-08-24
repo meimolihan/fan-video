@@ -216,10 +216,19 @@ func (h *MediaAnalysisHandler) DeleteHighlightExport(c *gin.Context) {
 
 // ==================== 精彩片段批量处理（媒体库管理） ====================
 
+// StartBatchHighlightsRequest 批量生成启动参数。
+type StartBatchHighlightsRequest struct {
+	// Mode balanced=均衡（一次一部，默认）；performance=性能（多部并行）。
+	Mode string `json:"mode"`
+}
+
 // StartBatchHighlights 一键为全部本地视频批量生成精彩片段。
 // POST /api/admin/media-analysis/batch
 func (h *MediaAnalysisHandler) StartBatchHighlights(c *gin.Context) {
-	status, err := h.analysis.StartBatchHighlights()
+	var req StartBatchHighlightsRequest
+	// 兼容空请求体：缺省按均衡模式处理
+	_ = c.ShouldBindJSON(&req)
+	status, err := h.analysis.StartBatchHighlights(req.Mode)
 	if err != nil {
 		if errors.Is(err, service.ErrMediaAnalysisInProgress) {
 			c.JSON(http.StatusAccepted, gin.H{"data": status, "message": "批量任务已在进行中"})
@@ -245,7 +254,7 @@ func (h *MediaAnalysisHandler) StopBatchHighlights(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": status, "message": "已请求停止，当前视频会处理到安全点"})
+	c.JSON(http.StatusOK, gin.H{"data": status, "message": "已请求停止：剩余视频不再处理，当前视频会正常完成并保留结果"})
 }
 
 // ClearAllHighlights 清空全库所有精彩片段。

@@ -48,9 +48,13 @@ type MediaAnalysisService struct {
 	taskRepo      *repository.AIAnalysisTaskRepo // legacy table/model reused as durable task storage
 	logger        *zap.SugaredLogger
 	wsHub         *WSHub
-	semaphore     chan struct{}
-	batch         batchHighlightState
-	previewMu     sync.Mutex
+	// semaphore 限制同时分析的电影数。批量任务按模式调整容量时必须整体换新
+	// channel，因此读写都走 analysisMu 保护；获取/释放必须使用同一 channel 实例，
+	// 见 acquireAnalysisSlot / releaseAnalysisSlot。
+	semaphore chan struct{}
+	analysisMu sync.Mutex
+	batch      batchHighlightState
+	previewMu  sync.Mutex
 }
 
 type MediaHighlightList struct {
@@ -98,6 +102,37 @@ func NewMediaAnalysisService(
 }
 
 func (s *MediaAnalysisService) SetWSHub(hub *WSHub) { s.wsHub = hub }
+
+// acquireAnalysisSlot 阻塞直到有空闲分析槽位，返回承载该槽位的 channel。
+// 调用方结束后必须把同一个 channel 传给 releaseAnalysisSlot，
+// 这样容量切换瞬间在途任务也能把令牌归还给正确的信号量。
+func (s *MediaAnalysisService) acquireAnalysisSlot() chan struct{} {
+	s.analysisMu.Lock()
+	ch := s.semaphore
+	s.analysisMu.Unlock()
+	ch <- struct{}{}
+	return ch
+}
+
+func (s *MediaAnalysisService) releaseAnalysisSlot(ch chan struct{}) {
+	if ch == nil {
+		return
+	}
+	<-ch
+}
+
+// setAnalysisCapacity 切换同时分析的影片数上限（批量模式切换时调用）。
+// 直接换新 channel：旧 channel 上未释放的槽位由持有者按原路归还，不会泄漏。
+func (s *MediaAnalysisService) setAnalysisCapacity(n int) {
+	if n < 1 {
+		n = 1
+	}
+	s.analysisMu.Lock()
+	defer s.analysisMu.Unlock()
+	if cap(s.semaphore) != n {
+		s.semaphore = make(chan struct{}, n)
+	}
+}
 
 func (s *MediaAnalysisService) ListHighlights(mediaID string) (*MediaHighlightList, error) {
 	media, err := s.mediaRepo.FindByID(mediaID)
@@ -164,8 +199,8 @@ func (s *MediaAnalysisService) AnalyzeHighlights(mediaID string) (*model.AIAnaly
 }
 
 func (s *MediaAnalysisService) runHighlightTask(taskID, mediaID string) {
-	s.semaphore <- struct{}{}
-	defer func() { <-s.semaphore }()
+	slot := s.acquireAnalysisSlot()
+	defer func() { s.releaseAnalysisSlot(slot) }()
 
 	task, err := s.taskRepo.FindByID(taskID)
 	if err != nil {

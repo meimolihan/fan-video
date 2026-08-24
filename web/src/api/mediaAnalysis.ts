@@ -55,13 +55,16 @@ export interface MediaAnalysisTask {
 
 export type MediaAnalysisExecutionMode = 'auto' | 'client_preferred' | 'server_only' | 'off'
 
+export type BatchHighlightMode = 'balanced' | 'performance'
+
 export interface BatchHighlightStatus {
   running: boolean
+  mode?: BatchHighlightMode | string
+  parallelism?: number
   stop_requested: boolean
   total: number
   processed: number
   skipped: number
-  discarded: number
   failed: number
   remaining: number
   current_media_id: string
@@ -230,8 +233,8 @@ export const mediaAnalysisApi = {
     api.delete<{ message: string }>(`/media/${mediaId}/highlights`),
 
   // ==================== 批量处理（媒体库管理） ====================
-  startBatchHighlights: () =>
-    api.post<{ data: BatchHighlightStatus; message: string }>('/admin/media-analysis/batch'),
+  startBatchHighlights: (mode: BatchHighlightMode = 'balanced') =>
+    api.post<{ data: BatchHighlightStatus; message: string }>('/admin/media-analysis/batch', { mode }),
 
   getBatchStatus: () =>
     api.get<{ data: BatchHighlightStatus }>('/admin/media-analysis/batch/status'),
