@@ -163,6 +163,57 @@ export const useThemeStore = create<ThemeStore>()(
   ),
 )
 
+/**
+ * 主题切换的圆形扩散揭示动画（与 2panel 同款）：
+ * 用 View Transitions API 拍摄新旧两帧，禁用默认交叉淡化后，
+ * 对新帧伪元素做 clip-path 圆形扩散 —— 从界面右上角向全屏展开。
+ * 浏览器不支持或用户偏好减少动效时，直接落盘无动画。
+ */
+function startThemeViewTransition(commit: () => void) {
+  const doc = document as Document & {
+    startViewTransition?: (updateCallback: () => void) => { ready: Promise<void> }
+  }
+  const reducedMotion = typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  if (typeof doc.startViewTransition !== 'function' || reducedMotion) {
+    commit()
+    return
+  }
+
+  // 圆心固定在右上角（与切换按钮位置呼应），半径取到最远角的距离
+  const cx = window.innerWidth
+  const cy = 0
+  const radius = Math.hypot(
+    Math.max(cx, window.innerWidth - cx),
+    Math.max(cy, window.innerHeight - cy),
+  )
+
+  try {
+    const transition = doc.startViewTransition(commit)
+    transition.ready
+      .then(() => {
+        document.documentElement.animate(
+          {
+            clipPath: [
+              `circle(0% at ${cx}px ${cy}px)`,
+              `circle(${radius}px at ${cx}px ${cy}px)`,
+            ],
+          },
+          {
+            duration: 500,
+            easing: 'ease-in-out',
+            pseudoElement: '::view-transition-new(root)',
+          } as KeyframeAnimationOptions,
+        )
+      })
+      .catch(() => {})
+  } catch {
+    // View Transition 创建失败（如连续快速切换被跳过）时保证主题仍然生效
+    commit()
+  }
+}
+
 /** Apply only the formal light/dark mode. CSS owns all application color tokens. */
 export function applyTheme(themeId: string) {
   if (typeof document === 'undefined') return
@@ -174,9 +225,11 @@ export function applyTheme(themeId: string) {
     return
   }
 
-  runWithoutThemeTransitions(() => {
-    root.setAttribute('data-theme', mode)
-    syncBrowserThemeChrome(mode)
+  startThemeViewTransition(() => {
+    runWithoutThemeTransitions(() => {
+      root.setAttribute('data-theme', mode)
+      syncBrowserThemeChrome(mode)
+    })
   })
 }
 

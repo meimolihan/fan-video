@@ -1,9 +1,10 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Clock3, Heart } from 'lucide-react'
+import { Clock3, Heart, Moon, Sun } from 'lucide-react'
 import Sidebar from './Sidebar'
 import { PageContainer } from './design-system'
 import { AppShell, PageHeader } from '@/ui'
+import { useThemeStore } from '@/stores/theme'
 
 const SCROLL_KEY_PREFIX = 'nowen_scroll_'
 const SIDEBAR_COLLAPSED_KEY = 'nowen_sidebar_collapsed'
@@ -46,6 +47,25 @@ function readInitialSidebarCollapsed() {
   }
 }
 
+// 顶栏右上角的主题切换按钮：与侧栏底部按钮共用同一 store，功能完全一致
+function ThemeToggleButton() {
+  const { theme, toggleTheme } = useThemeStore()
+  const isDark = theme === 'dark'
+  const label = isDark ? '切换浅色模式' : '切换深色模式'
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      className="nv-page-header-action"
+      aria-label={label}
+      aria-pressed={!isDark}
+      title={label}
+    >
+      {isDark ? <Sun size={15} aria-hidden="true" /> : <Moon size={15} aria-hidden="true" />}
+    </button>
+  )
+}
+
 function ApplicationTopBar() {
   const location = useLocation()
   const isHomeRoute = location.pathname === '/'
@@ -61,6 +81,7 @@ function ApplicationTopBar() {
         <Heart size={15} aria-hidden="true" />
         <span>我的收藏</span>
       </Link>
+      <ThemeToggleButton />
     </>
   )
 

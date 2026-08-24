@@ -38,6 +38,9 @@ func AutoMigrateLite(db *gorm.DB) error {
 		&VideoHighlight{},
 		&AIAnalysisTask{},
 		&CoverCandidate{},
+
+		// 首页手动精选轮播
+		&HomeFeatured{},
 	}
 
 	if err := db.AutoMigrate(models...); err != nil {

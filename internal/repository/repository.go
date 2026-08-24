@@ -48,6 +48,8 @@ type Repositories struct {
 	Rename *RenameRepo
 	// 扫描后处理：虚拟归类与命名映射（仅 DB 层）
 	ScanClassification *ScanClassificationRepo
+	// 首页手动精选轮播
+	HomeFeatured *HomeFeaturedRepo
 }
 
 func NewRepositories(db *gorm.DB) *Repositories {
@@ -99,6 +101,8 @@ func NewRepositories(db *gorm.DB) *Repositories {
 		Rename: NewRenameRepo(db),
 		// 扫描后处理
 		ScanClassification: NewScanClassificationRepo(db),
+		// 首页手动精选轮播
+		HomeFeatured: NewHomeFeaturedRepo(db),
 	}
 }
 

@@ -117,3 +117,22 @@ func (cc *CoverCandidate) BeforeCreate(tx *gorm.DB) error {
 	}
 	return nil
 }
+
+// ==================== 首页手动精选轮播 ====================
+
+// HomeFeatured 首页手动精选轮播配置。
+// 管理端维护条目（movie/series 两类引用），条目数达到阈值时
+// 首页轮播优先使用该列表，不足阈值时回落到默认推荐/最近添加逻辑。
+type HomeFeatured struct {
+	ID        string    `json:"id" gorm:"primaryKey;type:text"`
+	ItemType  string    `json:"item_type" gorm:"type:text;not null;uniqueIndex:idx_home_featured_item,priority:1"` // movie / series
+	ItemID    string    `json:"item_id" gorm:"type:text;not null;uniqueIndex:idx_home_featured_item,priority:2"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (hf *HomeFeatured) BeforeCreate(tx *gorm.DB) error {
+	if hf.ID == "" {
+		hf.ID = uuid.New().String()
+	}
+	return nil
+}

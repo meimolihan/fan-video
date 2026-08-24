@@ -147,6 +147,12 @@ func registerCoreAPI(
 	api.GET("/series/:id/backdrop", handlers.Series.Backdrop)
 	api.GET("/series/:id/persons", handlers.Series.GetPersons)
 
+	// 首页手动精选轮播：条目数达标时优先于推荐逻辑
+	api.GET("/home/featured", handlers.HomeFeatured.ListForHome)
+	api.GET("/admin/home-featured", middleware.AdminOnly(), handlers.HomeFeatured.AdminList)
+	api.POST("/admin/home-featured", middleware.AdminOnly(), handlers.HomeFeatured.Add)
+	api.DELETE("/admin/home-featured/:id", middleware.AdminOnly(), handlers.HomeFeatured.Remove)
+
 	api.GET("/stream/:id/info", guardByMediaID, playbackPlan.GetInfo)
 	api.GET("/stream/:id/plan", guardByMediaID, playbackPlan.Get)
 	api.GET("/stream/:id/direct", guardByMediaID, handlers.Stream.Direct)

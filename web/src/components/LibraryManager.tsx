@@ -28,6 +28,7 @@ import clsx from 'clsx'
 import { AdminPanel, AdminStatus } from '@/components/admin/AdminPrimitives'
 import { Button, EmptyState, Tag } from '@/components/design-system'
 import HighlightsBatchPanel from '@/components/admin/HighlightsBatchPanel'
+import HomeFeaturedPanel from '@/components/admin/HomeFeaturedPanel'
 import { invalidateMediaListCaches } from '@/utils/invalidateMediaCaches'
 
 const TYPE_CONFIG: Record<string, { label: string; icon: typeof Film }> = {
@@ -330,6 +331,8 @@ function LibraryManager({
       </AdminPanel>
 
       <HighlightsBatchPanel />
+
+      <HomeFeaturedPanel />
 
       <CreateLibraryModal
         open={showCreateModal}

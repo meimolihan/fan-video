@@ -10,6 +10,8 @@ import { MediaArtwork, MediaHeroContent } from '@/ui'
 
 const AUTO_PLAY_INTERVAL = 7000
 const SWIPE_THRESHOLD = 50
+// 手动精选轮播生效的最小条目数：不足时回落默认推荐/最近添加逻辑
+const MIN_FEATURED_ITEMS = 2
 
 // A stale media record can still advertise a backdrop whose file has already
 // disappeared. Remember failed endpoints for this page lifetime so the carousel
@@ -170,6 +172,8 @@ function formatClock(seconds: number) {
 interface HeroCarouselProps {
   items: RecommendedMedia[]
   fallbackItems?: MixedItem[]
+  /** 手动精选轮播条目：数量达到 MIN_FEATURED_ITEMS 时优先于推荐逻辑 */
+  featuredItems?: MixedItem[]
   maxItems?: number
   watchStateByMediaId?: Record<string, HeroWatchState>
 }
@@ -177,6 +181,7 @@ interface HeroCarouselProps {
 export default function HeroCarousel({
   items: rawItems,
   fallbackItems,
+  featuredItems,
   maxItems = 5,
   watchStateByMediaId = {},
 }: HeroCarouselProps) {
@@ -185,13 +190,24 @@ export default function HeroCarousel({
   const containerRef = useRef<HTMLElement>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // 手动精选达标时接管轮播，优先级高于推荐/最近添加
+  const manualItems = useMemo(
+    () =>
+      (featuredItems || [])
+        .map((item) => mixedItemToRecommended(item, '手动精选'))
+        .filter((item): item is RecommendedMedia => item !== null),
+    [featuredItems],
+  )
+  const useManual = manualItems.length >= MIN_FEATURED_ITEMS
+
   const items = useMemo(() => {
+    if (useManual) return manualItems.slice(0, maxItems)
     if (rawItems.length > 0) return rawItems.slice(0, maxItems)
     return (fallbackItems || [])
       .slice(0, maxItems)
       .map((item) => mixedItemToRecommended(item, t('home.recentlyAdded')))
       .filter((item): item is RecommendedMedia => item !== null)
-  }, [rawItems, fallbackItems, maxItems, t])
+  }, [useManual, manualItems, rawItems, fallbackItems, maxItems, t])
 
   const [current, setCurrent] = useState(0)
   const [isHovering, setIsHovering] = useState(false)

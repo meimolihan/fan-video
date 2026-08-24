@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { mediaApi, recommendApi, streamApi } from '@/api'
+import { mediaApi, homeApi, recommendApi, streamApi } from '@/api'
 import { useWebSocket, WS_EVENTS } from '@/hooks/useWebSocket'
 import { useToast } from '@/components/Toast'
 import { useTranslation } from '@/i18n'
@@ -21,6 +21,7 @@ interface HomeData {
   recentItems: MixedItem[]
   continueList: WatchHistory[]
   recommendations: RecommendedMedia[]
+  featuredItems: MixedItem[]
   genreItems: Partial<Record<HomeGenre, MixedItem[]>>
   allFailed: boolean
 }
@@ -77,6 +78,7 @@ export default function HomePage() {
         mediaApi.recentMixed(24),
         mediaApi.continueWatching(10),
         recommendApi.getRecommendations(12),
+        homeApi.getFeaturedCarousel(),
         ...HOME_GENRES.map((genre) => mediaApi.listMixed({
           page: 1,
           size: 16,
@@ -87,7 +89,7 @@ export default function HomePage() {
       ] as const
 
       const results = await Promise.allSettled(requests)
-      const [recentResult, continueResult, recommendResult, ...genreResults] = results
+      const [recentResult, continueResult, recommendResult, featuredResult, ...genreResults] = results
       const recentItems = recentResult.status === 'fulfilled' ? (recentResult.value.data.data || []) : []
       const genreItems: Partial<Record<HomeGenre, MixedItem[]>> = {}
 
@@ -103,6 +105,7 @@ export default function HomePage() {
         recentItems,
         continueList: continueResult.status === 'fulfilled' ? (continueResult.value.data.data || []) : [],
         recommendations: recommendResult.status === 'fulfilled' ? (recommendResult.value.data.data || []) : [],
+        featuredItems: featuredResult.status === 'fulfilled' ? (featuredResult.value.data.data || []) : [],
         genreItems,
         allFailed: [recentResult, continueResult, recommendResult].every((result) => result.status === 'rejected'),
       }
@@ -113,6 +116,7 @@ export default function HomePage() {
   const recentItems = data?.recentItems ?? []
   const continueList = data?.continueList ?? []
   const recommendations = data?.recommendations ?? []
+  const featuredItems = data?.featuredItems ?? []
   const genreItems = data?.genreItems ?? {}
   const watchStateByMediaId = useMemo(() => Object.fromEntries(
     continueList.map((item) => [item.media_id, { position: item.position, duration: item.duration }]),
@@ -158,6 +162,7 @@ export default function HomePage() {
         <HeroCarousel
           items={recommendations}
           fallbackItems={recentItems}
+          featuredItems={featuredItems}
           maxItems={5}
           watchStateByMediaId={watchStateByMediaId}
         />

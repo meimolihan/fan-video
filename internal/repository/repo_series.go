@@ -184,6 +184,16 @@ func (r *SeriesRepo) FindByTitle(title string) ([]model.Series, error) {
 	return series, err
 }
 
+// FindByIDs 按 ID 批量查找剧集（用于把分集命中归并为所属剧集）。
+func (r *SeriesRepo) FindByIDs(ids []string) ([]model.Series, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var series []model.Series
+	err := r.db.Where("id IN ?", ids).Find(&series).Error
+	return series, err
+}
+
 // FindDuplicateGroups 查找所有可能重复的 Series 分组（同一媒体库内同名的多条记录）
 func (r *SeriesRepo) FindDuplicateGroups() ([]string, error) {
 	var titles []string

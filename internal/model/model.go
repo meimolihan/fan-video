@@ -863,6 +863,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&AIAnalysisTask{},
 		// V3: 封面候选
 		&CoverCandidate{},
+		// 首页手动精选轮播
+		&HomeFeatured{},
 		&GenreMapping{},
 		&RecommendCache{},
 		// 视频预处理

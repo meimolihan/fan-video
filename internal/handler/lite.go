@@ -59,5 +59,7 @@ func NewLiteHandlers(services *service.Services, repos *repository.Repositories,
 			streamService:     services.Stream,
 			logger:            logger,
 		},
+		// 首页手动精选轮播
+		HomeFeatured: NewHomeFeaturedHandler(repos.HomeFeatured, repos.Media, repos.Series, logger),
 	}
 }

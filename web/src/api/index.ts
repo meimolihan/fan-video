@@ -52,6 +52,8 @@ export { embyCompatApi } from './emby'
 
 // 社交与互动
 export { recommendApi } from './recommend'
+export { homeApi } from './home'
+export type { HomeFeaturedEntry, HomeFeaturedListResult } from './home'
 export { castApi, bookmarkApi, commentApi, statsApi } from './social'
 
 // V2 扩展

@@ -54,6 +54,8 @@ type Handlers struct {
 	ScanPostProcess *ScanPostProcessHandler
 	// 懒人入库（一键入库）
 	LazyIngest *LazyIngestHandler
+	// 首页手动精选轮播
+	HomeFeatured *HomeFeaturedHandler
 }
 
 func NewHandlers(services *service.Services, repos *repository.Repositories, cfg *config.Config, logger *zap.SugaredLogger) *Handlers {
@@ -122,6 +124,8 @@ func NewHandlers(services *service.Services, repos *repository.Repositories, cfg
 		ScanPostProcess: NewScanPostProcessHandler(services.ScanPostProcess, repos.ScanClassification, logger),
 		// 懒人入库（一键入库）
 		LazyIngest: NewLazyIngestHandler(services.LazyIngest, logger),
+		// 首页手动精选轮播
+		HomeFeatured: NewHomeFeaturedHandler(repos.HomeFeatured, repos.Media, repos.Series, logger),
 	}
 
 	return h

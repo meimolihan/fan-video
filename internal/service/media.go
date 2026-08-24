@@ -446,6 +446,37 @@ func (s *MediaService) SearchMixed(keyword string, page, size int) (*SearchMixed
 		return nil, err
 	}
 
+	// 分集命中时自动并入其所属剧集：用户按单个视频文件名搜索时，
+	// 分集本身不直接展示（前端会过滤），但应能找到它所属的剧目。
+	directSeriesIDs := make(map[string]struct{}, len(series))
+	for i := range series {
+		directSeriesIDs[series[i].ID] = struct{}{}
+	}
+	episodeSeriesIDs := make([]string, 0)
+	seenSeriesIDs := make(map[string]struct{})
+	for i := range media {
+		m := &media[i]
+		if m.MediaType != "episode" || m.SeriesID == "" {
+			continue
+		}
+		if _, ok := directSeriesIDs[m.SeriesID]; ok {
+			continue
+		}
+		if _, ok := seenSeriesIDs[m.SeriesID]; ok {
+			continue
+		}
+		seenSeriesIDs[m.SeriesID] = struct{}{}
+		episodeSeriesIDs = append(episodeSeriesIDs, m.SeriesID)
+	}
+	if len(episodeSeriesIDs) > 0 {
+		extras, extraErr := s.seriesRepo.FindByIDs(episodeSeriesIDs)
+		if extraErr == nil && len(extras) > 0 {
+			series = append(series, extras...)
+		} else if extraErr != nil {
+			s.logger.Warnf("归并分集所属剧集失败: %v", extraErr)
+		}
+	}
+
 	return &SearchMixedResult{
 		Media:       media,
 		Series:      series,

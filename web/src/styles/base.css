@@ -40,6 +40,14 @@
     transition: none !important;
   }
 
+  /* 主题切换动画（与 2panel 同款）：禁用 View Transition 默认交叉淡化，
+     由 JS 对 ::view-transition-new(root) 做 clip-path 圆形扩散揭示 */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;

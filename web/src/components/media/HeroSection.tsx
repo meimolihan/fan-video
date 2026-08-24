@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
-import { streamApi } from '@/api'
+import { streamApi, homeApi } from '@/api'
 import { usePosterVersion } from '@/stores/mediaRefresh'
 import { useToast } from '@/components/Toast'
 import { Button, Tag, buttonClassName } from '@/components/design-system'
@@ -22,10 +22,12 @@ import {
   Play,
   RefreshCw,
   Share2,
+  Sparkles,
   Star,
   Trash2,
 } from 'lucide-react'
 import clsx from 'clsx'
+import { formatErrMsg } from '@/utils/error'
 
 interface HeroSectionProps {
   media: Media
@@ -175,6 +177,7 @@ export default function HeroSection({
   const [failedBackdropKey, setFailedBackdropKey] = useState<string | null>(null)
   const [showPlaylistMenu, setShowPlaylistMenu] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
+  const [addingFeatured, setAddingFeatured] = useState(false)
   const playlistButtonRef = useRef<HTMLButtonElement>(null)
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const effectivePosterVersion = posterVersion === undefined
@@ -196,6 +199,25 @@ export default function HeroSection({
   const handleAddToPlaylist = (playlistId: string) => {
     onAddToPlaylist(playlistId)
     setShowPlaylistMenu(false)
+  }
+
+  // 加入首页手动精选轮播：分集自动落到所属剧集（轮播以剧集为单位）
+  const handleAddToCarousel = async () => {
+    if (addingFeatured) return
+    setShowMoreMenu(false)
+    setAddingFeatured(true)
+    try {
+      const isEpisode = media.media_type === 'episode'
+      const itemType = isEpisode ? 'series' as const : 'movie' as const
+      const itemId = isEpisode && media.series_id ? media.series_id : media.id
+      const { data } = await homeApi.addFeatured(itemType, itemId)
+      if (data.active) toast.success(t('hero.addedToCarouselActive'))
+      else toast.info(t('hero.addedToCarouselPending', { count: data.total }))
+    } catch (error) {
+      toast.error(formatErrMsg(error, t('hero.addToCarouselFailed')))
+    } finally {
+      setAddingFeatured(false)
+    }
   }
 
   const title = media.media_type === 'episode'
@@ -337,6 +359,14 @@ export default function HeroSection({
             </button>
             <button onClick={() => { onEditMetadata?.(); setShowMoreMenu(false) }} className={menuItemClassName} role="menuitem">
               <Pencil size={14} aria-hidden="true" /> {t('hero.editMetadata')}
+            </button>
+            <button
+              onClick={handleAddToCarousel}
+              disabled={addingFeatured}
+              className={clsx(menuItemClassName, 'disabled:cursor-not-allowed disabled:opacity-45')}
+              role="menuitem"
+            >
+              <Sparkles size={14} aria-hidden="true" /> {t('hero.addToCarousel')}
             </button>
             <button onClick={() => { onDelete?.(); setShowMoreMenu(false) }} className={clsx(menuItemClassName, 'text-[var(--nv-status-danger)] hover:text-[var(--nv-status-danger)]')} role="menuitem">
               <Trash2 size={14} aria-hidden="true" /> {t('hero.deleteMedia')}
