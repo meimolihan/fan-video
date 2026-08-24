@@ -191,6 +191,21 @@ func registerPublicRoutes(
 		})
 	})
 
+	r.GET("/favicon.ico", func(c *gin.Context) {
+		c.Header("Content-Type", "image/png")
+		c.Header("Cache-Control", "public, max-age=604800")
+		c.File(cfg.App.WebDir + "/assets/icon-192.png")
+	})
+	r.GET("/favicon.svg", func(c *gin.Context) {
+		c.Header("Content-Type", "image/svg+xml")
+		c.Header("Cache-Control", "public, max-age=604800")
+		c.File(cfg.App.WebDir + "/favicon.svg")
+	})
+	r.GET("/webmanifest", func(c *gin.Context) {
+		c.Header("Content-Type", "application/manifest+json")
+		c.Header("Cache-Control", "no-cache")
+		c.File(cfg.App.WebDir + "/manifest.json")
+	})
 	r.GET("/manifest.json", func(c *gin.Context) {
 		c.Header("Cache-Control", "no-cache")
 		c.File(cfg.App.WebDir + "/manifest.json")

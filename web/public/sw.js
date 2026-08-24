@@ -1,7 +1,7 @@
 // Nowen Video Service Worker v8
 // 缓存生产环境的静态资源与海报图片；认证、HTML 导航、开发模块、写请求和其余 API 全部直连网络。
 
-const CACHE_VERSION = 'v8'
+const CACHE_VERSION = 'v11'
 const STATIC_CACHE = `nowen-static-${CACHE_VERSION}`
 const IMAGE_CACHE = `nowen-images-${CACHE_VERSION}`
 // 海报/背景图独立缓存：媒体库海报数量远超普通图片，
@@ -12,7 +12,8 @@ const MAX_POSTER_CACHE = 2000
 // 不缓存 HTML 应用壳。页面结构和导航必须始终来自当前部署版本，
 // 避免已经下线的页面与菜单被离线回退重新启动。
 const PRECACHE_ASSETS = [
-  '/manifest.json',
+  '/webmanifest',
+  '/favicon.svg',
 ]
 
 const MAX_IMAGE_CACHE = 200
@@ -146,7 +147,8 @@ self.addEventListener('fetch', (event) => {
       caches.match(request).then((cached) => {
         const network = fetch(request)
           .then((response) => {
-            if (response.ok && response.type === 'basic') {
+            const contentType = response.headers.get('content-type') || ''
+            if (response.ok && response.type === 'basic' && contentType.startsWith('image/')) {
               const clone = response.clone()
               void caches.open(IMAGE_CACHE).then(async (cache) => {
                 await cache.put(request, clone)

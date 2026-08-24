@@ -15,6 +15,17 @@ import './styles/app-ui.css'
 const SW_DEV_RELOAD_KEY = 'nowen-sw-dev-cleanup-reload'
 const SW_UPDATE_RELOAD_KEY = 'nowen-sw-production-update-reload'
 
+function dismissSplash() {
+  const splash = document.getElementById('splash')
+  if (!splash || splash.classList.contains('hide')) return
+  // 至少展示 600ms，避免资源秒开时开屏闪烁
+  const delay = Math.max(0, 600 - performance.now())
+  window.setTimeout(() => {
+    splash.classList.add('hide')
+    window.setTimeout(() => splash.remove(), 450)
+  }, delay)
+}
+
 async function cleanupDevelopmentServiceWorker() {
   try {
     const registrations = await navigator.serviceWorker.getRegistrations()
@@ -94,3 +105,5 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </LazyMotion>
   </React.StrictMode>,
 )
+
+requestAnimationFrame(dismissSplash)

@@ -664,7 +664,7 @@ func (c *Config) migrateFromFlatConfig() {
 		if c.WebDir != "" && c.WebDir != "./web/dist" {
 			c.App.WebDir = c.WebDir
 		} else {
-			c.App.WebDir = "./web/dist"
+			c.App.WebDir = "./web/public"
 		}
 	}
 	if c.App.FFmpegPath == "" {

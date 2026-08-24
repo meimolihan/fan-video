@@ -5,7 +5,7 @@
 # 基于 nowen-video server-lite 重构精简而来
 
 FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend
-ARG NOWEN_VERSION=1.0.1
+ARG NOWEN_VERSION=1.0.2
 WORKDIR /app/web
 COPY web/package*.json ./
 RUN npm ci
@@ -16,7 +16,7 @@ RUN npm run build
 FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS backend
 ARG TARGETOS
 ARG TARGETARCH
-ARG NOWEN_VERSION=1.0.1
+ARG NOWEN_VERSION=1.0.2
 WORKDIR /app
 ENV GOPROXY=https://goproxy.cn,https://goproxy.io,direct
 COPY go.mod go.sum ./
@@ -30,7 +30,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 
 FROM alpine:3.24
 ARG TARGETARCH
-ARG NOWEN_VERSION=1.0.1
+ARG NOWEN_VERSION=1.0.2
 ARG FFMPEG_VERSION=8.1.2-r0
 
 # Keep the runtime dependency surface minimal. Alpine's BusyBox already
@@ -58,6 +58,7 @@ RUN addgroup -S nowen && adduser -S nowen -G nowen
 WORKDIR /app
 COPY --from=backend /app/fan-video /usr/local/bin/fan-video
 COPY --from=frontend /app/web/dist /app/web/dist
+COPY --from=frontend /app/web/public/assets /app/web/dist/assets
 COPY scripts/docker-entrypoint.sh /entrypoint.sh
 
 RUN mkdir -p /data /cache /media \
