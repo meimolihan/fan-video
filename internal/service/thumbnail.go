@@ -1,140 +1,271 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"sync"
 
-	"github.com/fan-video/fan-video/internal/config"
 	"github.com/fan-video/fan-video/internal/model"
-	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
-// ThumbnailService 关键帧预览图服务
-// 使用 FFmpeg 提取视频关键帧生成缩略图条（Sprite Sheet）
-// 供前端播放器在进度条悬停时展示预览
-type ThumbnailService struct {
-	cfg    *config.Config
-	logger *zap.SugaredLogger
-	mu     sync.Mutex
-	cache  map[string]string // mediaID -> sprite 文件路径
+const (
+	thumbnailWidth  = 240
+	thumbnailFormat = "webp"
+)
+
+// thumbBaseDir 缩略图根目录（与数据卷分离，避免只读挂载问题）
+const thumbBaseDir = "/cache/thumbs"
+
+// GetThumbPath 生成缩略图文件路径，存放在 /cache/thumbs 下，保留原路径结构
+func GetThumbPath(posterPath string) string {
+	// 去掉前导 /，保留相对路径，替换扩展名为 .webp
+	rel := strings.TrimPrefix(posterPath, "/")
+	ext := filepath.Ext(rel)
+	name := strings.TrimSuffix(rel, ext)
+	return filepath.Join(thumbBaseDir, name+"."+thumbnailFormat)
 }
 
-func NewThumbnailService(cfg *config.Config, logger *zap.SugaredLogger) *ThumbnailService {
-	return &ThumbnailService{
-		cfg:    cfg,
-		logger: logger,
-		cache:  make(map[string]string),
-	}
-}
+// EnsureThumbnail 确保指定海报有对应的缩略图。如果已存在则直接返回，否则使用 FFmpeg 生成。
+func EnsureThumbnail(posterPath string) (string, error) {
+	thumbPath := GetThumbPath(posterPath)
 
-// GenerateSprite 为指定媒体生成缩略图精灵图
-// 默认每 10 秒截取一帧，缩放到 160x90，拼成一个网格图
-func (s *ThumbnailService) GenerateSprite(media *model.Media) (string, error) {
-	s.mu.Lock()
-	if cached, ok := s.cache[media.ID]; ok {
-		s.mu.Unlock()
-		if _, err := os.Stat(cached); err == nil {
-			return cached, nil
-		}
-	}
-	s.mu.Unlock()
-
-	// 创建缩略图目录
-	outputDir := filepath.Join(s.cfg.Cache.CacheDir, "thumbnails", media.ID)
-	os.MkdirAll(outputDir, 0755)
-
-	spritePath := filepath.Join(outputDir, "sprite.jpg")
-
-	// 计算帧提取间隔（确保不超过100帧）
-	interval := 10.0 // 每10秒一帧
-	if media.Duration > 1000 {
-		interval = media.Duration / 100
+	// 检查是否已存在
+	if _, err := os.Stat(thumbPath); err == nil {
+		return thumbPath, nil
 	}
 
-	// FFmpeg 命令：每 N 秒截取一帧 → 缩放到 160x90 → 拼成 10 列的 tile
+	// 确保父目录存在
+	parentDir := filepath.Dir(thumbPath)
+	if err := os.MkdirAll(parentDir, 0755); err != nil {
+		return "", fmt.Errorf("创建缩略图目录失败: %w", err)
+	}
+
+	// 使用 FFmpeg 生成固定宽度缩略图
+	// -vf "scale=128:-2"：按宽度128缩放，高度自动保持比例
+	// -frames:v 1：只处理第一帧（对于图片输入是生成缩略图）
+	// -c:v libwebp：输出 WebP 格式，体积小
+	// -quality 75：质量平衡
 	args := []string{
-		"-i", media.FilePath,
-		"-vf", fmt.Sprintf("fps=1/%d,scale=160:90,tile=10x10", int(interval)),
+		"-i", posterPath,
+		"-vf", fmt.Sprintf("scale=%d:-2", thumbnailWidth),
 		"-frames:v", "1",
-		"-q:v", "5",
-		"-y",
-		spritePath,
+		"-c:v", "libwebp",
+		"-quality", "95",
+		"-lossless", "0",
+		thumbPath,
 	}
 
-	cmd := exec.Command(s.cfg.App.FFmpegPath, args...)
+	cmd := exec.CommandContext(context.Background(), "ffmpeg", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		s.logger.Debugf("生成缩略图失败: %s - %v\n%s", media.Title, err, string(output))
-		return "", fmt.Errorf("生成缩略图失败: %w", err)
+		// 清理可能的部分文件
+		os.Remove(thumbPath)
+		return "", fmt.Errorf("FFmpeg 生成缩略图失败: %s", string(output))
 	}
 
-	// 缓存结果
-	s.mu.Lock()
-	s.cache[media.ID] = spritePath
-	s.mu.Unlock()
+	// 验证文件是否已创建
+	if _, err := os.Stat(thumbPath); err != nil {
+		return "", fmt.Errorf("缩略图文件未生成: %w", err)
+	}
 
-	s.logger.Debugf("缩略图生成完成: %s -> %s", media.Title, spritePath)
-	return spritePath, nil
+	return thumbPath, nil
 }
 
-// GenerateVTT 生成 WebVTT 格式的缩略图时间轴文件
-// 与精灵图配合使用，播放器可以通过 VTT 定位到精灵图中的具体位置
-func (s *ThumbnailService) GenerateVTT(media *model.Media) (string, error) {
-	outputDir := filepath.Join(s.cfg.Cache.CacheDir, "thumbnails", media.ID)
-	os.MkdirAll(outputDir, 0755)
-
-	vttPath := filepath.Join(outputDir, "thumbnails.vtt")
-
-	interval := 10.0
-	if media.Duration > 1000 {
-		interval = media.Duration / 100
-	}
-
-	var sb strings.Builder
-	sb.WriteString("WEBVTT\n\n")
-
-	thumbW, thumbH := 160, 90
-	cols := 10
-
-	frameCount := int(media.Duration / interval)
-	if frameCount > 100 {
-		frameCount = 100
-	}
-
-	for i := 0; i < frameCount; i++ {
-		startTime := float64(i) * interval
-		endTime := startTime + interval
-
-		col := i % cols
-		row := i / cols
-
-		x := col * thumbW
-		y := row * thumbH
-
-		sb.WriteString(fmt.Sprintf("%s --> %s\n",
-			formatVTTTime(startTime), formatVTTTime(endTime)))
-		sb.WriteString(fmt.Sprintf("sprite.jpg#xywh=%d,%d,%d,%d\n\n",
-			x, y, thumbW, thumbH))
-	}
-
-	if err := os.WriteFile(vttPath, []byte(sb.String()), 0644); err != nil {
-		return "", err
-	}
-
-	return vttPath, nil
+// ThumbnailStats 缩略图统计信息
+type ThumbnailStats struct {
+	Total     int `json:"total"`
+	Generated int `json:"generated"`
+	Missing   int `json:"missing"`
 }
 
-// GetSpritePath 获取缩略图精灵图路径
-func (s *ThumbnailService) GetSpritePath(mediaID string) string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.cache[mediaID]
+// ThumbnailAuditItem 缩略图完整性检查中的单条问题
+type ThumbnailAuditItem struct {
+	MediaID    string `json:"media_id"`
+	Title      string `json:"title"`
+	PosterPath string `json:"poster_path"`
+	ThumbPath  string `json:"thumb_path"`
+	Detail     string `json:"detail"`
 }
 
-// unused: satisfy compiler
-var _ = strconv.Atoi
+// ThumbnailAuditReport 缩略图完整性检查报告（三分类）
+type ThumbnailAuditReport struct {
+	Total         int                  `json:"total"`
+	Generated     int                  `json:"generated"`
+	PosterDeleted []ThumbnailAuditItem `json:"poster_deleted"` // 缩略图存在但源海报已删除
+	ThumbMissing  []ThumbnailAuditItem `json:"thumb_missing"`  // 海报存在但缩略图缺失
+	OrphanThumbs  []ThumbnailAuditItem `json:"orphan_thumbs"`  // 缩略图文件无对应媒体
+}
+
+// DeleteThumbnail 删除指定媒体的缩略图文件
+func DeleteThumbnail(posterPath string) error {
+	thumbPath := GetThumbPath(posterPath)
+	if err := os.Remove(thumbPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("删除缩略图失败: %w", err)
+	}
+	return nil
+}
+
+// GetThumbnailStats 统计全库缩略图覆盖情况
+func GetThumbnailStats(db *gorm.DB) (ThumbnailStats, error) {
+	var medias []model.Media
+	if err := db.Model(&model.Media{}).Find(&medias).Error; err != nil {
+		return ThumbnailStats{}, fmt.Errorf("获取媒体列表失败: %w", err)
+	}
+	stats := ThumbnailStats{Total: len(medias)}
+	for _, media := range medias {
+		if media.PosterPath == "" {
+			stats.Missing++
+			continue
+		}
+		if _, err := os.Stat(GetThumbPath(media.PosterPath)); err == nil {
+			stats.Generated++
+		} else {
+			stats.Missing++
+		}
+	}
+	return stats, nil
+}
+
+// thumbPathToPosterKey 从缩略图路径反推海报键（用于与 DB 记录比对）
+func thumbPathToPosterKey(thumbPath string) string {
+	rel := strings.TrimPrefix(thumbPath, thumbBaseDir+"/")
+	rel = strings.TrimPrefix(rel, thumbBaseDir)
+	rel = strings.TrimPrefix(rel, "/")
+	ext := filepath.Ext(rel)
+	return strings.TrimSuffix(rel, ext) // e.g. "data/movies/poster"
+}
+
+// GetThumbnailAudit 完整性检查：三分类报告
+func GetThumbnailAudit(db *gorm.DB) (ThumbnailAuditReport, error) {
+	var medias []model.Media
+	if err := db.Model(&model.Media{}).Find(&medias).Error; err != nil {
+		return ThumbnailAuditReport{}, fmt.Errorf("获取媒体列表失败: %w", err)
+	}
+
+	// 构建 thumb_key → media 的映射，用于孤儿检测
+	thumbToMedia := make(map[string]*model.Media)
+	for i := range medias {
+		if medias[i].PosterPath == "" {
+			continue
+		}
+		key := thumbPathToPosterKey(GetThumbPath(medias[i].PosterPath))
+		thumbToMedia[key] = &medias[i]
+	}
+
+	report := ThumbnailAuditReport{
+		Total:         len(medias),
+		PosterDeleted: make([]ThumbnailAuditItem, 0),
+		ThumbMissing:  make([]ThumbnailAuditItem, 0),
+		OrphanThumbs:  make([]ThumbnailAuditItem, 0),
+	}
+
+	// 1. 遍历 DB 媒体：检测 poster_deleted 和 thumb_missing
+	for _, media := range medias {
+		if media.PosterPath == "" {
+			// 无海报：缩略图缺失（海报本身不存在）
+			report.ThumbMissing = append(report.ThumbMissing, ThumbnailAuditItem{
+				MediaID: media.ID,
+				Title:   media.Title,
+				Detail:  "无海报图，无法生成缩略图",
+			})
+			continue
+		}
+
+		posterExists := false
+		if _, err := os.Stat(media.PosterPath); err == nil {
+			posterExists = true
+		}
+		thumbExists := false
+		thumbPath := GetThumbPath(media.PosterPath)
+		if _, err := os.Stat(thumbPath); err == nil {
+			thumbExists = true
+		}
+
+		if posterExists {
+			report.Generated++
+		}
+
+		if thumbExists && !posterExists {
+			// 缩略图存在但源海报已删除
+			report.PosterDeleted = append(report.PosterDeleted, ThumbnailAuditItem{
+				MediaID:    media.ID,
+				Title:      media.Title,
+				PosterPath: media.PosterPath,
+				ThumbPath:  thumbPath,
+				Detail:     "源海报已删除，缩略图已过期",
+			})
+		} else if !thumbExists {
+			// 海报存在但缩略图缺失
+			detail := "缩略图文件缺失"
+			if !posterExists {
+				detail = "海报与缩略图均缺失"
+			}
+			report.ThumbMissing = append(report.ThumbMissing, ThumbnailAuditItem{
+				MediaID:    media.ID,
+				Title:      media.Title,
+				PosterPath: media.PosterPath,
+				ThumbPath:  thumbPath,
+				Detail:     detail,
+			})
+		}
+	}
+
+	// 2. 扫描缩略图目录：检测孤儿文件
+	_ = filepath.Walk(thumbBaseDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) != "."+thumbnailFormat {
+			return nil
+		}
+		key := thumbPathToPosterKey(path)
+		if _, found := thumbToMedia[key]; !found {
+			report.OrphanThumbs = append(report.OrphanThumbs, ThumbnailAuditItem{
+				ThumbPath: path,
+				Detail:    "缩略图文件无对应媒体记录",
+			})
+		}
+		return nil
+	})
+
+	return report, nil
+}
+
+// CleanThumbnailAuditIssues 清理缩略图完整性问题
+func CleanThumbnailAuditIssues(db *gorm.DB, deleteOrphan, deleteStale bool) (int, error) {
+	deleted := 0
+
+	// 获取报告
+	report, err := GetThumbnailAudit(db)
+	if err != nil {
+		return 0, err
+	}
+
+	// 删除孤儿缩略图文件
+	if deleteOrphan {
+		for _, item := range report.OrphanThumbs {
+			if item.ThumbPath != "" {
+				if err := os.Remove(item.ThumbPath); err == nil {
+					deleted++
+				}
+			}
+		}
+	}
+
+	// 删除源海报已删除的缩略图文件
+	if deleteStale {
+		for _, item := range report.PosterDeleted {
+			if item.ThumbPath != "" {
+				if err := os.Remove(item.ThumbPath); err == nil {
+					deleted++
+				}
+			}
+		}
+	}
+
+	return deleted, nil
+}

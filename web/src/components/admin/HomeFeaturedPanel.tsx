@@ -4,15 +4,16 @@ import { AdminPanel } from '@/components/admin/AdminPrimitives'
 import { Button } from '@/components/design-system'
 import { useToast } from '@/components/Toast'
 import { homeApi, mediaApi, streamApi, type HomeFeaturedEntry } from '@/api'
+import { usePosterVersion } from '@/stores/mediaRefresh'
 import type { Media, Series } from '@/types'
 
 const MIN_ITEMS = 2
 
-function EntryThumb({ entry }: { entry: HomeFeaturedEntry }) {
+function EntryThumb({ entry, posterVersion }: { entry: HomeFeaturedEntry; posterVersion?: number }) {
   const [failed, setFailed] = useState(false)
   const url = entry.item_type === 'movie'
-    ? streamApi.getPosterUrl(entry.item_id)
-    : streamApi.getSeriesPosterUrl(entry.item_id)
+    ? streamApi.getPosterUrl(entry.item_id, posterVersion)
+    : streamApi.getSeriesPosterUrl(entry.item_id, posterVersion)
 
   if (failed || !entry.valid) {
     return (
@@ -34,6 +35,7 @@ function EntryThumb({ entry }: { entry: HomeFeaturedEntry }) {
 
 export default function HomeFeaturedPanel() {
   const toast = useToast()
+  const posterVersion = usePosterVersion()
   const [entries, setEntries] = useState<HomeFeaturedEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -264,7 +266,7 @@ export default function HomeFeaturedPanel() {
               }`}
             >
               <span className="w-5 shrink-0 text-center text-xs tabular-nums text-[var(--nv-text-tertiary)]">{index + 1}</span>
-              <EntryThumb entry={entry} />
+              <EntryThumb entry={entry} posterVersion={posterVersion} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-[var(--nv-text-primary)]" title={entry.title}>{entry.title}</p>
                 <p className="mt-0.5 truncate text-xs text-[var(--nv-text-tertiary)]">

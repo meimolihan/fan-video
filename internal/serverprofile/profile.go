@@ -38,7 +38,7 @@ func unavailable(mode string) Capability { return Capability{Available: false, E
 func (r LiteRuntime) Manifest(cfg *config.Config) Manifest {
 	return Manifest{
 		SchemaVersion: SchemaVersion,
-		Profile:       "fan-video",
+		Profile:       "lite",
 		Capabilities: map[string]Capability{
 			"library":             always("core"),
 			"metadata":            always("core"),

@@ -36,13 +36,23 @@ func (r *SeriesRepo) FindByIDOnly(id string) (*model.Series, error) {
 
 func (r *SeriesRepo) FindByFolderPath(folderPath string) (*model.Series, error) {
 	var series model.Series
-	err := r.db.Where("folder_path = ?", folderPath).First(&series).Error
+	err := r.db.Unscoped().Where("folder_path = ?", folderPath).First(&series).Error
+	if err == nil && !series.DeletedAt.Time.IsZero() {
+		if err := r.db.Unscoped().Model(&series).Update("deleted_at", nil).Error; err != nil {
+			return nil, err
+		}
+	}
 	return &series, err
 }
 
 func (r *SeriesRepo) FindByTitleAndLibrary(title, libraryID string) (*model.Series, error) {
 	var series model.Series
-	err := r.db.Where("title = ? AND library_id = ?", title, libraryID).First(&series).Error
+	err := r.db.Unscoped().Where("title = ? AND library_id = ?", title, libraryID).First(&series).Error
+	if err == nil && !series.DeletedAt.Time.IsZero() {
+		if err := r.db.Unscoped().Model(&series).Update("deleted_at", nil).Error; err != nil {
+			return nil, err
+		}
+	}
 	return &series, err
 }
 

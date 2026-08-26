@@ -61,5 +61,7 @@ func NewLiteHandlers(services *service.Services, repos *repository.Repositories,
 		},
 		// 首页手动精选轮播
 		HomeFeatured: NewHomeFeaturedHandler(repos.HomeFeatured, repos.Media, repos.Series, logger),
+		// 海报缩略图管理
+		Thumbnail: NewThumbnailHandler(repos.DB(), logger),
 	}
 }

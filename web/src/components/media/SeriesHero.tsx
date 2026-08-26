@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Heart, MoreHorizontal, Play, Share2, Trash2, Tv } from 'lucide-react'
+import { Heart, Image, MoreHorizontal, Play, Share2, Trash2, Tv } from 'lucide-react'
 import type { Media, Series } from '@/types'
 import { streamApi } from '@/api'
 import { Button, Tag, buttonClassName } from '@/components/design-system'
@@ -17,6 +17,7 @@ interface SeriesHeroProps {
   onFavorite: () => void
   onDelete: () => void
   onShare: () => void
+  onPosterPicker: () => void
 }
 
 export default function SeriesHero({
@@ -29,14 +30,27 @@ export default function SeriesHero({
   onFavorite,
   onDelete,
   onShare,
+  onPosterPicker,
 }: SeriesHeroProps) {
   const [imageLoaded, setImageLoaded] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const menuContainerRef = useRef<HTMLDivElement>(null)
   const genres = (series.genres || '').split(',').map((item) => item.trim()).filter(Boolean)
 
   useEffect(() => {
     setImageLoaded(false)
   }, [posterVersion, series.backdrop_path, series.id])
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const handlePointerDown = (e: PointerEvent) => {
+      if (menuContainerRef.current && !menuContainerRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', handlePointerDown, true)
+    return () => document.removeEventListener('pointerdown', handlePointerDown, true)
+  }, [menuOpen])
 
   const closeAndRun = (action: () => void) => {
     setMenuOpen(false)
@@ -56,7 +70,7 @@ export default function SeriesHero({
         <Heart size={18} fill={isFavorited ? 'currentColor' : 'none'} aria-hidden="true" />
       </Button>
 
-      <div className="relative">
+      <div className="relative" ref={menuContainerRef}>
         <Button type="button" variant="secondary" size="lg" iconOnly onClick={() => setMenuOpen((open) => !open)} aria-label="更多操作" aria-expanded={menuOpen}>
           <MoreHorizontal size={19} aria-hidden="true" />
         </Button>
@@ -66,6 +80,7 @@ export default function SeriesHero({
             {isAdmin && (
               <>
                 <div className="px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--nv-text-tertiary)]">剧集管理</div>
+                <MenuItem icon={<Image size={14} />} label="剧集海报" onClick={() => closeAndRun(onPosterPicker)} />
                 <MenuItem icon={<Trash2 size={14} />} label="删除剧集" onClick={() => closeAndRun(onDelete)} danger />
                 <div className="my-1 h-px bg-[var(--nv-border-subtle)]" />
               </>
@@ -134,8 +149,6 @@ export default function SeriesHero({
           actions={actions}
         />
       </div>
-
-      {menuOpen && <button type="button" className="fixed inset-0 z-[59] cursor-default" aria-label="关闭菜单" onClick={() => setMenuOpen(false)} />}
     </section>
   )
 }

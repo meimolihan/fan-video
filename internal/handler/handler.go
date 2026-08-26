@@ -56,6 +56,8 @@ type Handlers struct {
 	LazyIngest *LazyIngestHandler
 	// 首页手动精选轮播
 	HomeFeatured *HomeFeaturedHandler
+	// 海报缩略图管理
+	Thumbnail *ThumbnailHandler
 }
 
 func NewHandlers(services *service.Services, repos *repository.Repositories, cfg *config.Config, logger *zap.SugaredLogger) *Handlers {
@@ -126,6 +128,8 @@ func NewHandlers(services *service.Services, repos *repository.Repositories, cfg
 		LazyIngest: NewLazyIngestHandler(services.LazyIngest, logger),
 		// 首页手动精选轮播
 		HomeFeatured: NewHomeFeaturedHandler(repos.HomeFeatured, repos.Media, repos.Series, logger),
+		// 海报缩略图管理
+		Thumbnail: NewThumbnailHandler(repos.DB(), logger),
 	}
 
 	return h

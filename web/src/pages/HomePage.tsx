@@ -5,6 +5,7 @@ import { useWebSocket, WS_EVENTS } from '@/hooks/useWebSocket'
 import { useToast } from '@/components/Toast'
 import { useTranslation } from '@/i18n'
 import { usePageCache } from '@/hooks/usePageCache'
+import { usePosterVersion } from '@/stores/mediaRefresh'
 import { formatProgress } from '@/utils/format'
 import type { WatchHistory, RecommendedMedia, MixedItem } from '@/types'
 import MediaCard from '@/components/MediaCard'
@@ -33,16 +34,16 @@ interface HomeShelf {
   items: MixedItem[]
 }
 
-function getContinueArtwork(item: WatchHistory): string | null {
+function getContinueArtwork(item: WatchHistory, version?: number): string | null {
   const media = item.media
   if (media.media_type === 'episode' && media.series_id && media.series?.backdrop_path) {
-    return streamApi.getSeriesBackdropUrl(media.series_id)
+    return streamApi.getSeriesBackdropUrl(media.series_id, version)
   }
   if (media.media_type === 'episode' && media.series_id && media.series?.poster_path) {
-    return streamApi.getSeriesPosterUrl(media.series_id)
+    return streamApi.getSeriesPosterUrl(media.series_id, version)
   }
-  if (media.backdrop_path) return streamApi.getBackdropUrl(item.media_id)
-  if (media.poster_path) return streamApi.getPosterUrl(item.media_id)
+  if (media.backdrop_path) return streamApi.getBackdropUrl(item.media_id, version)
+  if (media.poster_path) return streamApi.getPosterUrl(item.media_id, version)
   return null
 }
 
@@ -69,6 +70,7 @@ export default function HomePage() {
   const { on, off } = useWebSocket()
   const toast = useToast()
   const { t } = useTranslation()
+  const posterVersion = usePosterVersion()
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const { data, loading, refetch, invalidate } = usePageCache<HomeData>(
@@ -173,6 +175,7 @@ export default function HomePage() {
           items={continueList}
           title={t('home.continueWatching')}
           watchedLabel={(percent) => t('home.watched', { percent: String(percent) })}
+          posterVersion={posterVersion}
         />
       )}
 
@@ -226,10 +229,12 @@ function ContinueWatchingRow({
   items,
   title,
   watchedLabel,
+  posterVersion,
 }: {
   items: WatchHistory[]
   title: string
   watchedLabel: (percent: number) => string
+  posterVersion?: number
 }) {
   return (
     <MediaRail
@@ -248,7 +253,7 @@ function ContinueWatchingRow({
         const displayTitle = item.media.media_type === 'episode' && item.media.series
           ? `${item.media.series.title} S${String(item.media.season_num || 0).padStart(2, '0')}E${String(item.media.episode_num || 0).padStart(2, '0')}`
           : item.media.title
-        const artworkUrl = getContinueArtwork(item)
+        const artworkUrl = getContinueArtwork(item, posterVersion)
 
         return (
           <article key={item.id} className="nv-continue-card group flex-shrink-0">

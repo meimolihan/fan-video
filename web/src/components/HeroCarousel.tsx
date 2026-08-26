@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Film, Heart, Play, RotateCcw } from 'lucide-
 import { streamApi } from '@/api'
 import { useTranslation } from '@/i18n'
 import type { RecommendedMedia, MixedItem, Media } from '@/types'
+import { usePosterVersion } from '@/stores/mediaRefresh'
 import { Button, buttonClassName } from '@/components/design-system'
 import { MediaArtwork, MediaHeroContent } from '@/ui'
 
@@ -107,27 +108,27 @@ function isSeriesProxy(media: Media) {
   return Boolean(media.series_id && media.series_id === media.id)
 }
 
-function getHeroPoster(media: Media): string | null {
+function getHeroPoster(media: Media, version?: number): string | null {
   // 剧集代理行（id === series_id）用剧集海报；真实分集一律用自身海报端点，
   // 由后端按「同名图 > 子目录同名图 > 首帧」返回独立封面。
   if (isSeriesProxy(media)) {
-    return streamApi.getSeriesPosterUrl(media.series_id)
+    return streamApi.getSeriesPosterUrl(media.series_id, version)
   }
-  if (media.series_id) return streamApi.getPosterUrl(media.id)
-  if (media.poster_path) return streamApi.getPosterUrl(media.id)
+  if (media.series_id) return streamApi.getPosterUrl(media.id, version)
+  if (media.poster_path) return streamApi.getPosterUrl(media.id, version)
   return null
 }
 
-function getHeroArtwork(media: Media): HeroArtwork {
-  const poster = getHeroPoster(media)
+function getHeroArtwork(media: Media, version?: number): HeroArtwork {
+  const poster = getHeroPoster(media, version)
   let backdrop: string | null = null
 
   // Only hit backdrop endpoints when metadata says a backdrop exists. The old
   // unconditional fallback path generated guaranteed 404s for poster-only media.
   if (media.series_id && (media.series?.backdrop_path || (isSeriesProxy(media) && media.backdrop_path))) {
-    backdrop = streamApi.getSeriesBackdropUrl(media.series_id)
+    backdrop = streamApi.getSeriesBackdropUrl(media.series_id, version)
   } else if (media.backdrop_path) {
-    backdrop = streamApi.getBackdropUrl(media.id)
+    backdrop = streamApi.getBackdropUrl(media.id, version)
   }
 
   if (backdrop && !hasHeroArtworkFailed(backdrop)) {
@@ -186,6 +187,7 @@ export default function HeroCarousel({
   watchStateByMediaId = {},
 }: HeroCarouselProps) {
   const { t } = useTranslation()
+  const posterVersion = usePosterVersion()
   const prefersReducedMotion = useReducedMotion()
   const containerRef = useRef<HTMLElement>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -303,8 +305,8 @@ export default function HeroCarousel({
   const item = items[current]
   if (!item) return null
 
-  const artwork = getHeroArtwork(item.media)
-  const poster = getHeroPoster(item.media)
+  const artwork = getHeroArtwork(item.media, posterVersion)
+  const poster = getHeroPoster(item.media, posterVersion)
   const playLink = item.media.media_type === 'episode' && item.media.series_id
     ? `/series/${item.media.series_id}`
     : `/play/${item.media.id}`

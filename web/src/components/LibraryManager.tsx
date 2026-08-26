@@ -29,6 +29,7 @@ import { AdminPanel, AdminStatus } from '@/components/admin/AdminPrimitives'
 import { Button, EmptyState, Tag } from '@/components/design-system'
 import HighlightsBatchPanel from '@/components/admin/HighlightsBatchPanel'
 import HomeFeaturedPanel from '@/components/admin/HomeFeaturedPanel'
+import ThumbnailManagementPanel from '@/components/admin/ThumbnailManagementPanel'
 import { invalidateMediaListCaches } from '@/utils/invalidateMediaCaches'
 
 const TYPE_CONFIG: Record<string, { label: string; icon: typeof Film }> = {
@@ -331,6 +332,8 @@ function LibraryManager({
       </AdminPanel>
 
       <HighlightsBatchPanel />
+
+      <ThumbnailManagementPanel />
 
       <HomeFeaturedPanel />
 

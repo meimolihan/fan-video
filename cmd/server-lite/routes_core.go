@@ -160,6 +160,7 @@ func registerCoreAPI(
 	api.GET("/stream/:id/strm-seg", guardByMediaID, handlers.Stream.STRMSegment)
 	api.GET("/stream/:id/strm-check", guardByMediaID, handlers.Stream.STRMCheck)
 	api.GET("/media/:id/poster", handlers.Stream.Poster)
+	api.GET("/media/:id/poster/thumb", handlers.Stream.PosterThumb)
 	api.GET("/media/:id/backdrop", handlers.Stream.Backdrop)
 
 	api.POST("/playback/sessions", playbackSessions.Create)
@@ -174,6 +175,8 @@ func registerCoreAPI(
 	api.GET("/persons/:id", handlers.Media.GetPersonDetail)
 	api.GET("/persons/:id/media", handlers.Media.GetPersonMedia)
 	api.GET("/persons/:id/profile", handlers.Media.PersonProfile)
+
+	// 缩略图生成服务（已迁移到 routes_admin.go 中统一注册）
 
 	api.GET("/subtitle/:id/tracks", handlers.Subtitle.ListTracks)
 	api.GET("/subtitle/:id/extract/:index", handlers.Subtitle.ExtractTrack)

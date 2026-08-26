@@ -198,6 +198,44 @@ func setPosterContentType(c *gin.Context, posterPath string) {
 	}
 }
 
+// PosterThumb 缩略图端点：优先返回 128px WebP 缩略图，不存在则 302 回退到原图
+func (h *StreamHandler) PosterThumb(c *gin.Context) {
+	id := c.Param("id")
+	posterPath, err := h.streamService.GetPosterPath(id)
+	if err != nil || posterPath == "" {
+		// 无海报：返回缩略图占位（复用原图占位逻辑）
+		h.Poster(c)
+		return
+	}
+
+	if service.IsWebDAVPath(posterPath) {
+		// WebDAV 海报暂不生成本地缩略图，直接代理原图
+		h.Poster(c)
+		return
+	}
+
+	thumbPath := service.GetThumbPath(posterPath)
+	if _, statErr := os.Stat(thumbPath); statErr == nil {
+		// 缩略图存在：ETag + 缓存
+		fileInfo, _ := os.Stat(thumbPath)
+		if fileInfo != nil {
+			etag := fmt.Sprintf(`"%x-%x"`, fileInfo.ModTime().UnixNano(), fileInfo.Size())
+			c.Header("ETag", etag)
+			if match := c.GetHeader("If-None-Match"); match == etag {
+				c.Status(http.StatusNotModified)
+				return
+			}
+		}
+		c.Header("Content-Type", "image/webp")
+		c.Header("Cache-Control", "public, max-age=86400, must-revalidate")
+		c.File(thumbPath)
+		return
+	}
+
+	// 缩略图不存在：直接返回原图（前端会懒加载替换）
+	h.Poster(c)
+}
+
 func (h *StreamHandler) STRMSegment(c *gin.Context) {
 	id := c.Param("id")
 	target := c.Query("u")

@@ -143,6 +143,9 @@ export const adminApi = {
   setSeriesImageByURL: (seriesId: string, url: string, imageType: 'poster' | 'backdrop' = 'poster') =>
     api.post(`/admin/series/${seriesId}/image/url`, { url, image_type: imageType }),
 
+  setSeriesPosterFromMedia: (seriesId: string, mediaId: string) =>
+    api.post<{ message: string; path: string }>(`/admin/series/${seriesId}/poster`, { media_id: mediaId }),
+
   // 文件系统浏览
   browseFS: (path: string) =>
     api.get<{ data: { current: string; parent: string; items: { name: string; path: string; is_dir: boolean }[] } }>('/admin/fs/browse', {

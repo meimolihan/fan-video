@@ -56,6 +56,7 @@ func registerAdminAPI(r *gin.Engine, cfg *config.Config, handlers *handler.Handl
 	admin.POST("/media/:mediaId/image/url", handlers.Admin.SetMediaImageByURL)
 	admin.POST("/series/:seriesId/image/upload", handlers.Admin.UploadSeriesImage)
 	admin.POST("/series/:seriesId/image/url", handlers.Admin.SetSeriesImageByURL)
+	admin.POST("/series/:seriesId/poster", handlers.Admin.SetSeriesPosterFromMedia)
 	admin.GET("/fs/browse", handlers.Admin.BrowseFS)
 
 	admin.GET("/storage/webdav", handlers.Storage.GetWebDAVConfig)
@@ -116,4 +117,15 @@ func registerAdminAPI(r *gin.Engine, cfg *config.Config, handlers *handler.Handl
 	admin.DELETE("/collections/:id", handlers.Collection.DeleteCollection)
 	admin.POST("/collections/:id/media", handlers.Collection.AddMedia)
 	admin.DELETE("/collections/:id/media/:mediaId", handlers.Collection.RemoveMedia)
+
+	// 海报缩略图管理
+	admin.POST("/media/:mediaId/thumbnail", handlers.Thumbnail.Generate)
+	admin.POST("/media/batch-thumbnail", handlers.Thumbnail.BatchGenerate)
+	admin.GET("/media/batch-thumbnail/status", handlers.Thumbnail.BatchStatus)
+	admin.DELETE("/media/batch-thumbnail/stop", handlers.Thumbnail.BatchStop)
+	admin.DELETE("/media/:mediaId/thumbnail", handlers.Thumbnail.Delete)
+	admin.DELETE("/media/batch-thumbnail", handlers.Thumbnail.BatchDelete)
+	admin.GET("/media/thumbnail-stats", handlers.Thumbnail.Stats)
+	admin.GET("/media/thumbnail-audit", handlers.Thumbnail.Audit)
+	admin.POST("/media/thumbnail-audit/clean", handlers.Thumbnail.Clean)
 }

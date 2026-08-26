@@ -328,6 +328,7 @@ func (s *MetadataService) SaveUploadedImageForSeries(seriesID string, imageData 
 
 	if imageType == "poster" {
 		series.PosterPath = localPath
+		series.ScrapeStatus = "manual"
 	} else {
 		series.BackdropPath = localPath
 	}
@@ -337,6 +338,34 @@ func (s *MetadataService) SaveUploadedImageForSeries(seriesID string, imageData 
 	}
 
 	return localPath, nil
+}
+
+// SetSeriesPosterFromMedia 将指定 Media 的海报复制为剧集合集的海报。
+func (s *MetadataService) SetSeriesPosterFromMedia(seriesID, mediaID string) (string, error) {
+	if _, err := s.seriesRepo.FindByID(seriesID); err != nil {
+		return "", fmt.Errorf("剧集合集不存在")
+	}
+
+	media, err := s.mediaRepo.FindByID(mediaID)
+	if err != nil {
+		return "", fmt.Errorf("媒体不存在")
+	}
+
+	if media.PosterPath == "" {
+		return "", fmt.Errorf("该媒体没有可用的海报")
+	}
+
+	data, err := os.ReadFile(media.PosterPath)
+	if err != nil {
+		return "", fmt.Errorf("读取海报文件失败: %w", err)
+	}
+
+	ext := strings.ToLower(filepath.Ext(media.PosterPath))
+	if ext == "" {
+		ext = ".jpg"
+	}
+
+	return s.SaveUploadedImageForSeries(seriesID, data, ext, "poster")
 }
 
 // DownloadURLImageForMedia 从 URL 下载图片并保存到本地，更新 Media 的图片路径

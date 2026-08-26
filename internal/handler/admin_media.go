@@ -455,3 +455,24 @@ func (h *AdminHandler) SetSeriesImageByURL(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "图片已更新", "path": localPath})
 }
 
+// SetSeriesPosterFromMedia 将指定 Media 的海报复制为剧集合集海报
+func (h *AdminHandler) SetSeriesPosterFromMedia(c *gin.Context) {
+	seriesID := c.Param("seriesId")
+
+	var req struct {
+		MediaID string `json:"media_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请提供 media_id"})
+		return
+	}
+
+	localPath, err := h.metadataService.SetSeriesPosterFromMedia(seriesID, req.MediaID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "剧集海报已更新", "path": localPath})
+}
+

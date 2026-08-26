@@ -1,7 +1,8 @@
-import { useEffect, useState, type HTMLAttributes, type ReactNode } from 'react'
+import { useEffect, useState, useMemo, type HTMLAttributes, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { Film } from 'lucide-react'
 import { resolvePosterUrl } from '@/utils/posterCache'
+import PosterImage from '@/components/PosterImage'
 
 export type MediaArtworkRatio = 'poster' | 'landscape' | 'hero' | 'square'
 
@@ -16,7 +17,6 @@ export interface MediaArtworkProps extends HTMLAttributes<HTMLDivElement> {
   overlay?: ReactNode
 }
 
-/** 应用级海报缓存解析：命中 IndexedDB 时返回本地 objectURL（秒出、零网络） */
 function useResolvedArtworkUrl(src: string | null | undefined) {
   const [state, setState] = useState<{ ready: boolean; url: string | null | undefined }>(
     () => (src ? { ready: false, url: null } : { ready: true, url: src }),
@@ -28,9 +28,9 @@ function useResolvedArtworkUrl(src: string | null | undefined) {
       return
     }
     let alive = true
+    setState({ ready: false, url: null })
     // 解析期间不把原始 URL 交给 <img>：否则浏览器会照常发起网络请求，
     // 缓存就失去意义了。解析结果要么是本地 blob URL，要么回退原始地址。
-    setState({ ready: false, url: null })
     resolvePosterUrl(src).then((url) => {
       if (alive) setState({ ready: true, url })
     })
@@ -40,6 +40,19 @@ function useResolvedArtworkUrl(src: string | null | undefined) {
   }, [src])
 
   return state
+}
+
+/**
+ * 从海报 URL 推导缩略图 URL。
+ * 海报格式：/api/media/{id}/poster 或 /api/media/{id}/poster?token=xxx
+ * 缩略图格式：/api/media/{id}/poster/thumb 或 /api/media/{id}/poster/thumb?token=xxx
+ * 也兼容 /api/series/{id}/poster 和 /api/collections/{id}/poster
+ */
+function deriveThumbUrl(src: string): string | null {
+  // 匹配 /poster 或 /poster? 后面的内容
+  const match = src.match(/(\/poster)(\?.*)?$/)
+  if (!match) return null
+  return src.replace(/(\/poster)(\?.*)?$/, '$1/thumb$2')
 }
 
 export function MediaArtwork({
@@ -55,45 +68,35 @@ export function MediaArtwork({
   children,
   ...props
 }: MediaArtworkProps) {
-  const [usingFallbackSrc, setUsingFallbackSrc] = useState(false)
-  const [failed, setFailed] = useState(false)
   const primary = useResolvedArtworkUrl(src)
-  const alternate = useResolvedArtworkUrl(fallbackSrc)
 
   useEffect(() => {
-    setUsingFallbackSrc(false)
-    setFailed(false)
-  }, [fallbackSrc, src])
+    // failed state managed by PosterImage component
+  }, [src])
 
-  const activeSrc = usingFallbackSrc
-    ? (alternate.ready ? (alternate.url ?? fallbackSrc) : null)
-    : (primary.ready ? (primary.url ?? src) : null)
-  const showImage = Boolean(activeSrc) && !failed
+  const activeSrc = primary.ready ? (primary.url ?? src) : null
+  const showImage = Boolean(activeSrc)
 
-  const handleImageError = () => {
-    if (!usingFallbackSrc && fallbackSrc && fallbackSrc !== src) {
-      setUsingFallbackSrc(true)
-      setFailed(false)
-      return
-    }
-    setFailed(true)
-  }
+  // 从原始 src（非缓存 blob）推导缩略图 URL
+  const thumbSrc = useMemo(() => {
+    if (!src) return null
+    return deriveThumbUrl(src)
+  }, [src])
 
   return (
     <div
       {...props}
       className={clsx('nv-media-artwork', className)}
       data-ratio={ratio}
-      data-image-state={showImage ? (usingFallbackSrc ? 'fallback-image' : 'ready') : 'fallback'}
+      data-image-state={showImage ? 'ready' : 'fallback'}
     >
       {showImage ? (
-        <img
+        <PosterImage
           src={activeSrc!}
+          thumbSrc={thumbSrc}
           alt={alt}
-          loading={loading}
           className={clsx('nv-media-artwork-image', imageClassName)}
-          onLoad={() => setFailed(false)}
-          onError={handleImageError}
+          loading={loading}
         />
       ) : (
         <div className="nv-media-artwork-fallback" aria-hidden={alt ? undefined : true}>

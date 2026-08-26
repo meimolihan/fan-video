@@ -8,6 +8,7 @@ import { CastGrid } from '@/components/media'
 import SeriesHero from '@/components/media/SeriesHero'
 import SeriesEpisodeBrowser from '@/components/media/SeriesEpisodeBrowser'
 import SeriesDetailSidebar from '@/components/media/SeriesDetailSidebar'
+import SeriesPosterPickerModal from '@/components/media/SeriesPosterPickerModal'
 import ConfirmDialog from '@/components/design-system/ConfirmDialog'
 import { Button, EmptyState, Tag } from '@/components/design-system'
 import { DetailTabs } from '@/ui'
@@ -151,6 +152,7 @@ export default function SeriesDetailPage() {
   const [scraping, setScraping] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showPosterPicker, setShowPosterPicker] = useState(false)
   const [editForm, setEditForm] = useState<{
     title: string
     orig_title: string
@@ -340,6 +342,18 @@ export default function SeriesDetailPage() {
       .catch(() => {})
   }
 
+  const handlePosterChange = async (mediaId: string) => {
+    if (!id) return
+    try {
+      await adminApi.setSeriesPosterFromMedia(id, mediaId)
+      await refreshSeriesDetail(id, true)
+      setShowPosterPicker(false)
+      toast.success('剧集海报已更新')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '设置剧集海报失败'))
+    }
+  }
+
   const handleBack = () => {
     if (window.history.length > 1) navigate(-1)
     else navigate('/')
@@ -403,6 +417,7 @@ export default function SeriesDetailPage() {
         onFavorite={handleFavorite}
         onDelete={() => setShowDeleteConfirm(true)}
         onShare={handleShare}
+        onPosterPicker={() => setShowPosterPicker(true)}
       />
 
       <div className="nv-detail-content-shell mx-auto w-full max-w-[var(--nv-content-max)] px-[var(--nv-page-gutter)] py-6">
@@ -508,6 +523,15 @@ export default function SeriesDetailPage() {
           tone="danger"
         />
       )}
+
+      <SeriesPosterPickerModal
+        open={showPosterPicker}
+        episodes={episodes}
+        seriesId={series.id}
+        currentPosterVersion={posterVersion}
+        onConfirm={handlePosterChange}
+        onClose={() => setShowPosterPicker(false)}
+      />
     </div>
   )
 }
