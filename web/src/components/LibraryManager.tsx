@@ -225,9 +225,23 @@ function LibraryManager({
     if (deletingLibraries.has(id)) return
     const ok = await dialog.confirm({
       title: '重建索引',
-      message: '确定重建索引？这将清除现有媒体记录并重新扫描文件。',
-      confirmText: '重建',
-      variant: 'warning',
+      message: (
+        <div className="space-y-2">
+          <p>此操作会<strong>删除该媒体库下所有数据库记录</strong>并从头重新扫描，以下数据将丢失且不可恢复：</p>
+          <ul className="list-disc pl-4 space-y-0.5 text-[var(--nv-text-tertiary)]">
+            <li>观看记录、播放进度</li>
+            <li>收藏列表</li>
+            <li>精彩片段及其数据库记录</li>
+            <li>视频章节标记</li>
+            <li>AI 分析任务结果</li>
+            <li>播放统计</li>
+            <li>手动设置的海报、刮削状态</li>
+          </ul>
+          <p className="text-[var(--nv-text-tertiary)]">缓存文件（缩略图、预览、HLS 分片）不会被清除，但关联关系会断裂。</p>
+        </div>
+      ),
+      confirmText: '我已了解，继续重建',
+      variant: 'danger',
     })
     if (!ok) return
     setScanning((current) => new Set(current).add(id))
