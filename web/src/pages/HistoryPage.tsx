@@ -188,15 +188,15 @@ export default function HistoryPage() {
                       className="nv-history-thumb"
                       aria-label={`继续播放 ${displayTitle}`}
                     >
-                      <MediaArtwork
-                        src={historyArtwork}
-                        fallbackSrc={fallbackPoster}
-                        alt=""
-                        ratio="landscape"
-                        className="absolute inset-0 !rounded-none !border-0 !shadow-none"
-                        imageClassName="transition-[filter,transform] duration-300 group-hover:scale-[1.02] group-hover:brightness-[.84]"
-                        fallback={<Film size={22} aria-hidden="true" />}
-                      />
+<MediaArtwork
+                      src={fallbackPoster}
+                      fallbackSrc={historyArtwork}
+                      alt=""
+                      ratio="landscape"
+                      className="absolute inset-0 !rounded-none !border-0 !shadow-none"
+                      imageClassName="transition-[filter,transform] duration-300 group-hover:scale-[1.02] group-hover:brightness-[.84]"
+                      fallback={<Film size={22} aria-hidden="true" />}
+                    />
                       <div className="nv-history-play-overlay" aria-hidden="true">
                         <span className="nv-history-play-button">
                           <Play size={16} fill="currentColor" />

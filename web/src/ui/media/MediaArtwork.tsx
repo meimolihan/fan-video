@@ -48,12 +48,7 @@ function useResolvedArtworkUrl(src: string | null | undefined) {
  * 缩略图格式：/api/media/{id}/poster/thumb 或 /api/media/{id}/poster/thumb?token=xxx
  * 也兼容 /api/series/{id}/poster 和 /api/collections/{id}/poster
  */
-function deriveThumbUrl(src: string): string | null {
-  // 匹配 /poster 或 /poster? 后面的内容
-  const match = src.match(/(\/poster)(\?.*)?$/)
-  if (!match) return null
-  return src.replace(/(\/poster)(\?.*)?$/, '$1/thumb$2')
-}
+
 
 export function MediaArtwork({
   src,
@@ -69,30 +64,41 @@ export function MediaArtwork({
   ...props
 }: MediaArtworkProps) {
   const primary = useResolvedArtworkUrl(src)
+  const [fallbackResolved, setFallbackResolved] = useState<string | null>(null)
 
   useEffect(() => {
-    // failed state managed by PosterImage component
-  }, [src])
+    if (fallbackSrc) {
+      resolvePosterUrl(fallbackSrc).then((u) => setFallbackResolved(u ?? fallbackSrc))
+    }
+  }, [fallbackSrc])
 
-  const activeSrc = primary.ready ? (primary.url ?? src) : null
-  const showImage = Boolean(activeSrc)
+  const activeSrc =
+    primary.ready && primary.url
+      ? primary.url
+      : fallbackResolved
 
   // 从原始 src（非缓存 blob）推导缩略图 URL
   const thumbSrc = useMemo(() => {
-    if (!src) return null
-    return deriveThumbUrl(src)
-  }, [src])
+    if (!src && !fallbackSrc) return null
+    const candidate = src ?? fallbackSrc
+    if (!candidate) return null
+    const match = candidate.match(/(\/poster)(\?.*)?$/)
+    if (match) return candidate.replace(/(\/poster)(\?.*)?$/, '$1/thumb$2')
+    return null
+  }, [src, fallbackSrc])
+
+  const effectiveSrc = activeSrc
 
   return (
     <div
       {...props}
       className={clsx('nv-media-artwork', className)}
       data-ratio={ratio}
-      data-image-state={showImage ? 'ready' : 'fallback'}
+      data-image-state={effectiveSrc ? 'ready' : 'fallback'}
     >
-      {showImage ? (
+      {effectiveSrc ? (
         <PosterImage
-          src={activeSrc!}
+          src={effectiveSrc}
           thumbSrc={thumbSrc}
           alt={alt}
           className={clsx('nv-media-artwork-image', imageClassName)}
