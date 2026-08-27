@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { userApi, streamApi } from '@/api'
+import { usePosterVersion } from '@/stores/mediaRefresh'
 import { useToast } from '@/components/Toast'
 import { useDialog } from '@/components/Dialog'
 import { Button, EmptyState } from '@/components/design-system'
@@ -63,6 +64,8 @@ export default function HistoryPage() {
   const toast = useToast()
   const { t } = useTranslation()
   const dialog = useDialog()
+
+  const posterVersion = usePosterVersion()
 
   const { data, loading, mutate, refetch } = usePageCache<HistoryData>(
     `history:page=${page}:size=${size}`,
@@ -179,7 +182,7 @@ export default function HistoryPage() {
                 const historyArtwork = item.media?.media_type === 'episode' && item.media?.series?.backdrop_path
                   ? streamApi.getSeriesBackdropUrl(item.media.series.id)
                   : streamApi.getBackdropUrl(item.media_id)
-                const fallbackPoster = streamApi.getPosterUrl(item.media_id)
+                const fallbackPoster = streamApi.getPosterUrl(item.media_id, posterVersion)
 
                 return (
                   <article key={item.id} className="nv-history-card group">

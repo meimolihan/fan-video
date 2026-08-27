@@ -1196,6 +1196,7 @@ body {
   height: 100%;
   display: block;
   object-fit: cover;
+  border-radius: inherit;
   transition: filter var(--nv-motion-normal) var(--nv-ease-standard);
 }
 

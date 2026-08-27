@@ -557,6 +557,7 @@ const zhCN: Record<string, string> = {
   'hero.continuePlay': '继续播放 {title}',
   'hero.playTitle': '播放 {title}',
   'hero.continuePlayAt': '继续播放 {time}',
+  'hero.continuePlaySimple': '继续播放',
   'hero.addToPlaylist': '添加到播放列表',
   'hero.playlists': '播放列表',
   'hero.noPlaylists': '暂无播放列表',

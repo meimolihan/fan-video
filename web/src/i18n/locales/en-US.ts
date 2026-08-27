@@ -575,6 +575,7 @@ const enUS: Record<string, string> = {
   'hero.continuePlay': 'Continue playing {title}',
   'hero.playTitle': 'Play {title}',
   'hero.continuePlayAt': 'Continue at {time}',
+  'hero.continuePlaySimple': 'Continue playing',
   'hero.addToPlaylist': 'Add to playlist',
   'hero.playlists': 'Playlists',
   'hero.noPlaylists': 'No playlists',

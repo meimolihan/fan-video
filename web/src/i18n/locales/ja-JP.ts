@@ -567,6 +567,7 @@ const jaJP: Record<string, string> = {
   'hero.continuePlay': '{title}を続きから再生',
   'hero.playTitle': '{title}を再生',
   'hero.continuePlayAt': '{time}から続きを再生',
+  'hero.continuePlaySimple': '続きから再生',
   'hero.addToPlaylist': 'プレイリストに追加',
   'hero.playlists': 'プレイリスト',
   'hero.noPlaylists': 'プレイリストなし',

@@ -369,6 +369,7 @@
   height: 100%;
   display: block;
   object-fit: cover;
+  border-radius: inherit;
   transition: opacity 0.4s ease, transform var(--nv-motion-slow) var(--nv-ease-emphasized), filter var(--nv-motion-normal) var(--nv-ease-standard);
 }
 
@@ -378,6 +379,7 @@
   display: grid;
   place-items: center;
   color: var(--nv-text-tertiary);
+  border-radius: inherit;
   background:
     radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--nv-brand-500) 10%, transparent), transparent 45%),
     var(--nv-bg-poster);
@@ -5562,7 +5564,6 @@ html body .nv-media-detail-page .nv-detail-hero-inner > div:first-child {
 html body .nv-media-detail-page .nv-detail-poster {
   width: 100% !important;
   max-width: 274px !important;
-  border-radius: 18px !important;
   border-color: color-mix(in srgb, var(--nv-border-default) 75%, transparent) !important;
   box-shadow: 0 18px 48px rgba(20, 24, 44, .16) !important;
 }
@@ -6167,7 +6168,6 @@ html body .nv-media-detail-page .nv-detail-side-card--quiet { display: none !imp
 
   html body .nv-media-detail-page .nv-detail-poster {
     max-width: none !important;
-    border-radius: 17px !important;
   }
 
   html body .nv-media-detail-page .nv-detail-hero-inner h1 {
@@ -6460,7 +6460,6 @@ html body .nv-media-detail-page .nv-detail-hero-inner {
 html body .nv-media-detail-page .nv-detail-poster {
   width: 100% !important;
   max-width: 258px !important;
-  border-radius: 18px !important;
   box-shadow: 0 20px 52px rgba(20, 24, 44, .18) !important;
 }
 
@@ -6892,7 +6891,6 @@ html body .nv-media-detail-page #detail-tech .nv-detail-tech-details {
 
   html body .nv-media-detail-page .nv-detail-poster {
     max-width: 142px !important;
-    border-radius: 15px !important;
   }
 
   html body .nv-media-detail-page .nv-detail-hero-inner h1 {

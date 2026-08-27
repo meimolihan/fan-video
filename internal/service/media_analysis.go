@@ -398,7 +398,25 @@ func existingPreviewPath(h *model.VideoHighlight) string {
 	if strings.TrimSpace(h.PreviewPath) != "" {
 		return h.PreviewPath
 	}
-	return strings.TrimSpace(h.GifPath)
+	if h.Version == 1 && strings.TrimSpace(h.GifPath) != "" {
+		return h.GifPath
+	}
+	return ""
+}
+
+// migrateHighlightVersion upgrades a V1 highlight to V2 format by promoting
+// GifPath to PreviewPath and incrementing the version tag.
+func (s *MediaAnalysisService) migrateHighlightVersion(h *model.VideoHighlight) error {
+	if h.Version >= 2 {
+		return nil
+	}
+	if h.Version == 1 {
+		if strings.TrimSpace(h.GifPath) != "" && strings.TrimSpace(h.PreviewPath) == "" {
+			h.PreviewPath = h.GifPath
+		}
+		h.Version = 2
+	}
+	return s.highlightRepo.Update(h)
 }
 
 func (s *MediaAnalysisService) ensureSupported(media *model.Media) error {

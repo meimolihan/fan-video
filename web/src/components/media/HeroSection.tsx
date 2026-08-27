@@ -8,7 +8,7 @@ import { Button, Tag, buttonClassName } from '@/components/design-system'
 import { HeroContent, MediaArtwork } from '@/ui'
 import PosterImage from '@/components/PosterImage'
 import { useTranslation } from '@/i18n'
-import { formatDuration, formatDurationShort } from '@/utils/format'
+import { formatDuration } from '@/utils/format'
 import type { Media, MediaPlayInfo, Playlist, WatchHistory } from '@/types'
 import {
   Check,
@@ -226,7 +226,7 @@ export default function HeroSection({
 
   const isResume = !!watchProgress && !watchProgress.completed && watchProgress.position > 0
   const playLabel = isResume
-    ? t('hero.continuePlayAt', { time: formatDurationShort(watchProgress.position) })
+    ? t('hero.continuePlaySimple')
     : t('media.play')
 
   const playStatus = playInfo
@@ -394,7 +394,7 @@ export default function HeroSection({
   )
 
   return (
-    <section className="nv-detail-hero relative overflow-visible border-b border-[var(--nv-border-subtle)] bg-[var(--nv-bg-canvas)]">
+    <section className="nv-detail-hero relative overflow-hidden rounded-2xl border-b border-[var(--nv-border-subtle)] bg-[var(--nv-bg-canvas)]">
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute inset-0 bg-[var(--nv-bg-surface-soft)]">
           <PosterImage

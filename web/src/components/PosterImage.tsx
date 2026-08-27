@@ -14,6 +14,7 @@ type PosterImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> & {
  * 实现要点：
  * - 全程只有一个 <img> 元素，通过 src 切换 + opacity transition 实现平滑过渡
  * - thumbSrc / hdSrc / resolved 各司其职，无重复解析
+ * - 仅渲染 <img>，容器由 MediaArtwork 统一管理（避免双重 border-radius）
  */
 export default function PosterImage({ src, thumbSrc, ...rest }: PosterImageProps) {
   const [isInViewport, setIsInViewport] = useState(false)
@@ -72,64 +73,19 @@ export default function PosterImage({ src, thumbSrc, ...rest }: PosterImageProps
   const imageVisible = showThumb ? thumbReady : true
 
   return (
-    <div
-      className="nv-media-artwork"
+    <img
+      ref={imgRef}
+      src={currentSrc}
+      alt={rest.alt || ''}
+      className={rest.className}
+      loading="lazy"
       style={{
+        opacity: imageVisible ? 1 : 0,
         width: rest.width || '100%',
         height: rest.height || '100%',
       }}
-    >
-      <img
-        ref={imgRef}
-        src={currentSrc}
-        alt={rest.alt || ''}
-        className={rest.className}
-        loading="lazy"
-        style={{
-          opacity: imageVisible ? 1 : 0,
-        }}
-        onLoad={handleLoad}
-        onError={() => {}}
-      />
-      {!imageVisible && (
-        <div
-          className="nv-media-artwork-fallback"
-          style={{
-            position: 'absolute',
-            width: '100%',
-            height: '100%',
-            background: 'var(--nv-surface-elevated)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--nv-text-tertiary)',
-            fontSize: 'var(--nv-font-xsmall)',
-            pointerEvents: 'none',
-          }}
-          aria-hidden="true"
-        >
-          <svg
-            width="40"
-            height="60"
-            viewBox="0 0 40 60"
-            style={{ width: '20px', height: '30px' }}
-            aria-hidden="true"
-          >
-            <rect width="40" height="60" fill="#1a1b2e" />
-            <text
-              fill="#86efac"
-              font-family="Verdana"
-              font-size="14"
-              text-anchor="middle"
-              x="20"
-              y="38"
-            >
-              图
-            </text>
-          </svg>
-          <span className="sr-only">海报加载中</span>
-        </div>
-      )}
-    </div>
+      onLoad={handleLoad}
+      onError={() => {}}
+    />
   )
 }
