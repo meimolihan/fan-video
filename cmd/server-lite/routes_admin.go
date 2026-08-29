@@ -1,10 +1,10 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
 	"github.com/fan-video/fan-video/internal/config"
 	"github.com/fan-video/fan-video/internal/handler"
 	"github.com/fan-video/fan-video/internal/middleware"
+	"github.com/gin-gonic/gin"
 )
 
 func registerAdminAPI(r *gin.Engine, cfg *config.Config, handlers *handler.Handlers, taskCenter *handler.TaskCenterHandler, runtimeHistory *handler.RuntimeHistoryHandler, jwtMiddleware gin.HandlerFunc) {

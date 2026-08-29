@@ -96,6 +96,13 @@ func (r *SeriesRepo) ListAll(libraryID string) ([]model.Series, error) {
 	return series, err
 }
 
+// ListAllImagePaths 返回所有剧集的海报/背景图路径（用于首帧缓存清理等批量收集）。
+func (r *SeriesRepo) ListAllImagePaths() ([]model.Series, error) {
+	var series []model.Series
+	err := r.db.Select("poster_path", "backdrop_path").Find(&series).Error
+	return series, err
+}
+
 func (r *SeriesRepo) Update(series *model.Series) error {
 	return r.db.Save(series).Error
 }

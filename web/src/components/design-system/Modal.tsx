@@ -116,7 +116,7 @@ export function ModalHeader({ title, description, onClose, icon, className, ...p
           data-icon-only="true"
           aria-label="关闭"
         >
-          <X size={17} aria-hidden="true" />
+          <X size={16} aria-hidden="true" />
         </button>
       )}
     </div>

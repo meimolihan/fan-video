@@ -104,7 +104,6 @@ export function canUseWebCodecs(
   if (!cap.supported) return false
 
   const v = (videoCodec || '').toLowerCase()
-  const a = (audioCodec || '').toLowerCase()
 
   // 视频：必须明确支持
   const videoOk =
@@ -115,11 +114,30 @@ export function canUseWebCodecs(
     false
   if (!videoOk) return false
 
-  // 音频：空（单轨或未探测）一律放行；明确编码则严格要求
+  // 音频：空（单轨或未探测到音频）一律放行；有明确编码则严格校验
+  return webcodecsAudioSupported(audioCodec, cap)
+}
+
+/**
+ * 判断 WebCodecs 能否原生解码某音频编码。
+ *
+ * 注意：WebCodecs 的 AudioDecoder 只保证支持 AAC / Opus（以及浏览器私有的
+ * pcm/flac 等）。AC3 / EAC3 / DTS / TrueHD / MP3 / Vorbis 等通常不在其保证集内，
+ * 直接判定为不支持，避免进入 WebCodecs 后解码失败造成"有画面没声音"。
+ *
+ * @param audioCodec 后端返回或 mp4box 上报的音频编码名（如 aac / mp4a / ac3 / ec-3 / dts / truehd）
+ * @param cap        能力检测结果
+ */
+export function webcodecsAudioSupported(
+  audioCodec: string,
+  cap: WebCodecsCapability,
+): boolean {
+  const a = (audioCodec || '').toLowerCase()
+  // 空编码：可能是无音轨（静音播放是正确行为）或未被探测到，放行进 WebCodecs
   if (!a) return true
+  // 明确编码：只认 WebCodecs 保证支持的 AAC / Opus，其余（ac3/eac3/dts/truehd/mp3/vorbis/flac）一律不支持
   if (a.includes('aac') || a.includes('mp4a')) return cap.aac
   if (a.includes('opus')) return cap.opus
-  // 其它音频（mp3/flac/ac3/eac3）WebCodecs 暂不原生支持，走其他路径
   return false
 }
 

@@ -26,7 +26,13 @@ export interface ServerHealthData {
   features?: Record<string, unknown>
 }
 
+export interface UISettings {
+  hide_overview: boolean
+  hide_cast: boolean
+}
+
 export const serverApi = {
   capabilities: () => api.get<{ data: ServerProfileManifest }>('/capabilities'),
   health: () => api.get<ServerHealthData & { data?: ServerHealthData }>('/health'),
+  uiSettings: () => api.get<{ data: UISettings }>('/settings/ui'),
 }

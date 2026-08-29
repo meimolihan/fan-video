@@ -8,7 +8,7 @@ import {
   type TextareaHTMLAttributes,
 } from 'react'
 import clsx from 'clsx'
-import { Search } from 'lucide-react'
+import { Loader2, Search } from 'lucide-react'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 export type ButtonSize = 'sm' | 'md' | 'lg'
@@ -61,7 +61,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       aria-busy={loading || undefined}
       disabled={disabled || loading}
     >
-      {children}
+      {loading ? (
+        <Loader2 size={14} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+      ) : (
+        children
+      )}
     </button>
   )
 })

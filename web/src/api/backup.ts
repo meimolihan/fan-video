@@ -1,20 +1,5 @@
 import api from './client'
 
-// ==================== 智能通知系统 ====================
-export const notificationApi = {
-  // 获取通知配置
-  getConfig: () =>
-    api.get<{ data: import('@/types').NotificationConfig }>('/admin/notification/config'),
-
-  // 更新通知配置
-  updateConfig: (config: import('@/types').NotificationConfig) =>
-    api.put<{ message: string; data: import('@/types').NotificationConfig }>('/admin/notification/config', config),
-
-  // 测试通知
-  test: (channel: 'email' | 'telegram' | 'webhook') =>
-    api.post<{ message: string }>(`/admin/notification/test?channel=${channel}`),
-}
-
 // ==================== 批量元数据编辑 ====================
 export const batchMetadataApi = {
   // 批量更新媒体元数据

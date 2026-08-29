@@ -15,6 +15,7 @@ type Repositories struct {
 	MediaPerson    *MediaPersonRepo
 	WatchHistory   *WatchHistoryRepo
 	Favorite       *FavoriteRepo
+	WatchLater     *WatchLaterRepo
 	Transcode      *TranscodeRepo
 	Playlist       *PlaylistRepo
 	Bookmark       *BookmarkRepo
@@ -69,6 +70,7 @@ func NewRepositories(db *gorm.DB) *Repositories {
 		MediaPerson:    &MediaPersonRepo{db: db},
 		WatchHistory:   &WatchHistoryRepo{db: db},
 		Favorite:       &FavoriteRepo{db: db},
+		WatchLater:     &WatchLaterRepo{db: db},
 		Transcode:      &TranscodeRepo{db: db},
 		Playlist:       &PlaylistRepo{db: db},
 		Bookmark:       &BookmarkRepo{db: db},

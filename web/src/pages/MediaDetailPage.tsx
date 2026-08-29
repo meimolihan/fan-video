@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { adminApi, mediaApi, playlistApi, recommendApi, streamApi, userApi } from '@/api'
+import { adminApi, mediaApi, playlistApi, recommendApi, serverApi, streamApi, userApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/components/Toast'
 import type {
@@ -54,6 +54,7 @@ export default function MediaDetailPage() {
   const [loading, setLoading] = useState(true)
 
   const [isFavorited, setIsFavorited] = useState(false)
+  const [isWatchLater, setIsWatchLater] = useState(false)
   const [playlists, setPlaylists] = useState<Playlist[]>([])
   const [watchProgress, setWatchProgress] = useState<WatchHistory | null>(null)
 
@@ -74,6 +75,8 @@ export default function MediaDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showSubtitleManager, setShowSubtitleManager] = useState(false)
   const [activeTab, setActiveTab] = useState<DetailTab>('overview')
+  const [hideOverview, setHideOverview] = useState(false)
+  const [hideCast, setHideCast] = useState(false)
   const [editForm, setEditForm] = useState<{
     title: string
     orig_title: string
@@ -99,11 +102,41 @@ export default function MediaDetailPage() {
   })
 
   useEffect(() => {
+    let active = true
+    serverApi.uiSettings()
+      .then((res) => {
+        if (!active) return
+        setHideOverview(res.data.data.hide_overview)
+        setHideCast(res.data.data.hide_cast)
+      })
+      .catch(() => { /* 读取失败时保持默认不隐藏 */ })
+    return () => { active = false }
+  }, [])
+
+  const allDetailTabs = [
+    { value: 'overview' as DetailTab, label: '简介', panelId: 'detail-overview', tabId: 'detail-tab-overview' },
+    { value: 'cast' as DetailTab, label: '演职人员', panelId: 'detail-cast', tabId: 'detail-tab-cast' },
+    { value: 'highlights' as DetailTab, label: '片段', panelId: 'detail-highlights', tabId: 'detail-tab-highlights' },
+    { value: 'tech' as DetailTab, label: '技术规格', panelId: 'detail-tech', tabId: 'detail-tab-tech' },
+    { value: 'subtitles' as DetailTab, label: '字幕', panelId: 'detail-subtitles', tabId: 'detail-tab-subtitles' },
+    { value: 'related' as DetailTab, label: '相关推荐', panelId: 'detail-related', tabId: 'detail-tab-related' },
+  ]
+  const detailTabs = allDetailTabs.filter((tab) => (tab.value !== 'overview' || !hideOverview) && (tab.value !== 'cast' || !hideCast))
+
+  useEffect(() => {
+    if (!detailTabs.some((tab) => tab.value === activeTab)) {
+      setActiveTab(detailTabs[0]?.value ?? 'overview')
+    }
+  }, [activeTab, detailTabs])
+
+  useEffect(() => {
     if (!id) return
     const abortController = new AbortController()
     setLoading(true)
     setPersons([])
     setWatchProgress(null)
+    setIsFavorited(false)
+    setIsWatchLater(false)
     setActiveTab('overview')
 
     Promise.all([
@@ -120,6 +153,9 @@ export default function MediaDetailPage() {
 
         userApi.checkFavorite(mediaData.id)
           .then((response) => { if (!abortController.signal.aborted) setIsFavorited(response.data.data) })
+          .catch(() => {})
+        userApi.checkWatchLater(mediaData.id)
+          .then((response) => { if (!abortController.signal.aborted) setIsWatchLater(response.data.data) })
           .catch(() => {})
         recommendApi.getSimilarMedia(mediaData.id, 12)
           .then((response) => { if (!abortController.signal.aborted) setRecommendations(response.data.data || []) })
@@ -166,6 +202,23 @@ export default function MediaDetailPage() {
       }
     } catch {
       toast.error(t('mediaDetail.favoriteFailed'))
+    }
+  }
+
+  const handleToggleWatchLater = async () => {
+    if (!id) return
+    try {
+      if (isWatchLater) {
+        await userApi.removeWatchLater(id)
+        setIsWatchLater(false)
+        toast.success(t('mediaDetail.removedWatchLater'))
+      } else {
+        await userApi.addWatchLater(id)
+        setIsWatchLater(true)
+        toast.success(t('mediaDetail.addedWatchLater'))
+      }
+    } catch {
+      toast.error(t('mediaDetail.watchLaterFailed'))
     }
   }
 
@@ -335,12 +388,14 @@ export default function MediaDetailPage() {
         media={media}
         playInfo={playInfo}
         isFavorited={isFavorited}
+        isWatchLater={isWatchLater}
         watchProgress={watchProgress}
         playlists={playlists}
         scraping={scraping}
         isAdmin={isAdmin}
         posterVersion={posterVersion}
         onFavorite={handleFavorite}
+        onToggleWatchLater={handleToggleWatchLater}
         onAddToPlaylist={handleAddToPlaylist}
         onShowTrailer={media.trailer_url ? () => setShowTrailer(true) : undefined}
         onRefreshMetadata={handleRefreshMetadata}
@@ -355,24 +410,21 @@ export default function MediaDetailPage() {
               value={activeTab}
               onChange={setActiveTab}
               ariaLabel="详情页章节导航"
-              items={[
-                { value: 'overview', label: '简介', panelId: 'detail-overview', tabId: 'detail-tab-overview' },
-                { value: 'cast', label: '演职人员', panelId: 'detail-cast', tabId: 'detail-tab-cast' },
-                { value: 'highlights', label: '片段', panelId: 'detail-highlights', tabId: 'detail-tab-highlights' },
-                { value: 'tech', label: '技术规格', panelId: 'detail-tech', tabId: 'detail-tab-tech' },
-                { value: 'subtitles', label: '字幕', panelId: 'detail-subtitles', tabId: 'detail-tab-subtitles' },
-                { value: 'related', label: '相关推荐', panelId: 'detail-related', tabId: 'detail-tab-related' },
-              ]}
+              items={detailTabs}
             />
 
-            <section id="detail-overview" className="nv-detail-content-section nv-detail-tab-panel" role="tabpanel" aria-labelledby="detail-tab-overview" hidden={activeTab !== 'overview'}>
-              <MediaInfoSection media={media} playInfo={playInfo} persons={persons} />
-              {id && <div className="nv-detail-tab-secondary-section"><CommentSection mediaId={id} /></div>}
-            </section>
+            {!hideOverview && (
+              <section id="detail-overview" className="nv-detail-content-section nv-detail-tab-panel" role="tabpanel" aria-labelledby="detail-tab-overview" hidden={activeTab !== 'overview'}>
+                <MediaInfoSection media={media} playInfo={playInfo} persons={persons} />
+                {id && <div className="nv-detail-tab-secondary-section"><CommentSection mediaId={id} /></div>}
+              </section>
+            )}
 
-            <section id="detail-cast" className="nv-detail-content-section nv-detail-tab-panel" role="tabpanel" aria-labelledby="detail-tab-cast" hidden={activeTab !== 'cast'}>
-              <CastGrid persons={persons} />
-            </section>
+            {!hideCast && (
+              <section id="detail-cast" className="nv-detail-content-section nv-detail-tab-panel" role="tabpanel" aria-labelledby="detail-tab-cast" hidden={activeTab !== 'cast'}>
+                <CastGrid persons={persons} />
+              </section>
+            )}
 
             <section id="detail-highlights" className="nv-detail-content-section nv-detail-tab-panel" role="tabpanel" aria-labelledby="detail-tab-highlights" hidden={activeTab !== 'highlights'}>
               <MediaHighlightsPanel mediaId={media.id} isAdmin={isAdmin} />

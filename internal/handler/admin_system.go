@@ -181,6 +181,8 @@ const (
 	SettingAutoTranscode    = "auto_transcode_on_play"  // 播放时自动触发转码
 	SettingPreferDirectPlay = "prefer_direct_play"      // 优先直接播放（禁用自动转码）
 	SettingDefaultAutoplay  = "default_autoplay"        // 默认自动播放（进入播放页自动开始）
+	SettingHideOverview     = "hide_overview"           // 隐藏视频详情页的影片简介
+	SettingHideCast         = "hide_cast"               // 隐藏视频详情页的演职人员
 )
 
 // GetSystemSettings 获取系统全局设置
@@ -202,6 +204,8 @@ func (h *AdminHandler) GetSystemSettings(c *gin.Context) {
 		SettingAutoTranscode:    getBoolSetting(all, SettingAutoTranscode, false),   // 默认关闭：播放时不自动转码
 		SettingPreferDirectPlay: getBoolSetting(all, SettingPreferDirectPlay, true), // 默认开启：优先直接播放
 		SettingDefaultAutoplay:  getBoolSetting(all, SettingDefaultAutoplay, true),  // 默认开启：进入播放页自动播放
+		SettingHideOverview:     getBoolSetting(all, SettingHideOverview, false),    // 默认关闭：不隐藏影片简介
+		SettingHideCast:         getBoolSetting(all, SettingHideCast, false),        // 默认关闭：不隐藏演职人员
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": settings})
@@ -218,6 +222,8 @@ type UpdateSystemSettingsRequest struct {
 	AutoTranscode      *bool   `json:"auto_transcode_on_play"`
 	PreferDirectPlay   *bool   `json:"prefer_direct_play"`
 	DefaultAutoplay    *bool   `json:"default_autoplay"`
+	HideOverview       *bool   `json:"hide_overview"`
+	HideCast           *bool   `json:"hide_cast"`
 }
 
 // UpdateSystemSettings 更新系统全局设置
@@ -256,6 +262,12 @@ func (h *AdminHandler) UpdateSystemSettings(c *gin.Context) {
 	if req.DefaultAutoplay != nil {
 		kvs[SettingDefaultAutoplay] = boolToStr(*req.DefaultAutoplay)
 	}
+	if req.HideOverview != nil {
+		kvs[SettingHideOverview] = boolToStr(*req.HideOverview)
+	}
+	if req.HideCast != nil {
+		kvs[SettingHideCast] = boolToStr(*req.HideCast)
+	}
 
 	if len(kvs) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "未提供任何设置项"})
@@ -272,6 +284,20 @@ func (h *AdminHandler) UpdateSystemSettings(c *gin.Context) {
 
 	// 返回更新后的完整设置
 	h.GetSystemSettings(c)
+}
+
+// GetUISettings 获取前端展示相关的全局设置（任何已登录用户可读）
+func (h *AdminHandler) GetUISettings(c *gin.Context) {
+	all, err := h.settingRepo.GetAll()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取系统设置失败"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{
+		SettingHideOverview: getBoolSetting(all, SettingHideOverview, false),
+		SettingHideCast:     getBoolSetting(all, SettingHideCast, false),
+	}})
 }
 
 // 辅助函数

@@ -127,3 +127,167 @@ func writeFakeJPEG(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 }
+
+// 规则：视频目录同时匹配到「真实海报」与「首帧封面」时，
+// 扫描后的 healFirstFramePosters 应删除首帧封面并把海报更新为目录海报。
+func TestHealFirstFramePosterPreferDirectoryPoster(t *testing.T) {
+	_, repos, _, nfoSvc, _, _, scanner := newCoverTestStack(t)
+
+	dir := t.TempDir()
+	videoPath := filepath.Join(dir, "movie.mp4")
+	createTestVideo(t, videoPath, 2)
+
+	// 模拟：媒体当前以「首帧封面」作为海报（首帧文件真实存在于缓存目录）
+	firstFrame := filepath.Join(nfoSvc.firstFrameCacheDir(), "simframe.jpg")
+	writeFakeJPEG(t, firstFrame)
+
+	library := &model.Library{ID: "lib-heal", Name: "修复库", Path: dir}
+	m := &model.Media{
+		LibraryID:  library.ID,
+		Title:      "movie",
+		FilePath:   videoPath,
+		MediaType:  "movie",
+		PosterPath: firstFrame,
+	}
+	if err := repos.Media.Create(m); err != nil {
+		t.Fatal(err)
+	}
+
+	// 用户随后在视频目录新增了真实海报（同名图片）
+	writeFakeJPEG(t, filepath.Join(dir, "movie.jpg"))
+
+	scanner.healFirstFramePosters(library)
+
+	updated, err := repos.Media.FindByID(m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.PosterPath != filepath.Join(dir, "movie.jpg") {
+		t.Fatalf("应改用目录海报 movie.jpg，实际 %s", updated.PosterPath)
+	}
+	if _, err := os.Stat(firstFrame); !os.IsNotExist(err) {
+		t.Fatalf("首帧封面文件应被删除，实际仍存在: %v", err)
+	}
+}
+
+// 规则：即使数据库海报已不是首帧（例如用户手动上传海报后），
+// 只要该视频目录存在真实海报，扫描后也应清理其遗留的首帧缓存文件（孤儿文件）。
+func TestHealFirstFramePosterRemovesOrphanWhenPosterAlreadyReplaced(t *testing.T) {
+	_, repos, _, nfoSvc, _, _, scanner := newCoverTestStack(t)
+
+	dir := t.TempDir()
+	videoPath := filepath.Join(dir, "movie.mp4")
+	createTestVideo(t, videoPath, 2)
+
+	// 目录写真海报
+	writeFakeJPEG(t, filepath.Join(dir, "movie.jpg"))
+	// 数据库已指向目录海报（此前被替换）
+	library := &model.Library{ID: "lib-heal3", Name: "修复库3", Path: dir}
+	m := &model.Media{
+		LibraryID:  library.ID,
+		Title:      "movie",
+		FilePath:   videoPath,
+		MediaType:  "movie",
+		PosterPath: filepath.Join(dir, "movie.jpg"),
+	}
+	if err := repos.Media.Create(m); err != nil {
+		t.Fatal(err)
+	}
+
+	// 但磁盘上仍残留该视频对应的首帧缓存文件（孤儿）
+	info, err := os.Stat(videoPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := firstFrameCacheKey(videoPath, info)
+	orphan := filepath.Join(nfoSvc.firstFrameCacheDir(), key+".jpg")
+	writeFakeJPEG(t, orphan)
+
+	scanner.healFirstFramePosters(library)
+
+	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
+		t.Fatalf("遗留首帧缓存文件应被删除，实际仍存在: %v", err)
+	}
+	updated, err := repos.Media.FindByID(m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.PosterPath != filepath.Join(dir, "movie.jpg") {
+		t.Fatalf("海报不应被改写，实际 %s", updated.PosterPath)
+	}
+}
+
+// 规则：目录中没有真实海报时，应保留首帧封面、不删除也不改写。
+func TestHealFirstFramePosterKeepsFallbackWhenNoDirectoryPoster(t *testing.T) {
+	_, repos, _, nfoSvc, _, _, scanner := newCoverTestStack(t)
+
+	dir := t.TempDir()
+	videoPath := filepath.Join(dir, "movie.mp4")
+	createTestVideo(t, videoPath, 2)
+
+	firstFrame := filepath.Join(nfoSvc.firstFrameCacheDir(), "simframe2.jpg")
+	writeFakeJPEG(t, firstFrame)
+
+	library := &model.Library{ID: "lib-heal2", Name: "修复库2", Path: dir}
+	m := &model.Media{
+		LibraryID:  library.ID,
+		Title:      "movie",
+		FilePath:   videoPath,
+		MediaType:  "movie",
+		PosterPath: firstFrame,
+	}
+	if err := repos.Media.Create(m); err != nil {
+		t.Fatal(err)
+	}
+
+	scanner.healFirstFramePosters(library)
+
+	updated, err := repos.Media.FindByID(m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.PosterPath != firstFrame {
+		t.Fatalf("无目录海报时应保留首帧封面，实际 %s", updated.PosterPath)
+	}
+	if _, err := os.Stat(firstFrame); err != nil {
+		t.Fatalf("首帧封面文件不应被删除: %v", err)
+	}
+}
+
+// 规则：被任一媒体引用的首帧缓存应保留，未被引用的孤儿首帧缓存应被删除，
+// 临时写入文件（.tmp.）应被忽略。
+func TestFirstFrameCacheGCRemovesOrphans(t *testing.T) {
+	_, repos, _, nfoSvc, _, _, scanner := newCoverTestStack(t)
+
+	cacheDir := nfoSvc.firstFrameCacheDir()
+
+	referenced := filepath.Join(cacheDir, "refabc.jpg")
+	writeFakeJPEG(t, referenced)
+	orphan := filepath.Join(cacheDir, "orphan123.jpg")
+	writeFakeJPEG(t, orphan)
+	tmp := filepath.Join(cacheDir, ".tmpkeep.tmp.jpg")
+	writeFakeJPEG(t, tmp)
+
+	media := &model.Media{
+		LibraryID:  "lib-gc",
+		Title:      "gc",
+		FilePath:   filepath.Join(t.TempDir(), "gc.mp4"),
+		MediaType:  "movie",
+		PosterPath: referenced,
+	}
+	if err := repos.Media.Create(media); err != nil {
+		t.Fatal(err)
+	}
+
+	scanner.firstFrameCacheGC()
+
+	if _, err := os.Stat(referenced); err != nil {
+		t.Fatalf("被引用的首帧不应被删除: %v", err)
+	}
+	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
+		t.Fatalf("孤儿首帧应被删除，实际仍存在: %v", err)
+	}
+	if _, err := os.Stat(tmp); err != nil {
+		t.Fatalf("临时文件不应被删除: %v", err)
+	}
+}

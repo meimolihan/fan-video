@@ -2,9 +2,9 @@ import { useRef, useEffect, useCallback, useState } from 'react'
 import Hls from 'hls.js'
 import { usePlayerStore } from '@/stores/player'
 import { useAuthStore } from '@/stores/auth'
-import { mediaApi, userApi, subtitleApi, subtitlePreprocessApi } from '@/api'
+import { mediaApi, userApi, subtitleApi } from '@/api'
 import { useWebSocket, WS_EVENTS } from '@/hooks/useWebSocket'
-import type { SubtitleTrack, ExternalSubtitle, ASRTask, TranslatedSubtitle, SubtitlePreprocessTask, DanmakuComment } from '@/types'
+import type { SubtitleTrack, ExternalSubtitle, ASRTask, TranslatedSubtitle, DanmakuComment } from '@/types'
 import {
   Play,
   Pause,
@@ -16,9 +16,8 @@ import {
   SkipForward,
   Settings,
   Subtitles,
-  Monitor,
+  
   Gauge,
-  ChevronRight,
   PictureInPicture2,
   Sparkles,
   Loader2,
@@ -28,7 +27,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import { usePlayerFullscreen } from '@/hooks/usePlayerFullscreen'
-import CastPanel from './CastPanel'
+
 import SubtitleSearchPanel from './SubtitleSearchPanel'
 import SubtitleContentSearch from './SubtitleContentSearch'
 import { Tag } from '@/components/design-system'
@@ -114,11 +113,9 @@ export default function VideoPlayer({
   const [externalSubs, setExternalSubs] = useState<ExternalSubtitle[]>([])
   const [activeSubtitle, setActiveSubtitle] = useState<string | null>(null)
   const userDisabledSubtitleRef = useRef(false)
-  const [showCastPanel, setShowCastPanel] = useState(false)
 
   const [aiSubtitleStatus, setAiSubtitleStatus] = useState<ASRTask | null>(null)
   const [aiGenerating, setAiGenerating] = useState(false)
-  const [subtitlePreprocessStatus, setSubtitlePreprocessStatus] = useState<SubtitlePreprocessTask | null>(null)
 
   const [translatedSubs, setTranslatedSubs] = useState<TranslatedSubtitle[]>([])
   const [translateStatus, setTranslateStatus] = useState<ASRTask | null>(null)
@@ -196,32 +193,11 @@ export default function VideoPlayer({
     const handlePreprocessCompleted = (data: any) => {
       if (data.media_id === mediaId && onPreprocessReady) onPreprocessReady()
     }
-    const handleSubPreprocessCompleted = (data: any) => {
-      if (data.media_id === mediaId) {
-        setSubtitlePreprocessStatus(data as SubtitlePreprocessTask)
-        subtitleApi.getAIStatus(mediaId).then((res) => {
-          const data = res.data.data
-          if (data && data.status !== 'none') setAiSubtitleStatus(data)
-        }).catch(() => {})
-        subtitleApi.listTranslated(mediaId).then((res) => {
-          if (Array.isArray(res.data.data)) setTranslatedSubs(res.data.data)
-        }).catch(() => {})
-      }
-    }
-    const handleSubPreprocessProgress = (data: any) => {
-      if (data.media_id === mediaId) setSubtitlePreprocessStatus(data as SubtitlePreprocessTask)
-    }
-    const handleSubPreprocessFailed = (data: any) => {
-      if (data.media_id === mediaId) setSubtitlePreprocessStatus(data as SubtitlePreprocessTask)
-    }
 
     on(WS_EVENTS.PREPROCESS_COMPLETED, handlePreprocessCompleted)
     on(WS_EVENTS.ASR_PROGRESS, handleASRProgress)
     on(WS_EVENTS.ASR_COMPLETED, handleASRCompleted)
     on(WS_EVENTS.ASR_FAILED, handleASRFailed)
-    on(WS_EVENTS.SUB_PREPROCESS_COMPLETED, handleSubPreprocessCompleted)
-    on(WS_EVENTS.SUB_PREPROCESS_PROGRESS, handleSubPreprocessProgress)
-    on(WS_EVENTS.SUB_PREPROCESS_FAILED, handleSubPreprocessFailed)
 
     const handleTranslateProgress = (data: any) => {
       if (data.media_id === mediaId) setTranslateStatus(data as ASRTask)
@@ -251,9 +227,6 @@ export default function VideoPlayer({
       off(WS_EVENTS.ASR_PROGRESS, handleASRProgress)
       off(WS_EVENTS.ASR_COMPLETED, handleASRCompleted)
       off(WS_EVENTS.ASR_FAILED, handleASRFailed)
-      off(WS_EVENTS.SUB_PREPROCESS_COMPLETED, handleSubPreprocessCompleted)
-      off(WS_EVENTS.SUB_PREPROCESS_PROGRESS, handleSubPreprocessProgress)
-      off(WS_EVENTS.SUB_PREPROCESS_FAILED, handleSubPreprocessFailed)
       off(WS_EVENTS.TRANSLATE_PROGRESS, handleTranslateProgress)
       off(WS_EVENTS.TRANSLATE_COMPLETED, handleTranslateCompleted)
       off(WS_EVENTS.TRANSLATE_FAILED, handleTranslateFailed)
@@ -280,10 +253,6 @@ export default function VideoPlayer({
 
     subtitleApi.listTranslated(mediaId).then((res) => {
       if (Array.isArray(res.data.data)) setTranslatedSubs(res.data.data)
-    }).catch(() => {})
-
-    subtitlePreprocessApi.getMediaStatus(mediaId).then((res) => {
-      if (res.data.data) setSubtitlePreprocessStatus(res.data.data)
     }).catch(() => {})
   }, [mediaId])
 
@@ -998,17 +967,15 @@ export default function VideoPlayer({
   const closeAllMenus = () => {
     setShowQuality(false)
     setShowSubtitleMenu(false)
-    setShowCastPanel(false)
     setShowSpeedMenu(false)
     setShowTranslateMenu(false)
     setShowContentSearch(false)
     setShowAudioMenu(false)
   }
 
-  const openExclusive = (menu: 'speed' | 'subtitle' | 'cast' | 'audio' | 'quality') => {
+  const openExclusive = (menu: 'speed' | 'subtitle' | 'audio' | 'quality') => {
     setShowSpeedMenu(menu === 'speed' ? !showSpeedMenu : false)
     setShowSubtitleMenu(menu === 'subtitle' ? !showSubtitleMenu : false)
-    setShowCastPanel(menu === 'cast' ? !showCastPanel : false)
     setShowAudioMenu(menu === 'audio' ? !showAudioMenu : false)
     setShowQuality(menu === 'quality' ? !showQuality : false)
     if (menu !== 'subtitle') setShowTranslateMenu(false)
@@ -1146,7 +1113,7 @@ export default function VideoPlayer({
               <span className="font-mono text-3xl font-bold tabular-nums text-[var(--nv-player-text-primary)]">{nextCountdown}</span>
             </div>
             <div>
-              <p className="text-sm text-[var(--nv-player-text-tertiary)]">即将播放下一集</p>
+              <p className="text-sm text-[var(--nv-player-text-tertiary)]">即将自动播放</p>
               {nextTitle && <p className="mt-1 font-display text-base font-medium tracking-tight text-[var(--nv-player-text-primary)]">{nextTitle}</p>}
             </div>
             <div className="flex items-center gap-3">
@@ -1243,9 +1210,9 @@ export default function VideoPlayer({
           <button type="button" onClick={() => seek(10)} className={PLAYER_CONTROL_CLASS} aria-label="前进 10 秒"><SkipForward size={18} aria-hidden="true" /></button>
 
           {onNext && (
-            <button type="button" onClick={() => { setNextCountdown(null); onNext() }} className={clsx(PLAYER_CONTROL_CLASS, 'gap-1 px-2')} title={nextTitle ? `下一集: ${nextTitle}` : '下一集'}>
-              <ChevronRight size={18} aria-hidden="true" />
-              <span className="hidden text-xs sm:inline">下一集</span>
+            <button type="button" onClick={() => { setNextCountdown(null); onNext() }} className={clsx(PLAYER_CONTROL_CLASS, 'gap-1 px-2')} title={nextTitle ? `下一个: ${nextTitle}` : '下一个'}>
+              <SkipForward size={16} aria-hidden="true" />
+              <span className="hidden text-xs sm:inline">下一个</span>
             </button>
           )}
 
@@ -1347,7 +1314,7 @@ export default function VideoPlayer({
                     </>
                   )}
 
-                  {(aiSubtitleStatus?.status === 'completed' || aiGenerating || subtitlePreprocessStatus?.status === 'running' || subtitlePreprocessStatus?.status === 'pending') && (
+                  {(aiSubtitleStatus?.status === 'completed' || aiGenerating) && (
                     <>
                       <div className={PLAYER_DIVIDER} />
                       <div className={PLAYER_MENU_LABEL}><Sparkles size={10} className="mr-1 inline" aria-hidden="true" />AI 字幕</div>
@@ -1360,13 +1327,6 @@ export default function VideoPlayer({
                           <div className="flex items-center gap-2"><Loader2 size={14} className="animate-spin text-[var(--nv-player-accent)]" aria-hidden="true" /><span>{aiSubtitleStatus?.message || '正在生成...'}</span></div>
                           {aiSubtitleStatus?.progress != null && aiSubtitleStatus.progress > 0 && (
                             <div className="mt-2 h-1 overflow-hidden rounded-full bg-[var(--nv-player-surface-hover)]"><div className="h-full rounded-full bg-[var(--nv-player-accent)] transition-[width] duration-500" style={{ width: `${aiSubtitleStatus.progress}%` }} /></div>
-                          )}
-                        </div>
-                      ) : (subtitlePreprocessStatus?.status === 'running' || subtitlePreprocessStatus?.status === 'pending') ? (
-                        <div className="px-3 py-2.5 text-sm text-[var(--nv-player-text-tertiary)]">
-                          <div className="flex items-center gap-2"><Loader2 size={14} className="animate-spin text-[var(--nv-player-warning)]" aria-hidden="true" /><span>{subtitlePreprocessStatus.status === 'pending' ? '字幕预处理排队中...' : (subtitlePreprocessStatus.message || '字幕预处理中...')}</span></div>
-                          {subtitlePreprocessStatus.progress > 0 && (
-                            <div className="mt-2 h-1 overflow-hidden rounded-full bg-[var(--nv-player-surface-hover)]"><div className="h-full rounded-full bg-[var(--nv-player-warning)] transition-[width] duration-500" style={{ width: `${subtitlePreprocessStatus.progress}%` }} /></div>
                           )}
                         </div>
                       ) : null}
@@ -1443,7 +1403,6 @@ export default function VideoPlayer({
                   setShowContentSearch(false)
                   setShowQuality(false)
                   setShowSubtitleMenu(false)
-                  setShowCastPanel(false)
                   setShowSpeedMenu(false)
                 }}
                 className={clsx(PLAYER_CONTROL_CLASS, showSubtitleSearch && 'border border-[var(--nv-player-accent-border)] bg-[var(--nv-player-accent-soft)] text-[var(--nv-player-accent)]')}
@@ -1455,13 +1414,6 @@ export default function VideoPlayer({
               {showContentSearch && <SubtitleContentSearch videoRef={videoRef} onClose={() => setShowContentSearch(false)} hasActiveSubtitle={!!activeSubtitle} />}
             </div>
           )}
-
-          <div className="relative">
-            <button type="button" onClick={() => openExclusive('cast')} className={clsx(PLAYER_CONTROL_CLASS, showCastPanel && 'border border-[var(--nv-player-accent-border)] bg-[var(--nv-player-accent-soft)] text-[var(--nv-player-accent)]')} title="投屏" aria-expanded={showCastPanel}>
-              <Monitor size={18} aria-hidden="true" />
-            </button>
-            {showCastPanel && <CastPanel mediaId={mediaId} mediaTitle={title} onClose={() => setShowCastPanel(false)} />}
-          </div>
 
           {audioTracks.length > 1 && (
             <div className="relative">
@@ -1526,7 +1478,7 @@ export default function VideoPlayer({
         </div>
       </div>
 
-      {(showQuality || showSubtitleMenu || showCastPanel || showSpeedMenu || showContentSearch || showAudioMenu) && (
+      {(showQuality || showSubtitleMenu || showSpeedMenu || showContentSearch || showAudioMenu) && (
         <button type="button" className="absolute inset-0 z-[-1]" onClick={closeAllMenus} aria-label="关闭播放器菜单" />
       )}
 

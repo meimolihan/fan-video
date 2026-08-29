@@ -26,6 +26,11 @@ fnpack-*
 stdout.log
 stderr.log
 
+# 崩溃转储（可能包含内存中的密钥/媒体内容，不应入库）
+core
+core.*
+*.core
+
 # 依赖
 vendor/
 node_modules/

@@ -349,7 +349,8 @@ const WebCodecsPlayer = forwardRef<WebCodecsPlayerHandle, WebCodecsPlayerProps>(
             console.error('[WebCodecs] AudioDecoder error:', e)
             if (audioDecoderRef.current === decoder) audioDecoderRef.current = null
             encodedAudioQueueRef.current = []
-            // 音频失败不中断播放（可能是不支持的 codec），静音继续
+            setError(`音频解码错误: ${(e && e.message) || String(e)}`)
+            cbRef.current.onError?.(`音频解码错误: ${(e && e.message) || String(e)}`)
           },
         })
         const config: AudioDecoderConfig = {
@@ -374,12 +375,18 @@ const WebCodecsPlayer = forwardRef<WebCodecsPlayerHandle, WebCodecsPlayerProps>(
           } else {
             closeAudioDecoder(decoder)
             encodedAudioQueueRef.current = []
+            const unsupportedMsg = `音频编码 ${atrack.codec} 不被浏览器支持`
+            setError(unsupportedMsg)
+            cbRef.current.onError?.(unsupportedMsg)
           }
         } catch (e) {
           closeAudioDecoder(decoder)
           if (!isActive()) return
           encodedAudioQueueRef.current = []
-          console.warn('[WebCodecs] 音频解码器配置失败，将静音播放:', e)
+          console.warn('[WebCodecs] 音频解码器配置失败，将回退播放:', e)
+          const cfgMsg = `音频解码器配置失败: ${(e as any)?.message || String(e)}`
+          setError(cfgMsg)
+          cbRef.current.onError?.(cfgMsg)
         }
       }
 

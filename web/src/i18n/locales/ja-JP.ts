@@ -55,6 +55,7 @@ const jaJP: Record<string, string> = {
   'auth.hasAccount': 'すでにアカウントをお持ちの方',
   'auth.loginFailed': 'ログインに失敗しました',
   'auth.registerFailed': '登録に失敗しました',
+  'auth.forceChangePwdTitle': 'アカウントセキュリティ',
 
   // ==================== ホーム ====================
   'home.continueWatching': '視聴を続ける',
@@ -82,6 +83,8 @@ const jaJP: Record<string, string> = {
   'media.trailer': '予告編',
   'media.addFavorite': 'お気に入りに追加',
   'media.removeFavorite': 'お気に入りから削除',
+  'media.addWatchLater': '後で見るに追加',
+  'media.removeWatchLater': '後で見るから削除',
   'media.noOverview': 'あらすじなし',
 
   // ==================== プレーヤー ====================
@@ -210,7 +213,7 @@ const jaJP: Record<string, string> = {
   'auth.passwordPlaceholder': 'パスワードを入力',
   'auth.switchToLogin': 'アカウントをお持ちの方はログイン',
   'auth.switchToRegister': 'アカウントをお持ちでない方は新規登録',
-  'auth.defaultAccount': 'デフォルトアカウント: admin / admin123',
+  'auth.defaultAccount': 'デフォルトアカウント: admin、初期パスワードは初回起動時に生成して表示します',
   'auth.firstUserHint': '🚀 初回利用：最初に登録したアカウントが管理者になります',
   'auth.slogan': 'ディープスペースシネマ · フューチャーハブ',
   'auth.showPassword': 'パスワードを表示',
@@ -334,6 +337,18 @@ const jaJP: Record<string, string> = {
   'favorites.empty': 'お気に入りはまだありません',
   'favorites.emptyHint': 'ライブラリを閲覧して、お気に入りボタンをクリックして追加してください',
 
+  // ==================== 後で見る（Watch Later） ====================
+  'watchLater.title': '後で見る',
+  'watchLater.loadFailed': '後で見るリストの読み込みに失敗しました',
+  'watchLater.clearAll': '後で見るをクリア',
+  'watchLater.clearConfirmTitle': '後で見るをクリア',
+  'watchLater.clear': 'クリア',
+  'watchLater.clearConfirm': '後で見るの全項目をクリアしますか？この操作は元に戻せません。',
+  'watchLater.cleared': '後で見るリストをクリアしました',
+  'watchLater.clearFailed': '後で見るリストのクリアに失敗しました',
+  'watchLater.empty': '後で見るはまだありません',
+  'watchLater.emptyHint': 'ライブラリを閲覧して、後で見るボタンをクリックして追加してください',
+
   // ==================== プレイリスト ====================
   'playlists.title': 'プレイリスト',
   'playlists.create': '新規作成',
@@ -452,6 +467,9 @@ const jaJP: Record<string, string> = {
   // ==================== メディア詳細（追加） ====================
   'mediaDetail.loadFailed': 'メディア詳細の読み込みに失敗しました',
   'mediaDetail.favoriteFailed': 'お気に入り操作に失敗しました',
+  'mediaDetail.addedWatchLater': '後で見るに追加しました',
+  'mediaDetail.removedWatchLater': '後で見るから削除しました',
+  'mediaDetail.watchLaterFailed': '後で見る操作に失敗しました',
   'mediaDetail.scrapeSuccess': 'メタデータのスクレイプに成功しました',
   'mediaDetail.scrapeFailed': 'メタデータのスクレイプに失敗しました。TMDb 設定またはネットワーク/プロキシを確認してください',
   'mediaDetail.addToPlaylistSuccess': 'プレイリストに追加しました',
@@ -643,6 +661,7 @@ const jaJP: Record<string, string> = {
   // ==================== 人物詳細ページ ====================
   'personDetail.notFound': 'この人物は見つかりませんでした',
   'personDetail.goBack': '戻る',
+  'personDetail.personTag': '人物',
   'personDetail.worksCount': '全{count}作品',
   'personDetail.movieCount': '映画{count}本',
   'personDetail.seriesCount': 'テレビ番組{count}本',

@@ -285,7 +285,7 @@
 /*  - Left/right safe-area insets are respected (landscape notch / curved       */
 /*    edges) instead of a fixed 10px gutter.                                    */
 /* -------------------------------------------------------------------------- */
-@media (max-width: 768px) {
+@media (max-width: 47.999rem) {
   .group\/player {
     --nv-player-side: 10px;
     --nv-player-side-l: max(10px, env(safe-area-inset-left, 0px));
@@ -794,7 +794,7 @@
   background: color-mix(in srgb, var(--nv-player-accent) 20%, transparent);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 47.999rem) {
   .group\/player .player-overlay-panel-header {
     min-height: 52px;
     padding: 12px 14px;

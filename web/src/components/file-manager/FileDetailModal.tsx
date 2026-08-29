@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Edit3, Eye, HardDrive, ImageOff, Sparkles } from 'lucide-react'
+import { Edit3, Eye, HardDrive, ImageOff, Sparkles, Star } from 'lucide-react'
 import type { Media } from '@/types'
 import { streamApi } from '@/api/stream'
 import PosterImage from '@/components/PosterImage'
@@ -50,7 +50,7 @@ export default function FileDetailModal({ media, onClose, onEdit, onRefreshArtwo
       <ModalBody>
         <div className="grid gap-6 sm:grid-cols-[9rem_minmax(0,1fr)]">
           <div className="mx-auto w-32 sm:mx-0 sm:w-36">
-            <div className="aspect-[2/3] overflow-hidden rounded-[var(--nv-radius-card)] bg-[var(--nv-bg-surface-soft)]">
+            <div className="aspect-[2/3] overflow-hidden rounded-[var(--nv-radius-card)] border border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)]">
               {!posterFailed ? (
                 <PosterImage
                   src={streamApi.getPosterUrl(media.id)}
@@ -71,7 +71,7 @@ export default function FileDetailModal({ media, onClose, onEdit, onRefreshArtwo
             <div className="flex flex-wrap items-center gap-1.5">
               <Tag>{media.media_type === 'movie' ? '电影' : '剧集'}</Tag>
               {media.resolution && <Tag tone="quality">{media.resolution}</Tag>}
-              {rating > 0 && <Tag tone="rating">★ {rating.toFixed(1)}</Tag>}
+              {rating > 0 && <Tag tone="rating"><Star size={10} fill="currentColor" aria-hidden="true" /> {rating.toFixed(1)}</Tag>}
             </div>
 
             <div className="mt-3">

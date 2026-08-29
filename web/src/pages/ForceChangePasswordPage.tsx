@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, KeyRound, Loader2, LogOut } from 'lucide-react'
 import { authApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { useTranslation } from '@/i18n'
 import AuthShell from '@/components/auth/AuthShell'
 import { Button, Input } from '@/components/design-system'
 
 export default function ForceChangePasswordPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const setAuth = useAuthStore((state) => state.setAuth)
   const logout = useAuthStore((state) => state.logout)
@@ -50,7 +52,7 @@ export default function ForceChangePasswordPage() {
     <AuthShell
       title="首次登录 — 请修改密码"
       description="为了账号安全，您必须先修改初始密码才能进入系统"
-      eyebrow="账号安全"
+      eyebrow={t('auth.forceChangePwdTitle')}
       icon={<KeyRound size={26} aria-hidden="true" />}
     >
       <form onSubmit={handleSubmit} className="space-y-5">

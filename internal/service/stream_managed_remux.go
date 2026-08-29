@@ -34,25 +34,46 @@ var managedRemuxVideoCodecs = map[string]bool{
 // MP4 audio copy is deliberately conservative. Everything else is converted to
 // AAC-LC while video remains bit-for-bit copied, covering DTS/TrueHD/FLAC/Opus
 // sources without the startup cost of full video transcoding.
+//
+// Note: an empty/unknown audio codec must NOT be treated as copy-safe. A file
+// may carry AC3/DTS/TrueHD audio while the probe record is missing/stale,
+// which browsers cannot decode (previous symptom: video with no sound). So the
+// unknown case falls through to AAC transcoding below — cheap, and always
+// yields browser-decodable audio.
 var mp4CopyAudioCodecs = map[string]bool{
-	"":    true,
 	"aac": true,
 	"mp3": true,
 }
 
-func managedRemuxMode(media *model.Media) (ManagedRemuxMode, bool) {
-	if media == nil || media.StreamURL != "" {
-		return "", false
-	}
-	videoCodec := strings.ToLower(strings.TrimSpace(media.VideoCodec))
-	if !managedRemuxVideoCodecs[videoCodec] {
-		return "", false
-	}
-	audioCodec := strings.ToLower(strings.TrimSpace(media.AudioCodec))
+func managedRemuxMode(audioCodec string) (ManagedRemuxMode, bool) {
+	audioCodec = strings.ToLower(strings.TrimSpace(audioCodec))
 	if mp4CopyAudioCodecs[audioCodec] {
 		return ManagedRemuxCopyAudio, true
 	}
 	return ManagedRemuxTranscodeAudio, true
+}
+
+// authoritativeAudioCodec resolves the audio codec the remux should trust.
+// The remux command always maps the first audio track (-map 0:a:0?), so the
+// decision here must reflect that first track's codec rather than the possibly
+// stale media.AudioCodec (which can be missing or record another track). If a
+// cached probe exists we use its first audio stream; otherwise we fall back to
+// the model value.
+func (s *StreamService) authoritativeAudioCodec(media *model.Media) string {
+	if media != nil && s != nil && s.execution != nil {
+		if probe := s.execution.GetCachedMediaProbe(media); probe != nil {
+			for _, stream := range probe.AudioStreams() {
+				codec := strings.ToLower(strings.TrimSpace(stream.Codec))
+				if codec != "" {
+					return codec
+				}
+			}
+		}
+	}
+	if media != nil {
+		return media.AudioCodec
+	}
+	return ""
 }
 
 // CanManagedRemuxByID reports whether video can be copied into fragmented MP4.
@@ -62,7 +83,14 @@ func (s *StreamService) CanManagedRemuxByID(mediaID string) (ManagedRemuxMode, b
 	if err != nil {
 		return "", false, ErrMediaNotFound
 	}
-	mode, ok := managedRemuxMode(media)
+	if media == nil || media.StreamURL != "" {
+		return "", false, nil
+	}
+	videoCodec := strings.ToLower(strings.TrimSpace(media.VideoCodec))
+	if !managedRemuxVideoCodecs[videoCodec] {
+		return "", false, nil
+	}
+	mode, ok := managedRemuxMode(s.authoritativeAudioCodec(media))
 	return mode, ok, nil
 }
 
@@ -75,7 +103,14 @@ func (s *StreamService) ManagedRemuxStream(mediaID string, w http.ResponseWriter
 	if err != nil {
 		return ErrMediaNotFound
 	}
-	mode, ok := managedRemuxMode(media)
+	if media == nil || media.StreamURL != "" {
+		return fmt.Errorf("媒体视频编码不适合 Remux: %s", media.VideoCodec)
+	}
+	videoCodec := strings.ToLower(strings.TrimSpace(media.VideoCodec))
+	if !managedRemuxVideoCodecs[videoCodec] {
+		return fmt.Errorf("媒体视频编码不适合 Remux: %s", media.VideoCodec)
+	}
+	mode, ok := managedRemuxMode(s.authoritativeAudioCodec(media))
 	if !ok {
 		return fmt.Errorf("媒体视频编码不适合 Remux: %s", media.VideoCodec)
 	}

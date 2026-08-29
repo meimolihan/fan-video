@@ -16,86 +16,32 @@ interface SeriesEpisodeBrowserProps {
   preferredSeason?: number
 }
 
-type ViewMode = 'season' | 'all'
 type DisplayMode = 'slide' | 'list'
 
 const EPISODE_PAGE_THRESHOLD = 50
 
-function resolveDefaultSeason(seasons: SeasonInfo[], preferredSeason?: number) {
-  if (preferredSeason !== undefined && seasons.some((season) => season.season_num === preferredSeason)) return preferredSeason
-  return seasons.find((season) => season.season_num > 0)?.season_num ?? seasons[0]?.season_num ?? 1
-}
-
-export default function SeriesEpisodeBrowser({ seasons, seriesTitle, historyMap, posterVersion, preferredSeason }: SeriesEpisodeBrowserProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>('season')
+export default function SeriesEpisodeBrowser({ seasons, seriesTitle, historyMap, posterVersion }: SeriesEpisodeBrowserProps) {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('slide')
-  const [activeSeason, setActiveSeason] = useState<number>(() => resolveDefaultSeason(seasons, preferredSeason))
-  const manuallySelectedSeasonRef = useRef(false)
   const pagination = usePagination({ initialSize: 50 })
-  const allPagination = usePagination({ initialSize: 50 })
 
-  useEffect(() => {
-    const activeExists = seasons.some((season) => season.season_num === activeSeason)
-    if (!activeExists) {
-      manuallySelectedSeasonRef.current = false
-      setActiveSeason(resolveDefaultSeason(seasons, preferredSeason))
-      return
-    }
-    if (!manuallySelectedSeasonRef.current && preferredSeason !== undefined && preferredSeason !== activeSeason && seasons.some((season) => season.season_num === preferredSeason)) {
-      setActiveSeason(preferredSeason)
-    }
-  }, [activeSeason, preferredSeason, seasons])
-
-  useEffect(() => {
-    pagination.setPage(1)
-  }, [activeSeason, pagination.setPage])
-
-  useEffect(() => {
-    if (viewMode === 'all') allPagination.setPage(1)
-  }, [allPagination.setPage, viewMode])
-
-  const activeSeasonData = seasons.find((season) => season.season_num === activeSeason)
-  const episodeCount = activeSeasonData?.episodes?.length ?? 0
-  const needsPagination = episodeCount > EPISODE_PAGE_THRESHOLD
-
-  const seasonTotalPages = Math.max(1, Math.ceil(episodeCount / pagination.size))
-  useEffect(() => {
-    if (pagination.page > seasonTotalPages) pagination.setPage(seasonTotalPages)
-  }, [pagination.page, pagination.setPage, seasonTotalPages])
-
-  const pagedEpisodes = useMemo(() => {
-    if (!activeSeasonData?.episodes) return []
-    if (!needsPagination) return activeSeasonData.episodes
-    const start = (pagination.page - 1) * pagination.size
-    return activeSeasonData.episodes.slice(start, start + pagination.size)
-  }, [activeSeasonData?.episodes, needsPagination, pagination.page, pagination.size])
-
+  // 平铺展示系列下的所有视频：不再按季分组，统一按顺序编排。
   const allEpisodes = useMemo(() => seasons
     .flatMap((season) => season.episodes || [])
     .slice()
-    .sort((left, right) => left.season_num - right.season_num || left.episode_num - right.episode_num || left.id.localeCompare(right.id)), [seasons])
-  const allNeedsPagination = allEpisodes.length > EPISODE_PAGE_THRESHOLD
-  const allTotalPages = Math.max(1, Math.ceil(allEpisodes.length / allPagination.size))
+    .sort((left, right) => left.season_num - right.season_num || left.episode_num - right.episode_num || (left.id > right.id ? 1 : -1)), [seasons])
+
+  const needsPagination = allEpisodes.length > EPISODE_PAGE_THRESHOLD
+  const totalPages = Math.max(1, Math.ceil(allEpisodes.length / pagination.size))
 
   useEffect(() => {
-    if (allPagination.page > allTotalPages) allPagination.setPage(allTotalPages)
-  }, [allPagination.page, allPagination.setPage, allTotalPages])
+    if (pagination.page > totalPages) pagination.setPage(totalPages)
+  }, [pagination.page, pagination.setPage, totalPages])
 
-  const pagedAllEpisodes = useMemo(() => {
-    if (!allNeedsPagination) return allEpisodes
-    const start = (allPagination.page - 1) * allPagination.size
-    return allEpisodes.slice(start, start + allPagination.size)
-  }, [allEpisodes, allNeedsPagination, allPagination.page, allPagination.size])
-
-  const allEpisodeGroups = useMemo(() => {
-    const grouped = new Map<number, Media[]>()
-    for (const episode of pagedAllEpisodes) {
-      const episodes = grouped.get(episode.season_num) || []
-      episodes.push(episode)
-      grouped.set(episode.season_num, episodes)
-    }
-    return Array.from(grouped.entries()).map(([seasonNum, episodes]) => ({ seasonNum, episodes }))
-  }, [pagedAllEpisodes])
+  const pagedEpisodes = useMemo(() => {
+    if (!needsPagination) return allEpisodes
+    const start = (pagination.page - 1) * pagination.size
+    return allEpisodes.slice(start, start + pagination.size)
+  }, [allEpisodes, needsPagination, pagination.page, pagination.size])
 
   const watchedCount = useMemo(() => allEpisodes.filter((episode) => getWatchStatus(historyMap[episode.id]).watched).length, [allEpisodes, historyMap])
   const inProgressCount = useMemo(() => allEpisodes.filter((episode) => {
@@ -103,123 +49,54 @@ export default function SeriesEpisodeBrowser({ seasons, seriesTitle, historyMap,
     return !status.watched && status.progress > 0
   }).length, [allEpisodes, historyMap])
 
-  if (seasons.length === 0) {
-    return <EmptyState title="暂无剧集" description="当前剧集还没有可展示的季或单集。" className="min-h-52" />
+  if (allEpisodes.length === 0) {
+    return <EmptyState title="暂无内容" description="当前系列还没有可展示的视频。" className="min-h-52" />
   }
 
   return (
     <section className="nv-series-episode-browser space-y-5">
       <div className="nv-series-episode-toolbar flex flex-col gap-3 border-b border-[var(--nv-border-subtle)] pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="剧集视图">
-          <Button type="button" variant={viewMode === 'season' ? 'primary' : 'ghost'} size="sm" onClick={() => setViewMode('season')}>季视图</Button>
-          <Button type="button" variant={viewMode === 'all' ? 'primary' : 'ghost'} size="sm" onClick={() => setViewMode('all')}>全部剧集</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Tag>共 <span className="text-[var(--nv-status-warning)] font-bold">{allEpisodes.length}</span> 个视频</Tag>
           {watchedCount > 0 && <Tag tone="success">已看 {watchedCount}/{allEpisodes.length}</Tag>}
           {inProgressCount > 0 && <Tag tone="brand">进行中 {inProgressCount}</Tag>}
         </div>
 
-        {viewMode === 'season' && (
-          <div className="flex items-center gap-1 rounded-[var(--nv-radius-control)] border border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)] p-1">
-            <Button type="button" variant={displayMode === 'slide' ? 'secondary' : 'ghost'} size="sm" iconOnly onClick={() => setDisplayMode('slide')} aria-label="幻灯片模式" title="幻灯片模式">
-              <GalleryHorizontal size={15} aria-hidden="true" />
-            </Button>
-            <Button type="button" variant={displayMode === 'list' ? 'secondary' : 'ghost'} size="sm" iconOnly onClick={() => setDisplayMode('list')} aria-label="列表模式" title="列表模式">
-              <LayoutList size={15} aria-hidden="true" />
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-1 rounded-[var(--nv-radius-control)] border border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)] p-1">
+          <Button type="button" variant={displayMode === 'slide' ? 'secondary' : 'ghost'} size="sm" iconOnly onClick={() => setDisplayMode('slide')} aria-label="幻灯片模式" title="幻灯片模式">
+            <GalleryHorizontal size={15} aria-hidden="true" />
+          </Button>
+          <Button type="button" variant={displayMode === 'list' ? 'secondary' : 'ghost'} size="sm" iconOnly onClick={() => setDisplayMode('list')} aria-label="列表模式" title="列表模式">
+            <LayoutList size={15} aria-hidden="true" />
+          </Button>
+        </div>
       </div>
 
-      {viewMode === 'season' ? (
-        <div className="space-y-5">
-          {seasons.length > 1 && (
-            <div className="flex flex-wrap gap-2">
-              {seasons.map((season) => {
-                const active = activeSeason === season.season_num
-                return (
-                  <button
-                    key={season.season_num}
-                    type="button"
-                    onClick={() => {
-                      manuallySelectedSeasonRef.current = true
-                      setActiveSeason(season.season_num)
-                    }}
-                    className={`nv-season-chip rounded-[var(--nv-radius-control)] border px-3.5 py-2 text-sm font-medium transition-colors ${active ? 'border-[var(--nv-action-primary)] bg-[var(--nv-bg-active)] text-[var(--nv-action-primary)]' : 'border-[var(--nv-border-default)] bg-[var(--nv-bg-surface)] text-[var(--nv-text-secondary)] hover:border-[var(--nv-border-hover)] hover:bg-[var(--nv-bg-hover)]'}`}
-                    aria-pressed={active}
-                  >
-                    {seasonLabel(season.season_num)}
-                    <span className="ml-1.5 text-xs opacity-70">{season.episode_count} 集</span>
-                  </button>
-                )
-              })}
-            </div>
-          )}
-
-          <div className="flex items-center justify-between gap-3">
-            {seasons.length > 1 && (
-              <div>
-                <h2 className="text-base font-semibold text-[var(--nv-text-primary)]">{seasonLabel(activeSeason)}</h2>
-                <p className="mt-0.5 text-xs text-[var(--nv-text-tertiary)]">共 {activeSeasonData?.episode_count || 0} 集</p>
-              </div>
-            )}
-          </div>
-
-          {displayMode === 'slide' ? (
-            <EpisodeSlider
-              episodes={pagedEpisodes}
-              seriesTitle={seriesTitle}
-              historyMap={historyMap}
-              posterVersion={posterVersion}
-            />
-          ) : (
-            <div className="space-y-2">
-              {pagedEpisodes.map((episode) => (
-                <EpisodeListCard key={episode.id} episode={episode} seriesTitle={seriesTitle} historyRecord={historyMap[episode.id]} posterVersion={posterVersion} />
-              ))}
-            </div>
-          )}
-
-          {needsPagination && activeSeasonData && (
-            <Pagination
-              page={pagination.page}
-              totalPages={seasonTotalPages}
-              total={activeSeasonData.episodes.length}
-              pageSize={pagination.size}
-              pageSizeOptions={[20, 50, 100, 200]}
-              onPageChange={pagination.setPage}
-              onPageSizeChange={pagination.setSize}
-            />
-          )}
-        </div>
+      {displayMode === 'slide' ? (
+        <EpisodeSlider
+          episodes={pagedEpisodes}
+          seriesTitle={seriesTitle}
+          historyMap={historyMap}
+          posterVersion={posterVersion}
+        />
       ) : (
-        <div className="space-y-8">
-          {allEpisodeGroups.map(({ seasonNum, episodes: groupEpisodes }) => (
-            <section key={`${seasonNum}-${allPagination.page}`} className="space-y-3">
-              {allEpisodeGroups.length > 1 && (
-                <div className="flex items-baseline gap-2">
-                  <h2 className="text-base font-semibold text-[var(--nv-text-primary)]">{seasonLabel(seasonNum)}</h2>
-                  <span className="text-xs text-[var(--nv-text-tertiary)]">本页 {groupEpisodes.length} 集</span>
-                </div>
-              )}
-              <div className="space-y-2">
-                {groupEpisodes.map((episode) => (
-                  <EpisodeListCard key={episode.id} episode={episode} seriesTitle={seriesTitle} historyRecord={historyMap[episode.id]} posterVersion={posterVersion} />
-                ))}
-              </div>
-            </section>
+        <div className="space-y-2">
+          {pagedEpisodes.map((episode) => (
+            <EpisodeListCard key={episode.id} episode={episode} seriesTitle={seriesTitle} historyRecord={historyMap[episode.id]} posterVersion={posterVersion} />
           ))}
-
-          {allNeedsPagination && (
-            <Pagination
-              page={allPagination.page}
-              totalPages={allTotalPages}
-              total={allEpisodes.length}
-              pageSize={allPagination.size}
-              pageSizeOptions={[20, 50, 100, 200]}
-              onPageChange={allPagination.setPage}
-              onPageSizeChange={allPagination.setSize}
-            />
-          )}
         </div>
+      )}
+
+      {needsPagination && (
+        <Pagination
+          page={pagination.page}
+          totalPages={totalPages}
+          total={allEpisodes.length}
+          pageSize={pagination.size}
+          pageSizeOptions={[20, 50, 100, 200]}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setSize}
+        />
       )}
     </section>
   )
@@ -240,7 +117,7 @@ function EpisodeSlider({
   const scrollBy = (left: number) => sliderRef.current?.scrollBy({ left, behavior: 'smooth' })
 
   if (episodes.length === 0) {
-    return <EmptyState title="暂无单集" description="这一季暂时没有可展示的单集。" className="min-h-44" />
+    return <EmptyState title="暂无内容" description="当前没有可展示的视频。" className="min-h-44" />
   }
 
   return (
@@ -284,7 +161,7 @@ function EpisodeListCard({
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <Tag tone="brand">S{pad(episode.season_num)}E{pad(episode.episode_num)}</Tag>
+          <Tag tone="brand">{formatEpisodeNo(episode)}</Tag>
           <h3 className={`min-w-0 flex-1 truncate text-sm font-medium ${status.watched ? 'text-[var(--nv-text-tertiary)]' : 'text-[var(--nv-text-primary)]'}`}>
             {episodeTitle(episode, seriesTitle)}
           </h3>
@@ -371,7 +248,7 @@ function EpisodeThumb({
         </div>
       </div>
 
-      {showEpisodeLabel && <div className="absolute left-2 top-2 z-30"><Tag tone="brand">E{pad(episode.episode_num)}</Tag></div>}
+      {showEpisodeLabel && <div className="absolute left-2 top-2 z-30"><Tag tone="brand">{pad(episode.episode_num)}</Tag></div>}
 
       {status.watched && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/45">
@@ -397,12 +274,13 @@ function getWatchStatus(historyRecord?: WatchHistory) {
   }
 }
 
-function seasonLabel(seasonNumber: number) {
-  return seasonNumber === 0 ? '特别篇' : `第 ${seasonNumber} 季`
+// 平铺编号：不再区分季与集，只保留顺序号（如 03、12）。
+function formatEpisodeNo(episode: Media) {
+  return `#${pad(episode.episode_num)}`
 }
 
 function episodeTitle(episode: Media, seriesTitle: string) {
-  return episode.episode_title || (episode.episode_num > 0 ? `第 ${episode.episode_num} 集` : seriesTitle)
+  return episode.episode_title || (episode.episode_num > 0 ? `#${pad(episode.episode_num)}` : seriesTitle)
 }
 
 function formatDuration(seconds: number) {

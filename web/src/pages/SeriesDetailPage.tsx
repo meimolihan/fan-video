@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { adminApi, seriesApi, streamApi, userApi } from '@/api'
+import { AnimatePresence, motion } from 'framer-motion'
+import { durations } from '@/lib/motion'
+import { adminApi, seriesApi, serverApi, streamApi, userApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/components/Toast'
 import EditMetadataModal from '@/components/EditMetadataModal'
@@ -11,7 +13,6 @@ import SeriesDetailSidebar from '@/components/media/SeriesDetailSidebar'
 import SeriesPosterPickerModal from '@/components/media/SeriesPosterPickerModal'
 import ConfirmDialog from '@/components/design-system/ConfirmDialog'
 import { Button, EmptyState, Tag } from '@/components/design-system'
-import { DetailTabs } from '@/ui'
 import { formatErrMsg } from '@/utils/error'
 import { invalidateMediaListCaches } from '@/utils/invalidateMediaCaches'
 import { bumpPosterVersion } from '@/stores/mediaRefresh'
@@ -48,7 +49,7 @@ function historyUpdatedAt(history?: WatchHistory) {
 }
 
 function episodeCode(episode: Media) {
-  return `S${String(episode.season_num).padStart(2, '0')}E${String(episode.episode_num).padStart(2, '0')}`
+  return episode.episode_title || `#${String(episode.episode_num).padStart(2, '0')}`
 }
 
 function chooseSeriesPlayback(episodes: Media[], historyMap: Record<string, WatchHistory>): SeriesPlaybackChoice {
@@ -84,7 +85,7 @@ function chooseSeriesPlayback(episodes: Media[], historyMap: Record<string, Watc
     return { episode: playbackOrder[0], label: `重新播放 ${episodeCode(playbackOrder[0])}` }
   }
 
-  return { episode: playbackOrder[0], label: '播放第一集' }
+  return { episode: playbackOrder[0], label: '开始播放' }
 }
 
 async function loadEpisodeHistory(episodeIds: Set<string>, onPartial?: (map: Record<string, WatchHistory>) => void) {
@@ -145,6 +146,8 @@ export default function SeriesDetailPage() {
   const [isFavorited, setIsFavorited] = useState(false)
   const [overviewExpanded, setOverviewExpanded] = useState(false)
   const [activeTab, setActiveTab] = useState<SeriesDetailTab>('episodes')
+  const [hideOverview, setHideOverview] = useState(false)
+  const [hideCast, setHideCast] = useState(false)
   const [posterVersion, setPosterVersion] = useState<number>(() => Date.now())
   const [historyMap, setHistoryMap] = useState<Record<string, WatchHistory>>({})
   const [persons, setPersons] = useState<MediaPerson[]>([])
@@ -176,6 +179,30 @@ export default function SeriesDetailPage() {
   })
 
   const isAdmin = user?.role === 'admin'
+
+  useEffect(() => {
+    let active = true
+    serverApi.uiSettings()
+      .then((res) => {
+        if (!active) return
+        setHideOverview(res.data.data.hide_overview)
+        setHideCast(res.data.data.hide_cast)
+      })
+      .catch(() => { /* 读取失败时保持默认不隐藏 */ })
+    return () => { active = false }
+  }, [])
+
+  const seriesDetailTabs = [
+    { value: 'episodes' as SeriesDetailTab, label: '内容', panelId: 'series-episodes', tabId: 'series-tab-episodes' },
+    { value: 'overview' as SeriesDetailTab, label: '简介', panelId: 'series-overview', tabId: 'series-tab-overview' },
+    { value: 'cast' as SeriesDetailTab, label: '演职人员', panelId: 'series-cast', tabId: 'series-tab-cast' },
+  ].filter((tab) => (tab.value !== 'overview' || !hideOverview) && (tab.value !== 'cast' || !hideCast))
+
+  useEffect(() => {
+    if (!seriesDetailTabs.some((tab) => tab.value === activeTab)) {
+      setActiveTab(seriesDetailTabs[0]?.value ?? 'episodes')
+    }
+  }, [activeTab, seriesDetailTabs])
 
   useEffect(() => {
     if (!id) return
@@ -361,14 +388,24 @@ export default function SeriesDetailPage() {
 
   if (loading || !series) {
     return (
-      <div className="nv-media-detail-page nv-series-detail-page relative -mx-4 -mt-6 sm:-mx-6 lg:-mx-8" aria-label="剧集详情加载中">
-        <div className="skeleton h-[52px]" />
-        <div className="skeleton h-[360px]" />
-        <div className="mx-auto grid w-full max-w-[var(--nv-content-max)] gap-6 px-[var(--nv-page-gutter)] py-6 lg:grid-cols-[minmax(0,1fr)_328px]">
-          <div className="space-y-4"><div className="skeleton h-12 rounded-[var(--nv-radius-card)]" /><div className="skeleton h-80 rounded-[var(--nv-radius-card)]" /></div>
-          <div className="space-y-4"><div className="skeleton h-52 rounded-[var(--nv-radius-card)]" /><div className="skeleton h-44 rounded-[var(--nv-radius-card)]" /></div>
-        </div>
-      </div>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key="series-skeleton"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: durations.fast }}
+          className="nv-detail-loading nv-series-detail-page relative space-y-5 -mx-4 -mt-6 sm:-mx-6 lg:-mx-8"
+          aria-label="剧集详情加载中"
+        >
+          <div className="skeleton h-12 rounded-[var(--nv-radius-control)]" />
+          <div className="skeleton h-[400px] rounded-[var(--nv-radius-hero)]" />
+          <div className="mx-auto grid w-full max-w-[var(--nv-content-max)] gap-6 px-[var(--nv-page-gutter)] py-6 lg:grid-cols-[minmax(0,1fr)_328px]">
+            <div className="space-y-4"><div className="skeleton h-12 rounded-[var(--nv-radius-card)]" /><div className="skeleton h-80 rounded-[var(--nv-radius-card)]" /></div>
+            <div className="space-y-4"><div className="skeleton h-52 rounded-[var(--nv-radius-card)]" /><div className="skeleton h-44 rounded-[var(--nv-radius-card)]" /></div>
+          </div>
+        </motion.div>
+      </AnimatePresence>
     )
   }
 
@@ -409,6 +446,7 @@ export default function SeriesDetailPage() {
 
       <SeriesHero
         series={series}
+        episodes={episodes}
         playEpisode={playbackChoice.episode}
         playLabel={playbackChoice.label}
         isFavorited={isFavorited}
@@ -423,24 +461,11 @@ export default function SeriesDetailPage() {
       <div className="nv-detail-content-shell mx-auto w-full max-w-[var(--nv-content-max)] px-[var(--nv-page-gutter)] py-6">
         <div className="nv-detail-body-grid">
           <main className="nv-detail-main-column min-w-0">
-            <DetailTabs
-              value={activeTab}
-              onChange={setActiveTab}
-              ariaLabel="剧集详情章节导航"
-              className="nv-series-detail-tabs"
-              items={[
-                { value: 'episodes', label: '剧集', panelId: 'series-episodes', tabId: 'series-tab-episodes' },
-                { value: 'overview', label: '简介', panelId: 'series-overview', tabId: 'series-tab-overview' },
-                { value: 'cast', label: '演职人员', panelId: 'series-cast', tabId: 'series-tab-cast' },
-              ]}
-            />
-
-            <section id="series-episodes" className="nv-detail-content-section nv-detail-tab-panel nv-series-episodes-panel" role="tabpanel" aria-labelledby="series-tab-episodes" hidden={activeTab !== 'episodes'}>
+            <section id="series-episodes" className="nv-detail-content-section nv-series-episodes-panel" role="tabpanel" aria-labelledby="series-tab-episodes">
               <div className="nv-series-tab-heading">
                 <div>
-                  <span className="nv-series-tab-eyebrow">EPISODES</span>
-                  <h2>选择剧集</h2>
-                  <p>{series.season_count} 季 · {series.episode_count} 集，观看进度会自动同步到每一集。</p>
+                  <h2>选择内容</h2>
+                  <p>共 <span className="text-[var(--nv-status-warning)] font-bold">{series.episode_count}</span> 项，观看进度会自动同步到每一项。</p>
                 </div>
               </div>
               <SeriesEpisodeBrowser
@@ -453,39 +478,42 @@ export default function SeriesDetailPage() {
               />
             </section>
 
-            <section id="series-overview" className="nv-detail-content-section nv-detail-tab-panel nv-series-overview-panel" role="tabpanel" aria-labelledby="series-tab-overview" hidden={activeTab !== 'overview'}>
-              {series.overview ? (
-                <div className="nv-series-overview-copy">
-                  <span className="nv-series-tab-eyebrow">OVERVIEW</span>
-                  <h2>剧情简介</h2>
-                  {series.orig_title && series.orig_title !== series.title && <p className="nv-series-overview-original">{series.orig_title}</p>}
-                  <p className={!overviewExpanded && isLongOverview ? 'line-clamp-4' : undefined}>{series.overview}</p>
-                  {isLongOverview && (
-                    <Button type="button" variant="ghost" size="sm" className="nv-series-overview-toggle" onClick={() => setOverviewExpanded((expanded) => !expanded)}>
-                      {overviewExpanded ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
-                      {overviewExpanded ? '收起' : '展开全部'}
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <EmptyState className="nv-detail-tab-empty-state" icon={<FileText size={23} aria-hidden="true" />} title="暂无简介" description="当前剧集暂未提供剧情简介或相关文字信息。" />
-              )}
-
-              {genres.length > 0 && (
-                <div className="nv-series-overview-genres">
-                  <span>类型</span>
-                  <div>
-                    {genres.map((genre) => (
-                      <Link key={genre} to={`/search?q=${encodeURIComponent(genre)}`} className="no-underline"><Tag>{genre}</Tag></Link>
-                    ))}
+            {!hideOverview && (
+              <section id="series-overview" className="nv-detail-content-section nv-detail-tab-panel nv-series-overview-panel" role="tabpanel" aria-labelledby="series-tab-overview" hidden={activeTab !== 'overview'}>
+                {series.overview ? (
+                  <div className="nv-series-overview-copy">
+                    <h2>剧情简介</h2>
+                    {series.orig_title && series.orig_title !== series.title && <p className="nv-series-overview-original">{series.orig_title}</p>}
+                    <p className={!overviewExpanded && isLongOverview ? 'line-clamp-4' : undefined}>{series.overview}</p>
+                    {isLongOverview && (
+                      <Button type="button" variant="ghost" size="sm" className="nv-series-overview-toggle" onClick={() => setOverviewExpanded((expanded) => !expanded)}>
+                        {overviewExpanded ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+                        {overviewExpanded ? '收起' : '展开全部'}
+                      </Button>
+                    )}
                   </div>
-                </div>
-              )}
-            </section>
+                ) : (
+                  <EmptyState className="nv-detail-tab-empty-state" icon={<FileText size={23} aria-hidden="true" />} title="暂无简介" description="当前剧集暂未提供剧情简介或相关文字信息。" />
+                )}
 
-            <section id="series-cast" className="nv-detail-content-section nv-detail-tab-panel" role="tabpanel" aria-labelledby="series-tab-cast" hidden={activeTab !== 'cast'}>
-              <CastGrid persons={persons} />
-            </section>
+                {genres.length > 0 && (
+                  <div className="nv-series-overview-genres">
+                    <span>类型</span>
+                    <div>
+                      {genres.map((genre) => (
+                        <Link key={genre} to={`/search?q=${encodeURIComponent(genre)}`} className="no-underline"><Tag>{genre}</Tag></Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {!hideCast && (
+              <section id="series-cast" className="nv-detail-content-section nv-detail-tab-panel" role="tabpanel" aria-labelledby="series-tab-cast" hidden={activeTab !== 'cast'}>
+                <CastGrid persons={persons} />
+              </section>
+            )}
           </main>
 
           <SeriesDetailSidebar

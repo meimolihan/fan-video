@@ -5,7 +5,7 @@
 # 基于 nowen-video server-lite 重构精简而来
 
 FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend
-ARG NOWEN_VERSION=1.0.8
+ARG NOWEN_VERSION=1.1.0
 WORKDIR /app/web
 COPY web/package*.json ./
 RUN npm ci
@@ -16,13 +16,17 @@ RUN npm run build
 FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS backend
 ARG TARGETOS
 ARG TARGETARCH
-ARG NOWEN_VERSION=1.0.8
+ARG NOWEN_VERSION=1.1.0
 WORKDIR /app
 ENV GOPROXY=https://goproxy.cn,https://goproxy.io,direct
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=frontend /app/web/dist ./web/dist
+# 将前端 PWA 源文件同步到 go:embed 目录，确保二进制内嵌版本始终与最新 dist 一致。
+RUN mkdir -p internal/pwa \
+    && cp web/public/assets/sw.js internal/pwa/sw.js \
+    && cp web/public/assets/manifest.json internal/pwa/manifest.json
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath \
       -ldflags="-s -w -X github.com/fan-video/fan-video/internal/version.Version=${NOWEN_VERSION}" \
@@ -30,7 +34,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 
 FROM alpine:3.24
 ARG TARGETARCH
-ARG NOWEN_VERSION=1.0.8
+ARG NOWEN_VERSION=1.1.0
 ARG FFMPEG_VERSION=8.1.2-r0
 
 # Keep the runtime dependency surface minimal. Alpine's BusyBox already

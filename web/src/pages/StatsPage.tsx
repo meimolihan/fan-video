@@ -7,6 +7,7 @@ import { useDialog } from '@/components/Dialog'
 import type { UserStatsOverview } from '@/types'
 import PosterImage from '@/components/PosterImage'
 import { EmptyState, PageContainer, Section, Tag, Button } from '@/components/design-system'
+import { PersonalWorkspaceHeader } from '@/ui'
 
 export default function StatsPage() {
   const [stats, setStats] = useState<UserStatsOverview | null>(null)
@@ -61,8 +62,23 @@ export default function StatsPage() {
   if (loading) {
     return (
       <PageContainer>
-        <div className="flex min-h-[50vh] items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--nv-border-default)] border-t-[var(--nv-text-secondary)]" aria-label="Loading" />
+        <div className="space-y-8 animate-pulse">
+          <div className="border-b border-[var(--nv-border-subtle)] pb-5">
+            <div className="h-7 w-40 rounded-[var(--nv-radius-control)] bg-[var(--nv-bg-interactive)]" />
+            <div className="mt-2 h-3.5 w-64 rounded-[var(--nv-radius-control)] bg-[var(--nv-bg-interactive)]" />
+          </div>
+          <div className="grid border-y border-[var(--nv-border-subtle)] sm:grid-cols-2 xl:grid-cols-4">
+            {[0, 1, 2, 3].map((index) => (
+              <div key={index} className={`flex min-w-0 items-start gap-3 px-1 py-4 sm:px-4 ${index > 0 ? 'border-t border-[var(--nv-border-subtle)] sm:border-t-0' : ''} ${index % 2 !== 0 ? 'sm:border-l sm:border-[var(--nv-border-subtle)]' : ''} ${index >= 2 ? 'sm:border-t sm:border-[var(--nv-border-subtle)] xl:border-t-0' : ''} ${index > 0 ? 'xl:border-l xl:border-[var(--nv-border-subtle)]' : ''}`}>
+                <div className="h-4 w-4 shrink-0 rounded bg-[var(--nv-bg-interactive)]" />
+                <div className="w-full min-w-0 space-y-2">
+                  <div className="h-2.5 w-20 rounded bg-[var(--nv-bg-interactive)]" />
+                  <div className="h-5 w-28 rounded-[var(--nv-radius-control)] bg-[var(--nv-bg-interactive)]" />
+                  <div className="h-2.5 w-16 rounded bg-[var(--nv-bg-interactive)]" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </PageContainer>
     )
@@ -80,8 +96,8 @@ export default function StatsPage() {
     {
       icon: Clock,
       label: t('stats.totalWatchTime'),
-      value: t('stats.hours', { hours: stats.total_hours.toFixed(1) }),
-      subValue: t('stats.minutes', { minutes: stats.total_minutes.toFixed(0) }),
+      value: t('stats.hours', { hours: Number(stats.total_hours ?? 0).toFixed(1) }),
+      subValue: t('stats.minutes', { minutes: Number(stats.total_minutes ?? 0).toFixed(0) }),
     },
     {
       icon: Film,
@@ -99,7 +115,7 @@ export default function StatsPage() {
       icon: BarChart3,
       label: t('stats.dailyAvg'),
       value: stats.daily_stats?.length
-        ? t('stats.dailyAvgMinutes', { minutes: (stats.total_minutes / Math.max(stats.daily_stats.length, 1)).toFixed(0) })
+        ? t('stats.dailyAvgMinutes', { minutes: (Number(stats.total_minutes ?? 0) / Math.max(stats.daily_stats.length, 1)).toFixed(0) })
         : t('stats.dailyAvgMinutes', { minutes: '0' }),
       subValue: t('stats.last30Days'),
     },
@@ -108,18 +124,17 @@ export default function StatsPage() {
   return (
     <PageContainer>
       <div className="space-y-8">
-        <header className="flex items-end justify-between gap-4 border-b border-[var(--nv-border-subtle)] pb-5">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-[-0.02em] text-[var(--nv-text-primary)]">{t('stats.title')}</h1>
-            <p className="mt-1.5 text-sm text-[var(--nv-text-tertiary)]">观看时长、内容偏好与最近观看趋势。</p>
-          </div>
-          {hasData && (
+        <PersonalWorkspaceHeader
+          icon={<BarChart3 size={20} />}
+          title={t('stats.title')}
+          description="观看时长、内容偏好与最近观看趋势。"
+          actions={hasData ? (
             <Button variant="danger" size="sm" onClick={handleClear} className="shrink-0">
               <Trash2 size={14} aria-hidden="true" />
               {t('stats.clearAll')}
             </Button>
-          )}
-        </header>
+          ) : undefined}
+        />
 
         <section aria-label={t('stats.title')} className="grid border-y border-[var(--nv-border-subtle)] sm:grid-cols-2 xl:grid-cols-4">
           {statItems.map(({ icon: Icon, label, value, subValue }, index) => (
@@ -185,7 +200,7 @@ export default function StatsPage() {
             <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {stats.most_watched.map((item) => (
                 <article key={item.media_id} className="group min-w-0 transition-transform duration-150 hover:-translate-y-0.5">
-                  <div className="relative aspect-[2/3] overflow-hidden rounded-[var(--nv-radius-card)] bg-[var(--nv-bg-surface-soft)] shadow-[var(--nv-shadow-card)] transition-shadow duration-150 group-hover:shadow-[var(--nv-shadow-card-hover)]">
+                  <div className="relative aspect-[2/3] overflow-hidden rounded-[var(--nv-radius-card)] border border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)] shadow-[var(--nv-shadow-card)] transition-[box-shadow,border-color] duration-150 group-hover:border-[var(--nv-border-default)] group-hover:shadow-[var(--nv-shadow-card-hover)]">
                     {item.poster_path ? (
                       <PosterImage
                         src={item.media_type === 'series'

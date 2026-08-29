@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AtSign, Key, Loader2, LogOut, Save, Shield, User } from 'lucide-react'
+import { AtSign, Key, Loader2, LogOut, Save, Shield } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth'
 import { authApi, userApi } from '@/api'
 import { useToast } from '@/components/Toast'
 import { useTranslation } from '@/i18n'
 import { Button, Input, PageContainer, Section, Tag } from '@/components/design-system'
+import { PersonalWorkspaceHeader } from '@/ui'
 
 export default function ProfilePage() {
   const { user, setAuth, updateUser, logout } = useAuthStore()
@@ -85,14 +86,11 @@ export default function ProfilePage() {
   return (
     <PageContainer className="max-w-3xl">
       <div className="space-y-7">
-        <header className="border-b border-[var(--nv-border-subtle)] pb-5">
-          <div className="mb-1.5 flex items-center gap-2 text-xs font-medium text-[var(--nv-text-tertiary)]">
-            <User size={15} aria-hidden="true" />
-            {t('profile.title')}
-          </div>
-          <h1 className="text-xl font-semibold tracking-[-0.015em] text-[var(--nv-text-primary)]">{t('profile.title')}</h1>
-          <p className="mt-1 text-xs leading-5 text-[var(--nv-text-tertiary)]">管理账号身份、登录凭据与当前会话。</p>
-        </header>
+        <PersonalWorkspaceHeader
+          icon={<AtSign size={20} />}
+          title={t('profile.title')}
+          description="管理账号身份、登录凭据与当前会话。"
+        />
 
         <section className="flex items-center gap-4 border-b border-[var(--nv-border-subtle)] pb-6">
           <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[var(--nv-radius-control)] bg-[var(--nv-fill-active)] text-base font-semibold text-[var(--nv-text-secondary)]">

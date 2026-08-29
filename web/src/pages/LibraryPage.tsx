@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react'
 import { Button, EmptyState, SearchField, Select, Surface, Tag } from '@/components/design-system'
-import { MediaArtwork, MediaGrid as SharedMediaGrid } from '@/ui'
+import { FilterChip, MediaArtwork, MediaGrid as SharedMediaGrid } from '@/ui'
 
 const SORT_OPTIONS = [
   { value: 'created_desc', label: '最近添加' },
@@ -54,14 +54,6 @@ const MAX_CLIENT_ITEMS = 2000
 
 function parseViewMode(value: string | null): LibraryViewMode {
   return value === 'list' || value === 'poster' ? value : 'grid'
-}
-
-function FilterChip({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button type="button" onClick={onClick} aria-pressed={selected} className="nv-button !min-h-[30px] !rounded-[9px] !px-2.5 !text-[11px]" data-variant={selected ? 'secondary' : 'ghost'} data-size="sm">
-      {children}
-    </button>
-  )
 }
 
 function FilterGroup({ icon, label, count, children }: { icon: ReactNode; label: string; count?: number; children: ReactNode }) {
@@ -420,7 +412,7 @@ function LibraryListItem({ item, series: seriesProp }: { item?: MixedItem; serie
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2"><h3 className="truncate text-xs font-medium text-[var(--nv-text-primary)]">{title}</h3>{isSeries && <Tag>剧集</Tag>}</div>
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] text-[var(--nv-text-tertiary)]">{year > 0 && <span>{year}</span>}{country && <span>{country}</span>}{duration > 0 && <span>{formatDuration(duration)}</span>}{series && <span>{series.season_count} 季 · {series.episode_count} 集</span>}</div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] text-[var(--nv-text-tertiary)]">{year > 0 && <span>{year}</span>}{country && <span>{country}</span>}{duration > 0 && <span>{formatDuration(duration)}</span>}</div>
         {genreList.length > 0 && <div className="mt-1.5 flex flex-wrap items-center gap-1">{visibleTags.map((genre) => <Tag key={genre}>{genre}</Tag>)}{genreList.length > 3 && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setTagsExpanded((value) => !value) }} className="text-[10px] text-[var(--nv-text-tertiary)] hover:text-[var(--nv-text-primary)]">{tagsExpanded ? '收起' : `+${genreList.length - 3}`}</button>}</div>}
         {overview && <p className="mt-1 line-clamp-1 text-[10px] text-[var(--nv-text-tertiary)]">{overview}</p>}
       </div>
@@ -449,8 +441,8 @@ function LibraryPosterItem({ item, series: seriesProp }: { item?: MixedItem; ser
         imageClassName="transition-[filter,transform] duration-200 group-hover:brightness-[.82]"
         fallback={isSeries ? <Tv size={22} aria-hidden="true" /> : <Film size={22} aria-hidden="true" />}
       >
-        <div className="absolute inset-0 z-20 grid place-items-center bg-black/20 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-[var(--nv-action-primary)] text-[var(--nv-text-on-brand)]"><Play size={12} fill="currentColor" /></span>
+        <div className="absolute inset-0 z-20 grid place-items-center bg-[var(--nv-bg-overlay)] opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          <span className="grid h-[34px] w-[34px] place-items-center rounded-full bg-[var(--nv-action-primary)] text-[var(--nv-text-on-brand)]"><Play size={13} fill="currentColor" /></span>
         </div>
         {rating > 0 && <Tag tone="quality" className="absolute left-1.5 top-1.5 z-30"><Star size={9} fill="currentColor" />{rating.toFixed(1)}</Tag>}
         {isSeries && <Tag tone="quality" className="absolute bottom-1.5 right-1.5 z-30">剧集</Tag>}

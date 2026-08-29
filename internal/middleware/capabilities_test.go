@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gin-gonic/gin"
 	"github.com/fan-video/fan-video/internal/serverprofile"
+	"github.com/gin-gonic/gin"
 )
 
 func TestSecurityServesRegisteredPublicCapabilities(t *testing.T) {

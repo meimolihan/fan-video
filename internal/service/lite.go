@@ -111,7 +111,7 @@ func NewLiteServices(repos *repository.Repositories, cfg *config.Config, logger 
 		User:                NewUserService(repos.User, repos.AuditLog, cfg, logger),
 		Auth:                NewAuthService(repos.User, repos.InviteCode, repos.LoginLog, repos.AuditLog, cfg, logger),
 		Library:             libraryService,
-		Media:               NewMediaService(repos.Media, repos.Series, repos.WatchHistory, repos.Favorite, repos.Library, repos.PlaybackStats, cfg, logger),
+		Media:               NewMediaService(repos.Media, repos.Series, repos.WatchHistory, repos.Favorite, repos.WatchLater, repos.Library, repos.PlaybackStats, cfg, logger),
 		Series:              NewSeriesService(repos.Series, repos.Media, logger),
 		Stream:              streamService,
 		MediaExecution:      mediaExecution,

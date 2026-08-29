@@ -216,7 +216,11 @@ func applyProbeToPlaybackInfoWithCaps(mediaID string, info *MediaPlayInfo, probe
 
 	videoCompatible := browserCompatibleVideoCodecs[strings.ToLower(strings.TrimSpace(info.VideoCodec))]
 	audioCodec := strings.ToLower(strings.TrimSpace(info.AudioCodec))
-	audioCompatible := audioCodec == "" || audioCodecCompatibleWithCaps(audioCodec, caps)
+	// An empty/unknown audio codec is NOT compatible: the file may carry audio
+	// (AC3/DTS/TrueHD) that the probe failed to record, which a browser cannot
+	// decode if served raw or copied. Treat unknown as incompatible so these
+	// fall through to Smart Remux (audio → AAC) below instead of silent playback.
+	audioCompatible := audioCodec != "" && audioCodecCompatibleWithCaps(audioCodec, caps)
 	info.CanDirectPlay = directPlayableExts[strings.ToLower(info.FileExt)] && videoCompatible && audioCompatible
 	info.CanRemux = !info.CanDirectPlay && remuxableExts[strings.ToLower(info.FileExt)] && videoCompatible && audioCompatible
 	if info.CanDirectPlay {
@@ -263,8 +267,11 @@ func canSmartRemuxInfoWithCaps(info *MediaPlayInfo, caps PlaybackClientCapabilit
 		return false
 	}
 	audio := strings.ToLower(strings.TrimSpace(info.AudioCodec))
+	// Unknown/empty audio: the file may carry audio that the probe failed to
+	// record (AC3/DTS/TrueHD...). It cannot be served raw or copied, so route to
+	// Smart Remux which transcodes the (possibly incompatible) audio to AAC.
 	if audio == "" {
-		return false
+		return true
 	}
 	// 如果客户端报告支持该音频编码，则不需要 smart remux
 	if audioCodecCompatibleWithCaps(audio, caps) {
@@ -320,7 +327,8 @@ func canSmartRemuxInfo(info *MediaPlayInfo, caps PlaybackClientCapabilities) boo
 		return false
 	}
 	audio := strings.ToLower(strings.TrimSpace(info.AudioCodec))
-	return audio != "" && !mp4CopyAudioCodecs[audio]
+	// Unknown/empty audio: route to Smart Remux (audio → AAC) for safety.
+	return audio == "" || !mp4CopyAudioCodecs[audio]
 }
 
 func smartRemuxVideoCodec(codec string) bool {

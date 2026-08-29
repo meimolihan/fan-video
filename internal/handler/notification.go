@@ -9,45 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// NotificationHandler 通知处理器
-type NotificationHandler struct {
-	notifyService *service.NotificationService
-	logger        *zap.SugaredLogger
-}
-
-// GetConfig 获取通知配置
-func (h *NotificationHandler) GetConfig(c *gin.Context) {
-	cfg := h.notifyService.GetConfig()
-	c.JSON(http.StatusOK, gin.H{"data": cfg})
-}
-
-// UpdateConfig 更新通知配置
-func (h *NotificationHandler) UpdateConfig(c *gin.Context) {
-	var cfg service.NotificationConfig
-	if err := c.ShouldBindJSON(&cfg); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的配置参数"})
-		return
-	}
-
-	h.notifyService.UpdateConfig(cfg)
-	c.JSON(http.StatusOK, gin.H{"message": "通知配置已更新", "data": cfg})
-}
-
-// TestNotification 测试通知
-func (h *NotificationHandler) TestNotification(c *gin.Context) {
-	channel := c.Query("channel")
-	if channel == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "请指定通知渠道"})
-		return
-	}
-
-	if err := h.notifyService.TestNotification(channel); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "测试通知已发送"})
-}
+// NotificationHandler（通知）已随全功能轨移除：Lite 发行版从未构造/挂载该处理器。
 
 // SubtitleSearchHandler 字幕搜索处理器
 type SubtitleSearchHandler struct {

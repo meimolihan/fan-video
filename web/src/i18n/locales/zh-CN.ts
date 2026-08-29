@@ -55,6 +55,7 @@ const zhCN: Record<string, string> = {
   'auth.hasAccount': '已有账号？',
   'auth.loginFailed': '登录失败',
   'auth.registerFailed': '注册失败',
+  'auth.forceChangePwdTitle': '账号安全',
 
   // ==================== 首页 ====================
   'home.continueWatching': '继续观看',
@@ -82,6 +83,8 @@ const zhCN: Record<string, string> = {
   'media.trailer': '预告片',
   'media.addFavorite': '加入收藏',
   'media.removeFavorite': '取消收藏',
+  'media.addWatchLater': '加入稍后再看',
+  'media.removeWatchLater': '从稍后再看移除',
   'media.noOverview': '暂无简介',
 
   // ==================== 播放器 ====================
@@ -210,7 +213,7 @@ const zhCN: Record<string, string> = {
   'auth.passwordPlaceholder': '请输入密码',
   'auth.switchToLogin': '已有账号？去登录',
   'auth.switchToRegister': '没有账号？创建一个',
-  'auth.defaultAccount': '首次使用默认账号: admin / admin123',
+  'auth.defaultAccount': '默认账号: admin，初始密码由服务端首次启动时生成并打印',
   'auth.firstUserHint': '🚀 首次使用，注册的第一个账号将成为管理员',
   'auth.slogan': '深空影音 · 未来枢纽',
   'auth.showPassword': '显示密码',
@@ -385,6 +388,18 @@ const zhCN: Record<string, string> = {
   'favorites.empty': '还没有收藏的内容',
   'favorites.emptyHint': '浏览媒体库，点击收藏按钮添加到这里',
 
+  // ==================== 稍后再看 ====================
+  'watchLater.title': '稍后再看',
+  'watchLater.loadFailed': '加载稍后再看列表失败',
+  'watchLater.clearAll': '清空稍后再看',
+  'watchLater.clearConfirmTitle': '清空稍后再看',
+  'watchLater.clear': '清空',
+  'watchLater.clearConfirm': '确定清空全部稍后再看？此操作不可恢复。',
+  'watchLater.cleared': '稍后再看已清空',
+  'watchLater.clearFailed': '清空稍后再看失败',
+  'watchLater.empty': '稍后再看还是空的',
+  'watchLater.emptyHint': '浏览媒体库，点击稍后再看按钮添加到这里',
+
   // ==================== 播放列表 ====================
   'playlists.title': '播放列表',
   'playlists.create': '新建列表',
@@ -504,6 +519,9 @@ const zhCN: Record<string, string> = {
   // ==================== 媒体详情（补充） ====================
   'mediaDetail.loadFailed': '加载媒体详情失败',
   'mediaDetail.favoriteFailed': '收藏操作失败',
+  'mediaDetail.addedWatchLater': '已加入稍后再看',
+  'mediaDetail.removedWatchLater': '已从稍后再看移除',
+  'mediaDetail.watchLaterFailed': '稍后再看操作失败',
   'mediaDetail.scrapeSuccess': '元数据刮削成功',
   'mediaDetail.scrapeFailed': '元数据刮削失败，请检查 TMDb 配置或网络/代理',
   'mediaDetail.addToPlaylistSuccess': '已添加到播放列表',
@@ -553,7 +571,7 @@ const zhCN: Record<string, string> = {
   // ==================== 影片详情页 Hero ====================
   'hero.filePathCopied': '文件路径已复制',
   'hero.linkCopied': '链接已复制',
-  'hero.episodeNum': '第 {num} 集',
+  'hero.episodeNum': '#{num}',
   'hero.continuePlay': '继续播放 {title}',
   'hero.playTitle': '播放 {title}',
   'hero.continuePlayAt': '继续播放 {time}',
@@ -633,6 +651,7 @@ const zhCN: Record<string, string> = {
   // ==================== 演员详情页 ====================
   'personDetail.notFound': '未找到该演员信息',
   'personDetail.goBack': '返回',
+  'personDetail.personTag': '人物',
   'personDetail.worksCount': '共 {count} 部作品',
   'personDetail.movieCount': '{count} 部电影',
   'personDetail.seriesCount': '{count} 部剧集',

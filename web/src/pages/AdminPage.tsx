@@ -218,6 +218,8 @@ export default function AdminPage() {
     auto_transcode_on_play: false,
     prefer_direct_play: true,
     default_autoplay: true,
+    hide_overview: false,
+    hide_cast: false,
   })
 
   const { connected, on, off } = useWebSocket()

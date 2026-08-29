@@ -446,6 +446,17 @@ type Favorite struct {
 	Media Media `json:"media" gorm:"foreignKey:MediaID"`
 }
 
+// WatchLater 稍后再看
+type WatchLater struct {
+	ID        string    `json:"id" gorm:"primaryKey;type:text"`
+	UserID    string    `json:"user_id" gorm:"index;type:text;not null"`
+	MediaID   string    `json:"media_id" gorm:"index;type:text;not null"`
+	CreatedAt time.Time `json:"created_at"`
+
+	User  User  `json:"-" gorm:"foreignKey:UserID"`
+	Media Media `json:"media" gorm:"foreignKey:MediaID"`
+}
+
 // TranscodeTask 转码任务
 type TranscodeTask struct {
 	ID         string  `json:"id" gorm:"primaryKey;type:text"`
@@ -501,6 +512,13 @@ func (w *WatchHistory) BeforeCreate(tx *gorm.DB) error {
 func (f *Favorite) BeforeCreate(tx *gorm.DB) error {
 	if f.ID == "" {
 		f.ID = uuid.New().String()
+	}
+	return nil
+}
+
+func (wl *WatchLater) BeforeCreate(tx *gorm.DB) error {
+	if wl.ID == "" {
+		wl.ID = uuid.New().String()
 	}
 	return nil
 }
@@ -849,6 +867,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&MediaPerson{},
 		&WatchHistory{},
 		&Favorite{},
+		&WatchLater{},
 		&Playlist{},
 		&PlaylistItem{},
 		&Bookmark{},

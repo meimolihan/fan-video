@@ -5,15 +5,17 @@ import (
 	"net"
 	"net/http"
 	"runtime"
+	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/fan-video/fan-video/internal/config"
 	"github.com/fan-video/fan-video/internal/handler"
 	"github.com/fan-video/fan-video/internal/middleware"
+	"github.com/fan-video/fan-video/internal/pwa"
 	"github.com/fan-video/fan-video/internal/repository"
 	"github.com/fan-video/fan-video/internal/serverprofile"
 	"github.com/fan-video/fan-video/internal/service"
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
@@ -29,7 +31,12 @@ func buildRouter(
 	if !cfg.App.Debug {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	r := gin.Default()
+	// gin.Default() = Logger + Recovery；此处显式构建并在两者之间插入 Gzip，
+	// 使 Gzip 位于 Recovery 外层，panic 时错误响应同样完整经过 gzip 流。
+	r := gin.New()
+	r.Use(gin.Logger())
+	r.Use(middleware.Gzip())
+	r.Use(gin.Recovery())
 	corsOrigins := append([]string{
 		"tauri://localhost",
 		"http://tauri.localhost",
@@ -42,6 +49,26 @@ func buildRouter(
 		Window:       time.Minute,
 		ExcludePaths: []string{"/api/ws"},
 	}))
+	// PJAX 局部刷新：识别 X-PJAX 请求头，非 API 的 SPA 导航 GET 返回页面主体片段，
+	// 普通请求返回完整页面。保持与完整页面复用同一份 index.html，不重写业务模板。
+	r.Use(middleware.PJAX(cfg.App.WebDir))
+	// Build assets carry content-hashed filenames (index-<hash>.js etc.) and are
+	// therefore immutable: cache them for a year so repeat visits never re-download.
+	// /assets/sw.js 与 /assets/manifest.json 由 registerPWAAndAssets 单独处理
+	// （内嵌内容 + PWA 专用缓存头），不落入 immutable 缓存。
+	r.Use(func(c *gin.Context) {
+		if !strings.HasPrefix(c.Request.URL.Path, "/assets/") {
+			return
+		}
+		switch c.Request.URL.Path {
+		case "/assets/sw.js":
+			c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
+		case "/assets/manifest.json":
+			c.Header("Cache-Control", "no-cache")
+		default:
+			c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		}
+	})
 
 	if cfg.Secrets.JWTSecret == "" {
 		logger.Fatal("JWT Secret 未配置或自动生成失败，无法启动")
@@ -112,7 +139,7 @@ func buildRouter(
 	r.GET("/pulse", redirectLegacyPulse)
 	r.GET("/pulse/*path", redirectLegacyPulse)
 
-	r.Static("/assets", cfg.App.WebDir+"/assets")
+	registerPWAAndAssets(r, cfg.App.WebDir)
 	r.NoRoute(func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
 		c.Header("Pragma", "no-cache")
@@ -196,26 +223,25 @@ func registerPublicRoutes(
 		c.Header("Cache-Control", "public, max-age=604800")
 		c.File(cfg.App.WebDir + "/assets/icon-192.png")
 	})
-	r.GET("/favicon.svg", func(c *gin.Context) {
-		c.Header("Content-Type", "image/svg+xml")
-		c.Header("Cache-Control", "public, max-age=604800")
-		c.File(cfg.App.WebDir + "/favicon.svg")
-	})
 	r.GET("/webmanifest", func(c *gin.Context) {
 		c.Header("Content-Type", "application/manifest+json")
 		c.Header("Cache-Control", "no-cache")
-		c.File(cfg.App.WebDir + "/manifest.json")
+		c.Data(http.StatusOK, "application/manifest+json", pwa.ManifestJSON())
 	})
 	r.GET("/manifest.json", func(c *gin.Context) {
+		c.Header("Content-Type", "application/manifest+json")
 		c.Header("Cache-Control", "no-cache")
-		c.File(cfg.App.WebDir + "/manifest.json")
+		c.Data(http.StatusOK, "application/manifest+json", pwa.ManifestJSON())
 	})
+	// PWA 资源同时挂到 /assets/ 下（见 registerPWAAndAssets）：反代/防火墙普遍放行
+	// 该路径，而顶层 /sw.js、/webmanifest 常被拦成 403。Service-Worker-Allowed: / 让
+	// /assets/sw.js 的 scope 仍是站点根目录，PWA 行为与原先完全一致。
 	r.GET("/sw.js", func(c *gin.Context) {
 		c.Header("Service-Worker-Allowed", "/")
 		c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
 		c.Header("Pragma", "no-cache")
 		c.Header("Expires", "0")
-		c.File(cfg.App.WebDir + "/sw.js")
+		c.Data(http.StatusOK, "text/javascript", pwa.SWJS())
 	})
 	r.GET("/api/ws", jwtMiddleware, handlers.WS.HandleWebSocket)
 }

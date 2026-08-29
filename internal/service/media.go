@@ -18,14 +18,15 @@ import (
 
 // MediaService 媒体服务
 type MediaService struct {
-	mediaRepo   *repository.MediaRepo
-	seriesRepo  *repository.SeriesRepo
-	historyRepo *repository.WatchHistoryRepo
-	favRepo     *repository.FavoriteRepo
-	libRepo     *repository.LibraryRepo
-	statsRepo   *repository.PlaybackStatsRepo
-	cfg         *config.Config
-	logger      *zap.SugaredLogger
+	mediaRepo      *repository.MediaRepo
+	seriesRepo     *repository.SeriesRepo
+	historyRepo    *repository.WatchHistoryRepo
+	favRepo        *repository.FavoriteRepo
+	watchLaterRepo *repository.WatchLaterRepo
+	libRepo        *repository.LibraryRepo
+	statsRepo      *repository.PlaybackStatsRepo
+	cfg            *config.Config
+	logger         *zap.SugaredLogger
 }
 
 func NewMediaService(
@@ -33,20 +34,22 @@ func NewMediaService(
 	seriesRepo *repository.SeriesRepo,
 	historyRepo *repository.WatchHistoryRepo,
 	favRepo *repository.FavoriteRepo,
+	watchLaterRepo *repository.WatchLaterRepo,
 	libRepo *repository.LibraryRepo,
 	statsRepo *repository.PlaybackStatsRepo,
 	cfg *config.Config,
 	logger *zap.SugaredLogger,
 ) *MediaService {
 	return &MediaService{
-		mediaRepo:   mediaRepo,
-		seriesRepo:  seriesRepo,
-		historyRepo: historyRepo,
-		favRepo:     favRepo,
-		libRepo:     libRepo,
-		statsRepo:   statsRepo,
-		cfg:         cfg,
-		logger:      logger,
+		mediaRepo:      mediaRepo,
+		seriesRepo:     seriesRepo,
+		historyRepo:    historyRepo,
+		favRepo:        favRepo,
+		watchLaterRepo: watchLaterRepo,
+		libRepo:        libRepo,
+		statsRepo:      statsRepo,
+		cfg:            cfg,
+		logger:         logger,
 	}
 }
 
@@ -577,6 +580,38 @@ func (s *MediaService) IsFavorited(userID, mediaID string) bool {
 // ListFavorites 获取收藏列表
 func (s *MediaService) ListFavorites(userID string, page, size int) ([]model.Favorite, int64, error) {
 	return s.favRepo.List(userID, page, size)
+}
+
+// AddWatchLater 加入稍后再看
+func (s *MediaService) AddWatchLater(userID, mediaID string) error {
+	if s.watchLaterRepo.Exists(userID, mediaID) {
+		return ErrAlreadyFavorited
+	}
+	wl := &model.WatchLater{
+		UserID:  userID,
+		MediaID: mediaID,
+	}
+	return s.watchLaterRepo.Add(wl)
+}
+
+// RemoveWatchLater 移除稍后再看
+func (s *MediaService) RemoveWatchLater(userID, mediaID string) error {
+	return s.watchLaterRepo.Remove(userID, mediaID)
+}
+
+// ClearWatchLater 清空当前用户的全部稍后再看
+func (s *MediaService) ClearWatchLater(userID string) (int64, error) {
+	return s.watchLaterRepo.DeleteByUser(userID)
+}
+
+// IsWatchLater 检查是否已加入稍后再看
+func (s *MediaService) IsWatchLater(userID, mediaID string) bool {
+	return s.watchLaterRepo.Exists(userID, mediaID)
+}
+
+// ListWatchLater 获取稍后再看列表
+func (s *MediaService) ListWatchLater(userID string, page, size int) ([]model.WatchLater, int64, error) {
+	return s.watchLaterRepo.List(userID, page, size)
 }
 
 // ListHistory 获取观看历史列表

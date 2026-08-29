@@ -36,24 +36,27 @@ func TestSecurityRedirectsRetiredPulseRoutes(t *testing.T) {
 
 func TestSecurityDisablesServiceWorkerCaching(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	router.Use(Security())
-	router.GET("/sw.js", func(c *gin.Context) {
-		c.String(http.StatusOK, "service worker")
-	})
 
-	request := httptest.NewRequest(http.MethodGet, "/sw.js", nil)
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
+	for _, path := range []string{"/sw.js", "/assets/sw.js"} {
+		router := gin.New()
+		router.Use(Security())
+		router.GET(path, func(c *gin.Context) {
+			c.String(http.StatusOK, "service worker")
+		})
 
-	if response.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", response.Code)
-	}
-	if got := response.Header().Get("Service-Worker-Allowed"); got != "/" {
-		t.Fatalf("expected Service-Worker-Allowed=/, got %q", got)
-	}
-	if got := response.Header().Get("Cache-Control"); got != "no-store, no-cache, must-revalidate" {
-		t.Fatalf("unexpected Cache-Control: %q", got)
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+
+		if response.Code != http.StatusOK {
+			t.Fatalf("path=%s expected status 200, got %d", path, response.Code)
+		}
+		if got := response.Header().Get("Service-Worker-Allowed"); got != "/" {
+			t.Fatalf("path=%s expected Service-Worker-Allowed=/, got %q", path, got)
+		}
+		if got := response.Header().Get("Cache-Control"); got != "no-store, no-cache, must-revalidate" {
+			t.Fatalf("path=%s unexpected Cache-Control: %q", path, got)
+		}
 	}
 }
 

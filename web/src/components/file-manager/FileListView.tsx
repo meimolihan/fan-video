@@ -430,7 +430,7 @@ export default function FileListView({
                 onClick={() => onViewDetail(file)}
                 onContextMenu={(event) => handleFileContextMenu(event, file)}
               >
-                <div className={`relative aspect-[2/3] overflow-hidden rounded-[var(--nv-radius-card)] bg-[var(--nv-bg-surface-soft)] shadow-[var(--nv-shadow-card)] transition-shadow duration-150 group-hover:shadow-[var(--nv-shadow-card-hover)] ${selected ? 'ring-1 ring-[var(--nv-text-secondary)]' : ''}`}>
+                <div className={`relative aspect-[2/3] overflow-hidden rounded-[var(--nv-radius-card)] border border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)] shadow-[var(--nv-shadow-card)] transition-[box-shadow,border-color] duration-150 group-hover:border-[var(--nv-border-default)] group-hover:shadow-[var(--nv-shadow-card-hover)] ${selected ? 'ring-1 ring-[var(--nv-text-secondary)]' : ''}`}>
                   <PosterImage
                     src={streamApi.getPosterUrl(file.id)}
                     alt=""

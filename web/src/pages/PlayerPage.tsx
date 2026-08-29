@@ -205,12 +205,12 @@ export default function PlayerPage() {
   const playerTitle = media.media_type === 'episode'
     ? (media.episode_title
         ? `${media.series?.title || ''}${media.series?.title && media.episode_title ? ' - ' : ''}${media.episode_title}`
-        : `${media.series?.title || media.title} S${String(media.season_num).padStart(2, '0')}E${String(media.episode_num).padStart(2, '0')}`)
+        : `${media.series?.title || media.title} #${String(media.episode_num).padStart(2, '0')}`)
     : media.title
   const nextTitle = nextEpisode
     ? (nextEpisode.episode_title
         ? `${nextEpisode.series?.title ? `${nextEpisode.series.title} - ` : ''}${nextEpisode.episode_title}`
-        : `S${String(nextEpisode.season_num).padStart(2, '0')}E${String(nextEpisode.episode_num).padStart(2, '0')}`)
+        : `#${String(nextEpisode.episode_num).padStart(2, '0')}`)
     : undefined
 
   const handleBack = () => {

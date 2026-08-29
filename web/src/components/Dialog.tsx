@@ -142,7 +142,7 @@ function DialogShell({ state, onClose }: { state: DialogState; onClose: (result:
       >
         {dismissible && (
           <Button type="button" variant="ghost" size="sm" iconOnly aria-label="关闭" onClick={dismiss} className="absolute right-3 top-3 z-10">
-            <X size={15} aria-hidden="true" />
+            <X size={16} aria-hidden="true" />
           </Button>
         )}
         {kind === 'confirm' && <ConfirmBody options={options as ConfirmOptions} variant={variant} onClose={onClose} />}

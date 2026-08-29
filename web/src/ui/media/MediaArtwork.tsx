@@ -65,6 +65,7 @@ export function MediaArtwork({
 }: MediaArtworkProps) {
   const primary = useResolvedArtworkUrl(src)
   const [fallbackResolved, setFallbackResolved] = useState<string | null>(null)
+  const [primaryBroken, setPrimaryBroken] = useState(false)
 
   useEffect(() => {
     if (fallbackSrc) {
@@ -72,10 +73,21 @@ export function MediaArtwork({
     }
   }, [fallbackSrc])
 
-  const activeSrc =
-    primary.ready && primary.url
-      ? primary.url
-      : fallbackResolved
+  // 主图源变化时重置错误状态，重新尝试主图
+  useEffect(() => {
+    setPrimaryBroken(false)
+  }, [src])
+
+  const primaryUrl = primary.ready && primary.url ? primary.url : undefined
+  const activeSrc = !primaryBroken && primaryUrl ? primaryUrl : fallbackResolved
+
+  // 主图加载失败（如 backdrop 端点 404 返回占位/错误）时回退到备用图，
+  // 避免 <img> 显示浏览器原生破图「?」。
+  const handlePosterError = () => {
+    if (!primaryBroken && fallbackResolved && fallbackResolved !== primaryUrl) {
+      setPrimaryBroken(true)
+    }
+  }
 
   // 从原始 src（非缓存 blob）推导缩略图 URL
   const thumbSrc = useMemo(() => {
@@ -103,6 +115,7 @@ export function MediaArtwork({
           alt={alt}
           className={clsx('nv-media-artwork-image', imageClassName)}
           loading={loading}
+          onError={handlePosterError}
         />
       ) : (
         <div className="nv-media-artwork-fallback" aria-hidden={alt ? undefined : true}>

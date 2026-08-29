@@ -6,6 +6,7 @@ import type { Media, MixedItem, Person, Series } from '@/types'
 import MediaGrid from '@/components/MediaGrid'
 import Pagination from '@/components/Pagination'
 import { Button, EmptyState, SearchField, Surface } from '@/components/design-system'
+import { FilterChip } from '@/ui'
 import {
   ArrowUpDown,
   Calendar,
@@ -63,21 +64,6 @@ type SearchUniverseCacheEntry = SearchUniverse & {
 
 const searchUniverseCache = new Map<string, SearchUniverseCacheEntry>()
 const searchUniverseInFlight = new Map<string, Promise<SearchUniverse>>()
-
-function FilterChip({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="nv-button nv-search-filter-chip"
-      data-variant={selected ? 'secondary' : 'ghost'}
-      data-size="sm"
-      aria-pressed={selected}
-    >
-      {children}
-    </button>
-  )
-}
 
 function FilterRow({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
   return (
@@ -565,7 +551,7 @@ function PersonSearchCard({ person }: { person: Person }) {
       role="listitem"
       aria-label={`查看人物 ${person.name}`}
     >
-      <div className="relative aspect-[4/5] overflow-hidden rounded-[var(--nv-radius-card)] border border-[var(--nv-border-subtle)] bg-[var(--nv-bg-poster)] shadow-[var(--nv-shadow-card)] transition-[transform,border-color,box-shadow] duration-200 group-hover:-translate-y-[3px] group-hover:border-[var(--nv-border-default)] group-hover:shadow-[var(--nv-shadow-card-hover)]">
+      <div className="relative aspect-[2/3] overflow-hidden rounded-[var(--nv-radius-card)] border border-[var(--nv-border-subtle)] bg-[var(--nv-bg-poster)] shadow-[var(--nv-shadow-card)] transition-[transform,border-color,box-shadow] duration-200 group-hover:-translate-y-[3px] group-hover:border-[var(--nv-border-default)] group-hover:shadow-[var(--nv-shadow-card-hover)]">
         {!imageFailed ? (
           <img
             src={profileUrl}

@@ -1,6 +1,8 @@
 .nv-detail-hero-backdrop-shell {
   position: relative;
   isolation: isolate;
+  border-radius: 16px;
+  overflow: hidden;
 }
 
 .nv-detail-hero-local-backdrop {

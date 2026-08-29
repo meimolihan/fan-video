@@ -80,7 +80,7 @@ export default function CollectionDetailHero({ data, movieCount, onBack }: Colle
           <div className="min-w-0 flex-1 pb-1">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <Tag tone="brand">系列合集</Tag>
-              <Tag>{movieCount} 部电影</Tag>
+              <Tag><span className="text-[var(--nv-status-warning)] font-bold">{movieCount}</span> 部电影</Tag>
               {stats.yearRange && <Tag><Calendar size={11} />{stats.yearRange}</Tag>}
               {stats.averageRating > 0 && <Tag tone="rating"><Star size={11} fill="currentColor" />均分 {stats.averageRating.toFixed(1)}</Tag>}
             </div>

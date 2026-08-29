@@ -176,6 +176,85 @@ func (h *UserHandler) CheckFavorite(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": favorited})
 }
 
+// WatchLater 获取稍后再看列表
+func (h *UserHandler) WatchLater(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
+
+	if page < 1 {
+		page = 1
+	}
+	if size < 1 || size > 50 {
+		size = 20
+	}
+
+	items, total, err := h.mediaService.ListWatchLater(userID.(string), page, size)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取稍后再看列表失败"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":  items,
+		"total": total,
+		"page":  page,
+		"size":  size,
+	})
+}
+
+// AddWatchLater 加入稍后再看
+func (h *UserHandler) AddWatchLater(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	mediaID := c.Param("mediaId")
+
+	if err := h.mediaService.AddWatchLater(userID.(string), mediaID); err != nil {
+		if err == service.ErrAlreadyFavorited {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "加入稍后再看失败"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "已加入稍后再看"})
+}
+
+// RemoveWatchLater 移除稍后再看
+func (h *UserHandler) RemoveWatchLater(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	mediaID := c.Param("mediaId")
+
+	if err := h.mediaService.RemoveWatchLater(userID.(string), mediaID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "移除稍后再看失败"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "已移除"})
+}
+
+// ClearWatchLater 清空当前用户的全部稍后再看
+func (h *UserHandler) ClearWatchLater(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+
+	deleted, err := h.mediaService.ClearWatchLater(userID.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "清空稍后再看失败"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "已清空", "deleted": deleted})
+}
+
+// CheckWatchLater 检查是否已加入稍后再看
+func (h *UserHandler) CheckWatchLater(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	mediaID := c.Param("mediaId")
+
+	added := h.mediaService.IsWatchLater(userID.(string), mediaID)
+	c.JSON(http.StatusOK, gin.H{"data": added})
+}
+
 // GetProgress 获取用户对指定媒体的观看进度
 func (h *UserHandler) GetProgress(c *gin.Context) {
 	userID, _ := c.Get("user_id")

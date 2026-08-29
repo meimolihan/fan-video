@@ -1,7 +1,8 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Clock3, Heart, Moon, Sun } from 'lucide-react'
+import { Clock3, Heart, Moon, Sun, Bookmark } from 'lucide-react'
 import Sidebar from './Sidebar'
+import BackToTop from './BackToTop'
 import { PageContainer } from './design-system'
 import { AppShell, PageHeader } from '@/ui'
 import { useThemeStore } from '@/stores/theme'
@@ -14,6 +15,7 @@ const TITLE_BY_PREFIX: Array<[string, string]> = [
   ['/browse', '影视库'],
   ['/search', '搜索'],
   ['/favorites', '收藏'],
+  ['/watch-later', '稍后再看'],
   ['/history', '观看历史'],
   ['/playlists', '播放列表'],
   ['/collections', '合集'],
@@ -80,6 +82,10 @@ function ApplicationTopBar() {
       <Link to="/favorites" className="nv-page-header-action nv-page-header-action--label" aria-label="我的收藏" title="我的收藏">
         <Heart size={15} aria-hidden="true" />
         <span>我的收藏</span>
+      </Link>
+      <Link to="/watch-later" className="nv-page-header-action nv-page-header-action--label" aria-label="稍后再看" title="稍后再看">
+        <Bookmark size={15} aria-hidden="true" />
+        <span>稍后再看</span>
       </Link>
       <ThemeToggleButton />
     </>
@@ -165,6 +171,7 @@ export default function Layout() {
         >
           <Outlet />
         </PageContainer>
+        <BackToTop />
       </main>
     </AppShell>
   )

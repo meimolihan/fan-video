@@ -11,6 +11,7 @@ import { useTranslation } from '@/i18n'
 import { formatDuration } from '@/utils/format'
 import type { Media, MediaPlayInfo, Playlist, WatchHistory } from '@/types'
 import {
+  Bookmark,
   Check,
   ChevronRight,
   Clapperboard,
@@ -33,12 +34,14 @@ interface HeroSectionProps {
   media: Media
   playInfo: MediaPlayInfo | null
   isFavorited: boolean
+  isWatchLater?: boolean
   watchProgress: WatchHistory | null
   playlists: Playlist[]
   scraping: boolean
   isAdmin: boolean
   posterVersion?: number
   onFavorite: () => void
+  onToggleWatchLater?: () => void
   onAddToPlaylist: (playlistId: string) => void
   onShowTrailer?: () => void
   onRefreshMetadata?: () => void
@@ -158,12 +161,14 @@ export default function HeroSection({
   media,
   playInfo,
   isFavorited,
+  isWatchLater = false,
   watchProgress,
   playlists,
   scraping,
   isAdmin,
   posterVersion,
   onFavorite,
+  onToggleWatchLater,
   onAddToPlaylist,
   onShowTrailer,
   onRefreshMetadata,
@@ -221,7 +226,7 @@ export default function HeroSection({
   }
 
   const title = media.media_type === 'episode'
-    ? (media.episode_title || t('hero.episodeNum', { num: String(media.episode_num) }))
+    ? undefined
     : media.title
 
   const isResume = !!watchProgress && !watchProgress.completed && watchProgress.position > 0
@@ -245,7 +250,7 @@ export default function HeroSection({
       <span className="truncate">{media.series?.title || media.title}</span>
       <ChevronRight size={14} aria-hidden="true" />
       <span className="shrink-0 text-[var(--nv-action-muted-hover)]">
-        S{String(media.season_num).padStart(2, '0')}E{String(media.episode_num).padStart(2, '0')}
+        {media.episode_title || `#${String(media.episode_num).padStart(2, '0')}`}
       </span>
     </Link>
   ) : undefined
@@ -289,6 +294,21 @@ export default function HeroSection({
       >
         <Heart size={19} fill={isFavorited ? 'currentColor' : 'none'} aria-hidden="true" />
       </Button>
+
+      {onToggleWatchLater && (
+        <Button
+          variant="secondary"
+          size="lg"
+          iconOnly
+          onClick={onToggleWatchLater}
+          className={isWatchLater ? 'border-[var(--nv-border-hover)] bg-[var(--nv-bg-active)] text-[var(--nv-action-muted-hover)]' : undefined}
+          title={isWatchLater ? t('media.removeWatchLater') : t('media.addWatchLater')}
+          aria-label={isWatchLater ? t('media.removeWatchLater') : t('media.addWatchLater')}
+          aria-pressed={isWatchLater}
+        >
+          <Bookmark size={19} fill={isWatchLater ? 'currentColor' : 'none'} aria-hidden="true" />
+        </Button>
+      )}
 
       <Button
         ref={playlistButtonRef}

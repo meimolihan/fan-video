@@ -10,6 +10,7 @@ import Pagination from '@/components/Pagination'
 import type { Playlist } from '@/types'
 import PosterImage from '@/components/PosterImage'
 import { Button, EmptyState, Input, Tag } from '@/components/design-system'
+import { PersonalWorkspaceHeader } from '@/ui'
 
 export default function PlaylistsPage() {
   const [playlists, setPlaylists] = useState<Playlist[]>([])
@@ -85,21 +86,17 @@ export default function PlaylistsPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-4 border-b border-[var(--nv-border-subtle)] pb-5 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-[-0.02em] text-[var(--nv-text-primary)]">
-            <ListVideo size={20} className="text-[var(--nv-text-tertiary)]" aria-hidden="true" />
-            {t('playlists.title')}
-          </h1>
-          <p className="mt-1.5 text-sm leading-6 text-[var(--nv-text-tertiary)]">
-            整理常看内容，快速进入播放，并管理列表中的媒体项目。
-          </p>
-        </div>
-        <Button type="button" variant="secondary" onClick={() => setShowCreate((current) => !current)} aria-expanded={showCreate}>
-          <Plus size={15} aria-hidden="true" />
-          {t('playlists.create')}
-        </Button>
-      </header>
+      <PersonalWorkspaceHeader
+        icon={<ListVideo size={20} />}
+        title={t('playlists.title')}
+        description="整理常看内容，快速进入播放，并管理列表中的媒体项目。"
+        actions={(
+          <Button type="button" variant="secondary" onClick={() => setShowCreate((current) => !current)} aria-expanded={showCreate}>
+            <Plus size={15} aria-hidden="true" />
+            {t('playlists.create')}
+          </Button>
+        )}
+      />
 
       {showCreate && (
         <section className="border-y border-[var(--nv-border-subtle)] py-4">

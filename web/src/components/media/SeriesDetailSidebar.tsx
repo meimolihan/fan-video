@@ -19,7 +19,7 @@ function isCompleted(history?: WatchHistory) {
 
 function episodeCode(episode?: Media | null) {
   if (!episode) return '—'
-  return `S${String(episode.season_num).padStart(2, '0')}E${String(episode.episode_num).padStart(2, '0')}`
+  return `#${String(episode.episode_num).padStart(2, '0')}`
 }
 
 export default function SeriesDetailSidebar({ series, episodes, historyMap, playEpisode, playLabel }: SeriesDetailSidebarProps) {
@@ -35,11 +35,11 @@ export default function SeriesDetailSidebar({ series, episodes, historyMap, play
   return (
     <aside className="nv-series-detail-sidebar" aria-label="剧集状态与信息">
       <section className="nv-series-sidebar-card nv-series-progress-card">
-        <div className="nv-series-sidebar-eyebrow"><Clapperboard size={12} aria-hidden="true" /> WATCHING</div>
+        <div className="nv-series-sidebar-eyebrow"><Clapperboard size={12} aria-hidden="true" /> 观看进度</div>
         <div className="nv-series-sidebar-heading-row">
           <div>
             <h2>观看进度</h2>
-            <p>{episodes.length > 0 ? `已看 ${watchedCount} / ${episodes.length} 集` : '暂无可播放单集'}</p>
+            <p>{episodes.length > 0 ? `已看 ${watchedCount} / ${episodes.length}` : '暂无可播放视频'}</p>
           </div>
           <span className="nv-series-progress-value">{progress}%</span>
         </div>
@@ -48,7 +48,7 @@ export default function SeriesDetailSidebar({ series, episodes, historyMap, play
         </div>
         <div className="nv-series-progress-meta">
           <span>当前 {episodeCode(playEpisode)}</span>
-          {inProgressCount > 0 && <span>{inProgressCount} 集进行中</span>}
+          {inProgressCount > 0 && <span>{inProgressCount} 个进行中</span>}
         </div>
         {playEpisode && (
           <Link to={`/play/${playEpisode.id}`} className={`${buttonClassName({ variant: 'primary', size: 'sm' })} nv-series-sidebar-play`}>
@@ -59,11 +59,10 @@ export default function SeriesDetailSidebar({ series, episodes, historyMap, play
       </section>
 
       <section className="nv-series-sidebar-card">
-        <div className="nv-series-sidebar-eyebrow"><Tv2 size={12} aria-hidden="true" /> SERIES</div>
-        <h2>剧集信息</h2>
+        <div className="nv-series-sidebar-eyebrow"><Tv2 size={12} aria-hidden="true" /> 系列信息</div>
+        <h2>系列信息</h2>
         <dl className="nv-series-sidebar-facts">
-          <div><dt>季数</dt><dd>{series.season_count || 0} 季</dd></div>
-          <div><dt>集数</dt><dd>{series.episode_count || episodes.length || 0} 集</dd></div>
+          <div><dt>内容数</dt><dd><span className="text-[var(--nv-status-warning)] font-bold">{series.episode_count || episodes.length || 0}</span> 项</dd></div>
           {series.year > 0 && <div><dt>年份</dt><dd>{series.year}</dd></div>}
           {series.country && <div><dt>地区</dt><dd>{series.country}</dd></div>}
           {series.language && <div><dt>语言</dt><dd>{series.language}</dd></div>}
@@ -77,7 +76,7 @@ export default function SeriesDetailSidebar({ series, episodes, historyMap, play
       </section>
 
       <section className="nv-series-sidebar-card">
-        <div className="nv-series-sidebar-eyebrow"><Database size={12} aria-hidden="true" /> METADATA</div>
+        <div className="nv-series-sidebar-eyebrow"><Database size={12} aria-hidden="true" /> 元数据</div>
         <h2>元数据来源</h2>
         {hasSources ? (
           <div className="nv-series-source-list">

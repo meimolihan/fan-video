@@ -784,6 +784,19 @@ func (s *ScannerService) ScanLibraryWithOptions(library *model.Library, opts Sca
 		sizeRemoved = s.purgeUndersizedMedia(library)
 	}
 
+	// 首帧封面修复：对当前仍以「首帧图片」作为海报的视频，检查视频目录是否已新增
+	// 真实海报；若两者同时匹配，则删除首帧封面并把海报更新为目录海报。
+	// 该修复在扫描完成后统一执行，确保增量扫描跳过未改动文件时也能生效。
+	if err == nil {
+		s.healFirstFramePosters(library)
+	}
+	// 首帧缓存垃圾回收：清理已被真实海报替换后遗留的孤儿首帧文件。
+	// 与 healFirstFramePosters 不同，这里按全体媒体/剧集引用做全局比对，
+	// 不依赖键匹配或目录海报匹配规则，能可靠删除任何残留首帧缓存。
+	if err == nil {
+		s.firstFrameCacheGC()
+	}
+
 	if err != nil {
 		s.broadcastScanEvent(EventScanFailed, &ScanProgressData{
 			LibraryID:   library.ID,
@@ -810,6 +823,154 @@ func (s *ScannerService) ScanLibraryWithOptions(library *model.Library, opts Sca
 	}
 
 	return count, err
+}
+
+// healFirstFramePosters 在扫描完成后统一修复「首帧封面」：
+// 对当前仍以首帧图片作为海报的本地视频，重新匹配视频目录海报。
+// 一旦目录中匹配到真实海报（非首帧），就删除首帧封面文件并把海报更新为目录海报。
+// 该遍历仅覆盖仍持有首帧封面的媒体（数量有限），不影响其余海报。
+func (s *ScannerService) healFirstFramePosters(library *model.Library) {
+	if s.nfoService == nil || library == nil {
+		return
+	}
+	mediaList, err := s.mediaRepo.ListByLibraryID(library.ID)
+	if err != nil {
+		s.logger.Warnf("加载媒体库海报修复列表失败: %v", err)
+		return
+	}
+
+	healed := 0
+	deletedFiles := 0
+	for i := range mediaList {
+		m := &mediaList[i]
+		// 仅处理本地视频
+		if m.FilePath == "" || m.StreamURL != "" || IsWebDAVPath(m.FilePath) {
+			continue
+		}
+		// 目录海报匹配（无目录海报时函数内部以「首帧兜底」返回）
+		poster, backdrop := s.nfoService.FindLocalImagesForMedia(m.FilePath)
+		// 仅当目录中匹配到真实海报（非首帧）时才处理；否则首帧仍是合法兜底
+		if poster == "" || s.nfoService.IsFirstFrameCachePath(poster) {
+			continue
+		}
+		oldPoster := m.PosterPath
+		if oldPoster != poster && s.nfoService.IsFirstFrameCachePath(oldPoster) {
+			m.PosterPath = poster
+			if backdrop != "" && m.BackdropPath == "" {
+				m.BackdropPath = backdrop
+			}
+			if err := s.mediaRepo.Update(m); err != nil {
+				s.logger.Warnf("更新目录海报失败 media=%s: %v", m.ID, err)
+			} else {
+				healed++
+				s.logger.Debugf("首帧封面替换为目录海报 media=%s: %s", m.ID, poster)
+			}
+		}
+		// 无论数据库是否仍指向首帧，都清理该视频遗留的首帧缓存文件（含孤儿文件）
+		deletedFiles += s.deleteVideoFirstFrame(m, oldPoster)
+	}
+	if healed > 0 {
+		s.logger.Infof("扫描后首帧封面修复: %d 个媒体已改用目录海报", healed)
+	}
+	if deletedFiles > 0 {
+		s.logger.Infof("扫描后清理首帧封面缓存: 删除 %d 个文件", deletedFiles)
+	}
+}
+
+// deleteVideoFirstFrame 删除视频的首帧封面缓存文件。
+// 同时清理数据库中记录的首帧路径与按当前视频身份推导出的缓存路径，
+// 以覆盖数据库路径过期/不一致（孤儿首帧被替换后残留）的情况。
+// 返回实际删除的文件数。
+func (s *ScannerService) deleteVideoFirstFrame(m *model.Media, storedPath string) int {
+	targets := map[string]struct{}{}
+	if storedPath != "" {
+		targets[storedPath] = struct{}{}
+	}
+	if m != nil && m.FilePath != "" && !IsWebDAVPath(m.FilePath) {
+		if info, err := os.Stat(m.FilePath); err == nil {
+			key := firstFrameCacheKey(m.FilePath, info)
+			targets[filepath.Join(s.nfoService.firstFrameCacheDir(), key+".jpg")] = struct{}{}
+		}
+	}
+	deleted := 0
+	for path := range targets {
+		if path == "" {
+			continue
+		}
+		if err := os.Remove(path); err != nil {
+			if !os.IsNotExist(err) {
+				s.logger.Warnf("删除首帧封面失败: %s: %v", path, err)
+			}
+			continue
+		}
+		deleted++
+		s.logger.Debugf("已删除首帧封面: %s", path)
+	}
+	return deleted
+}
+
+// firstFrameCacheGC 首帧封面缓存垃圾回收：删除未被任何媒体/剧集引用的孤儿首帧缓存文件。
+// 以「全体媒体与剧集当前海报/背景图引用」为准做全局比对，不依赖键匹配或目录海报匹配规则，
+// 因此无论首帧因何被替换（扫描、手动上传、剧集借用等）都能可靠清理残留文件。
+func (s *ScannerService) firstFrameCacheGC() {
+	if s.nfoService == nil {
+		return
+	}
+	cacheDir := s.nfoService.firstFrameCacheDir()
+	entries, err := os.ReadDir(cacheDir)
+	if err != nil {
+		return // 目录不存在或不可读时无需处理
+	}
+
+	referenced := map[string]bool{}
+	collect := func(paths ...string) {
+		for _, p := range paths {
+			p = strings.TrimSpace(p)
+			if p == "" || !s.nfoService.IsFirstFrameCachePath(p) {
+				continue
+			}
+			if abs, aerr := filepath.Abs(p); aerr == nil {
+				referenced[abs] = true
+			}
+		}
+	}
+	if media, merr := s.mediaRepo.ListAllImagePaths(); merr == nil {
+		for i := range media {
+			collect(media[i].PosterPath, media[i].BackdropPath)
+		}
+	}
+	if series, serr := s.seriesRepo.ListAllImagePaths(); serr == nil {
+		for i := range series {
+			collect(series[i].PosterPath, series[i].BackdropPath)
+		}
+	}
+
+	deleted := 0
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(name), ".jpg") || strings.Contains(name, ".tmp.") {
+			continue
+		}
+		full := filepath.Join(cacheDir, name)
+		ref, aerr := filepath.Abs(full)
+		if aerr != nil {
+			continue
+		}
+		if referenced[ref] {
+			continue
+		}
+		if err := os.Remove(full); err != nil {
+			if !os.IsNotExist(err) {
+				s.logger.Warnf("清理孤儿首帧缓存失败: %s: %v", full, err)
+			}
+			continue
+		}
+		deleted++
+		s.logger.Debugf("已清理孤儿首帧缓存: %s", full)
+	}
+	if deleted > 0 {
+		s.logger.Infof("首帧缓存清理完成: 删除 %d 个孤儿文件", deleted)
+	}
 }
 
 // scanMovieLibrary 扫描电影库（支持增量扫描 + P2 性能优化）

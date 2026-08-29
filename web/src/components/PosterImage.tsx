@@ -16,7 +16,7 @@ type PosterImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> & {
  * - thumbSrc / hdSrc / resolved 各司其职，无重复解析
  * - 仅渲染 <img>，容器由 MediaArtwork 统一管理（避免双重 border-radius）
  */
-export default function PosterImage({ src, thumbSrc, ...rest }: PosterImageProps) {
+export default function PosterImage({ src, thumbSrc, onError, ...rest }: PosterImageProps) {
   const [isInViewport, setIsInViewport] = useState(false)
   const [thumbReady, setThumbReady] = useState(false)
   const [hdReady, setHdReady] = useState(false)
@@ -85,7 +85,7 @@ export default function PosterImage({ src, thumbSrc, ...rest }: PosterImageProps
         height: rest.height || '100%',
       }}
       onLoad={handleLoad}
-      onError={() => {}}
+      onError={onError}
     />
   )
 }

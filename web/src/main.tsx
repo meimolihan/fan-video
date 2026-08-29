@@ -2,7 +2,6 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { LazyMotion, domAnimation } from 'framer-motion'
 import App from './App'
-import FluentAppProvider from './components/FluentAppProvider'
 import { initTheme } from './stores/theme'
 import { initI18n } from './i18n'
 import { installSubtitleTrackActivationGuard } from './utils/subtitleTrackActivation'
@@ -54,7 +53,7 @@ async function cleanupDevelopmentServiceWorker() {
 
 async function registerProductionServiceWorker() {
   try {
-    const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+    const registration = await navigator.serviceWorker.register('/assets/sw.js', { scope: '/' })
 
     const activateUpdate = (worker: ServiceWorker | null) => {
       if (!worker || worker.state !== 'installed' || !navigator.serviceWorker.controller) return
@@ -93,17 +92,27 @@ if ('serviceWorker' in navigator) {
 installSubtitleTrackActivationGuard()
 installMediaDetailHeroEnhancer()
 
-initTheme()
-initI18n()
+// 兜底：无论下方渲染是否同步抛错，开屏动画都必须在短时间内移除，
+// 否则任何启动期错误都会把用户永久挡在开屏画面上。
+window.setTimeout(dismissSplash, 1500)
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <LazyMotion features={domAnimation} strict>
-      <FluentAppProvider>
+try {
+  initTheme()
+  initI18n()
+} catch (error) {
+  console.error('[boot] init failed:', error)
+}
+
+try {
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <LazyMotion features={domAnimation} strict>
         <App />
-      </FluentAppProvider>
-    </LazyMotion>
-  </React.StrictMode>,
-)
+      </LazyMotion>
+    </React.StrictMode>,
+  )
+} catch (error) {
+  console.error('[boot] React 挂载失败:', error)
+}
 
 requestAnimationFrame(dismissSplash)

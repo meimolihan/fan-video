@@ -8,6 +8,7 @@ import type { RecommendedMedia, MixedItem, Media } from '@/types'
 import { usePosterVersion } from '@/stores/mediaRefresh'
 import { Button, buttonClassName } from '@/components/design-system'
 import { MediaArtwork, MediaHeroContent } from '@/ui'
+import HeroParticleTransition from '@/components/HeroParticleTransition'
 
 const AUTO_PLAY_INTERVAL = 7000
 const SWIPE_THRESHOLD = 50
@@ -215,24 +216,43 @@ export default function HeroCarousel({
   const [isHovering, setIsHovering] = useState(false)
   const [isInViewport, setIsInViewport] = useState(true)
   const [isPageVisible, setIsPageVisible] = useState(() => document.visibilityState !== 'hidden')
+  const directionRef = useRef<1 | -1>(1)
+  const lastArtworkRef = useRef<{ id: string; src: string | null } | null>(null)
+  const fxSeqRef = useRef(0)
+  const [fx, setFx] = useState<{ src: string | null; direction: 1 | -1; seq: number } | null>(null)
 
   useEffect(() => {
     if (current >= items.length && items.length > 0) setCurrent(0)
   }, [current, items.length])
 
+  useEffect(() => {
+    const media = items[current]
+    if (!media) return
+    const prev = lastArtworkRef.current
+    const cur = { id: media.media.id, src: getHeroArtwork(media.media, posterVersion).primary }
+    lastArtworkRef.current = cur
+    if (prev && prev.id !== cur.id && items.length > 1 && !prefersReducedMotion) {
+      fxSeqRef.current += 1
+      setFx({ src: prev.src, direction: directionRef.current, seq: fxSeqRef.current })
+    }
+  }, [current, items, posterVersion, prefersReducedMotion])
+
   const goPrev = useCallback(() => {
     if (!items.length) return
+    directionRef.current = -1
     setCurrent((value) => (value - 1 + items.length) % items.length)
   }, [items.length])
 
   const goNext = useCallback(() => {
     if (!items.length) return
+    directionRef.current = 1
     setCurrent((value) => (value + 1) % items.length)
   }, [items.length])
 
   const goTo = useCallback((index: number) => {
+    directionRef.current = index > current ? 1 : -1
     setCurrent(index)
-  }, [])
+  }, [current])
 
   useEffect(() => {
     const container = containerRef.current
@@ -330,18 +350,22 @@ export default function HeroCarousel({
       <AnimatePresence initial={false} mode="sync">
         <motion.div
           key={`hero-${item.media.id}`}
-          className="absolute inset-0"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: prefersReducedMotion ? 0.1 : 0.28, ease: 'easeOut' }}
+          className="absolute inset-0 overflow-hidden rounded-[inherit]"
+          initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0.04, scale: 1.045, filter: 'blur(14px)' }}
+          animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1, filter: 'blur(0px)' }}
+          exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 1.015 }}
+          transition={{
+            duration: prefersReducedMotion ? 0.1 : 0.95,
+            ease: 'easeOut',
+            delay: prefersReducedMotion ? 0 : 0.12,
+          }}
         >
           {artwork.primary && (
             <img
               src={artwork.primary}
               alt=""
               data-artwork-kind={artwork.isBackdrop ? 'backdrop' : 'poster'}
-              className={`h-full w-full select-none object-cover object-center${artwork.isBackdrop ? '' : ' scale-110 blur-2xl'}`}
+              className={`h-full w-full select-none object-cover object-center rounded-[inherit]${artwork.isBackdrop ? '' : ' scale-110 blur-2xl'}`}
               loading="eager"
               decoding="async"
               draggable={false}
@@ -353,6 +377,16 @@ export default function HeroCarousel({
 
       <div className="pointer-events-none absolute inset-0" style={{ background: 'var(--nv-hero-scrim)' }} />
       <div className="pointer-events-none absolute inset-0" style={{ background: 'var(--nv-hero-bottom-scrim)' }} />
+
+      {fx && !prefersReducedMotion && (
+        <HeroParticleTransition
+          key={fx.seq}
+          className="pointer-events-none absolute inset-0 z-[5]"
+          sourceSrc={fx.src}
+          direction={fx.direction}
+          onDone={() => setFx(null)}
+        />
+      )}
 
       <div className="nv-home-hero-foreground relative z-10">
         <MediaArtwork

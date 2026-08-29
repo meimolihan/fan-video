@@ -1,42 +1,12 @@
 import api from './client'
 import type {
-  CastDevice,
-  CastSession,
-  CastRequest,
-  CastControlRequest,
-  ListResponse,
-} from '@/types'
-
-// ==================== 投屏 ====================
-export const castApi = {
-  listDevices: () =>
-    api.get<ListResponse<CastDevice>>('/cast/devices'),
-
-  refreshDevices: () =>
-    api.post('/cast/devices/refresh'),
-
-  startCast: (data: CastRequest) =>
-    api.post<{ data: CastSession; message: string }>('/cast/start', data),
-
-  listSessions: () =>
-    api.get<ListResponse<CastSession>>('/cast/sessions'),
-
-  getSession: (sessionId: string) =>
-    api.get<{ data: CastSession }>(`/cast/sessions/${sessionId}`),
-
-  control: (sessionId: string, data: CastControlRequest) =>
-    api.post(`/cast/sessions/${sessionId}/control`, data),
-
-  stopSession: (sessionId: string) =>
-    api.delete(`/cast/sessions/${sessionId}`),
-}
-
-// ==================== 视频书签 ====================
-import type {
   Bookmark,
   CreateBookmarkRequest,
+  ListResponse,
   PaginatedResponse,
 } from '@/types'
+
+// ==================== 视频书签 ====================
 
 export const bookmarkApi = {
   create: (data: CreateBookmarkRequest) =>

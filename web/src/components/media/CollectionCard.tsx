@@ -73,7 +73,7 @@ function CollectionGridCard({ collection, className }: { collection: MovieCollec
         <div className="nv-media-card-meta mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden">
           {collection.year_range && <span className="shrink-0">{collection.year_range}</span>}
           {collection.year_range && <span aria-hidden="true">·</span>}
-          <span className="shrink-0">{collection.media_count} 部电影</span>
+          <span className="shrink-0"><span className="text-[var(--nv-status-warning)] font-bold">{collection.media_count}</span> 部电影</span>
           {collection.file_count != null && collection.file_count > collection.media_count && (
             <>
               <span aria-hidden="true">·</span>
@@ -107,7 +107,7 @@ function CollectionListCard({ collection }: { collection: MovieCollection }) {
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] text-[var(--nv-text-tertiary)]">
           {collection.year_range && <span>{collection.year_range}</span>}
-          <span>{collection.media_count} 部电影</span>
+          <span><span className="text-[var(--nv-status-warning)] font-bold">{collection.media_count}</span> 部电影</span>
           {collection.file_count != null && collection.file_count > collection.media_count && (
             <span>{collection.file_count} 文件</span>
           )}

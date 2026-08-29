@@ -4,10 +4,11 @@ import { useThemeStore } from '@/stores/theme'
 import { useTranslation } from '@/i18n'
 import { BottomNavigation, NavigationRailLink, NavigationRailSection } from '@/ui'
 import {
+  Bookmark,
   ChevronLeft,
   ChevronRight,
-  Clock3,
   Film,
+  Heart,
   Home,
   Layers,
   LogOut,
@@ -89,7 +90,8 @@ export default function Sidebar({ collapsed = false, onCollapsedChange }: Sideba
           </NavigationRailSection>
 
           <NavigationRailSection title="我的列表">
-            <NavigationRailLink to="/favorites" icon={<Clock3 size={17} aria-hidden="true" />} label="稍后观看" />
+            <NavigationRailLink to="/favorites" icon={<Heart size={17} aria-hidden="true" />} label="收藏" />
+            <NavigationRailLink to="/watch-later" icon={<Bookmark size={17} aria-hidden="true" />} label="稍后再看" />
           </NavigationRailSection>
 
           {user?.role === 'admin' && (

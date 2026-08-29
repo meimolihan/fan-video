@@ -295,7 +295,7 @@ export default function MediaHighlightsPanel({ mediaId, isAdmin }: MediaHighligh
     return (
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {[0, 1, 2].map((item) => (
-          <div key={item} className="overflow-hidden rounded-[var(--nv-radius-container)] border border-[var(--nv-border-subtle)] bg-[var(--nv-surface-soft)]">
+          <div key={item} className="overflow-hidden rounded-[var(--nv-radius-container)] border border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)]">
             <div className="skeleton aspect-video w-full" />
             <div className="space-y-2 p-4">
               <div className="skeleton h-5 w-2/3 rounded" />
@@ -309,7 +309,7 @@ export default function MediaHighlightsPanel({ mediaId, isAdmin }: MediaHighligh
 
   if (running) {
     return (
-      <div className="rounded-[var(--nv-radius-container)] border border-[var(--nv-border-subtle)] bg-[var(--nv-surface-soft)] p-6 shadow-[var(--nv-shadow-card)]">
+      <div className="rounded-[var(--nv-radius-container)] border border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)] p-6 shadow-[var(--nv-shadow-card)]">
         <div className="flex items-start gap-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--nv-accent-soft)] text-[var(--nv-accent)]">
             <Loader2 size={21} className="animate-spin" aria-hidden="true" />
@@ -322,7 +322,7 @@ export default function MediaHighlightsPanel({ mediaId, isAdmin }: MediaHighligh
               </div>
               <span className="rounded-full border border-[var(--nv-border-subtle)] px-3 py-1 text-xs text-[var(--nv-text-tertiary)]">{executionBadge(task?.stage)}</span>
             </div>
-            <div className="mt-5 h-2 overflow-hidden rounded-full bg-[var(--nv-surface-elevated)]">
+            <div className="mt-5 h-2 overflow-hidden rounded-full bg-[var(--nv-bg-elevated)]">
               <div className="h-full rounded-full bg-[var(--nv-accent)] transition-[width] duration-300" style={{ width: `${progress}%` }} />
             </div>
           </div>
@@ -408,14 +408,14 @@ export default function MediaHighlightsPanel({ mediaId, isAdmin }: MediaHighligh
             <button
               key={item.id}
               type="button"
-              className="nv-highlight-card group overflow-hidden rounded-[var(--nv-radius-container)] border border-[var(--nv-border-subtle)] bg-[var(--nv-surface-soft)] text-left shadow-[var(--nv-shadow-card)] transition duration-200 hover:-translate-y-0.5 hover:border-[var(--nv-accent)]/40 hover:shadow-[var(--nv-shadow-elevated)]"
+              className="nv-highlight-card group overflow-hidden rounded-[var(--nv-radius-container)] border border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)] text-left shadow-[var(--nv-shadow-card)] transition duration-200 hover:-translate-y-0.5 hover:border-[var(--nv-accent)]/40 hover:shadow-[var(--nv-shadow-elevated)]"
               onMouseEnter={() => beginHover(item.id)}
               onMouseLeave={() => endHover(item.id)}
               onFocus={() => setHoveredId(item.id)}
               onBlur={() => endHover(item.id)}
               onClick={() => navigate(`/play/${mediaId}?start=${item.start_time.toFixed(3)}&end=${item.end_time.toFixed(3)}&mode=highlight`)}
             >
-              <div className="nv-highlight-card-media relative aspect-video overflow-hidden bg-[var(--nv-surface-elevated)]">
+              <div className="nv-highlight-card-media relative aspect-video overflow-hidden bg-[var(--nv-bg-elevated)]">
                 {poster ? (
                   <img
                     src={poster}

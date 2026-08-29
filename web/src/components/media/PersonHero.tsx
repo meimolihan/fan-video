@@ -63,7 +63,7 @@ export default function PersonHero({
             className="text-center sm:text-left"
             eyebrow={(
               <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-                <Tag tone="brand">人物</Tag>
+                <Tag tone="brand">{t('personDetail.personTag')}</Tag>
                 {!worksLoading && totalWorks > 0 && (
                   <Tag>{t('personDetail.worksCount', { count: totalWorks })}</Tag>
                 )}

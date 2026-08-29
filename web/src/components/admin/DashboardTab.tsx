@@ -7,6 +7,7 @@ import {
   Check,
   Cpu,
   Clock,
+  EyeOff,
   FolderCog,
   HardDrive,
   Link,
@@ -21,6 +22,7 @@ import {
   Settings,
   ShieldAlert,
   Trash2,
+  UserX,
   X,
   Zap,
 } from 'lucide-react'
@@ -310,8 +312,8 @@ export default function DashboardTab({
 
         <SettingRow
           icon={<FolderCog size={16} />}
-          title="媒体元数据存储位置"
-          description="自定义媒体元数据的保存路径，留空使用默认。"
+          title="媒体数据存储"
+          description="自定义媒体数据的保存路径，留空使用默认。"
         >
           <Input
             value={sysSettings.metadata_store_path}
@@ -388,6 +390,30 @@ export default function DashboardTab({
             <ToggleButton
               checked={sysSettings.auto_transcode_on_play}
               onChange={() => setSysSettings((s) => ({ ...s, auto_transcode_on_play: !s.auto_transcode_on_play }))}
+            />
+          )}
+        />
+
+        <SettingRow
+          icon={<EyeOff size={16} />}
+          title="隐藏影片简介"
+          description="开启后，视频详情页不再显示影片的剧情简介内容。"
+          control={(
+            <ToggleButton
+              checked={sysSettings.hide_overview}
+              onChange={() => setSysSettings((s) => ({ ...s, hide_overview: !s.hide_overview }))}
+            />
+          )}
+        />
+
+        <SettingRow
+          icon={<UserX size={16} />}
+          title="隐藏演职人员"
+          description="开启后，视频详情页不再显示导演与演员等演职人员名单。"
+          control={(
+            <ToggleButton
+              checked={sysSettings.hide_cast}
+              onChange={() => setSysSettings((s) => ({ ...s, hide_cast: !s.hide_cast }))}
             />
           )}
         />
@@ -671,9 +697,11 @@ function MetricCard({
 }
 
 function MemoryMetric({ systemInfo }: { systemInfo: SystemInfo }) {
-  const processMB = systemInfo.memory.process_used_mb ?? systemInfo.memory.sys_mb ?? systemInfo.memory.alloc_mb
-  const hostTotalMB = systemInfo.memory.system_total_mb
-  const pct = systemInfo.memory.process_used_percent ?? (hostTotalMB ? (processMB / hostTotalMB) * 100 : 0)
+  const safeInfo = (systemInfo && typeof systemInfo === 'object' ? systemInfo : {}) as SystemInfo
+  const memory = (safeInfo.memory ?? {}) as SystemInfo['memory']
+  const processMB = memory.process_used_mb ?? memory.sys_mb ?? memory.alloc_mb ?? 0
+  const hostTotalMB = memory.system_total_mb
+  const pct = memory.process_used_percent ?? (hostTotalMB ? (processMB / hostTotalMB) * 100 : 0)
   const pctText = pct < 1 ? pct.toFixed(2) : pct.toFixed(1)
   const fmt = (mb: number) => mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`
   const tone = pct > 50 ? 'danger' : pct > 20 ? 'warning' : 'success'
@@ -694,7 +722,7 @@ function MemoryMetric({ systemInfo }: { systemInfo: SystemInfo }) {
         </div>
       )}
       <p className="mt-1 text-xs text-[var(--nv-text-tertiary)]">
-        {hostTotalMB ? `占主机 ${pctText}% · ` : ''}堆 {systemInfo.memory.alloc_mb.toFixed(1)} MB
+        {hostTotalMB ? `占主机 ${pctText}% · ` : ''}堆 {(memory.alloc_mb ?? 0).toFixed(1)} MB
       </p>
     </div>
   )
@@ -737,7 +765,7 @@ function ToggleButton({ checked, onChange }: { checked: boolean; onChange: () =>
       role="switch"
       aria-checked={checked}
       onClick={onChange}
-      className="relative inline-flex h-6 w-11 shrink-0 rounded-full border transition-[background-color,border-color] duration-200 focus:outline-none"
+      className="relative inline-flex h-6 w-11 shrink-0 rounded-full border outline-none transition-[background-color,border-color] duration-200 focus-visible:border-[var(--nv-action-primary)] focus-visible:shadow-[var(--nv-shadow-focus)]"
       style={{
         background: checked ? 'var(--nv-action-primary)' : 'var(--nv-bg-control)',
         borderColor: checked ? 'var(--nv-action-primary)' : 'var(--nv-border-default)',

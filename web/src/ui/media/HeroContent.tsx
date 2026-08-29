@@ -4,7 +4,7 @@ import clsx from 'clsx'
 export type HeroHeadingLevel = 'h1' | 'h2'
 
 export interface HeroContentProps {
-  title: ReactNode
+  title?: ReactNode
   subtitle?: ReactNode
   eyebrow?: ReactNode
   meta?: ReactNode
@@ -37,21 +37,22 @@ export function HeroContent({
     <div className={clsx('nv-hero-content min-w-0', compact && 'nv-hero-content--compact', className)}>
       {eyebrow && <div className="nv-hero-content-eyebrow mb-2.5">{eyebrow}</div>}
 
-      <Heading
-        className="nv-media-hero-title max-w-[28ch] text-balance font-bold text-[var(--nv-text-primary)]"
-        title={titleText}
-        aria-label={titleText}
-        style={{
-          fontSize: compact ? 'var(--nv-type-h1)' : 'var(--nv-type-display)',
-          lineHeight: 'var(--nv-line-tight)',
-          letterSpacing: 'var(--nv-tracking-tight)',
-        }}
-      >
-        {title}
-      </Heading>
+      {title && (
+        <Heading
+          className="nv-media-hero-title max-w-[28ch] text-balance font-bold text-[var(--nv-text-primary)]"
+          title={titleText}
+          aria-label={titleText}
+          style={{
+            fontSize: compact ? 'var(--nv-type-h1)' : 'var(--nv-type-display)',
+            lineHeight: 'var(--nv-line-tight)',
+            letterSpacing: 'var(--nv-tracking-tight)',
+          }}
+        >
+          {title}
+        </Heading>
+      )}
 
-      {subtitle && (
-        <div className="nv-media-hero-subtitle mt-1.5 line-clamp-1 max-w-3xl text-sm text-[var(--nv-text-secondary)] sm:text-base">
+      {subtitle && (        <div className="nv-media-hero-subtitle mt-1.5 line-clamp-1 max-w-3xl text-sm text-[var(--nv-text-secondary)] sm:text-base">
           {subtitle}
         </div>
       )}

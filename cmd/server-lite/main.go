@@ -12,13 +12,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/glebarez/sqlite"
 	"github.com/fan-video/fan-video/internal/config"
 	"github.com/fan-video/fan-video/internal/handler"
 	"github.com/fan-video/fan-video/internal/model"
 	"github.com/fan-video/fan-video/internal/repository"
 	"github.com/fan-video/fan-video/internal/service"
 	"github.com/fan-video/fan-video/internal/version"
+	"github.com/glebarez/sqlite"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -80,16 +80,25 @@ func main() {
 		addr = fmt.Sprintf("127.0.0.1:%d", cfg.App.Port)
 	}
 	srv := &http.Server{Addr: addr, Handler: router}
+	// ListenAndServe runs in a goroutine; any bind/runtime failure must be
+	// surfaced to the main goroutine so the process exits instead of hanging
+	// alive without serving traffic (e.g. port already in use).
+	srvErr := make(chan error, 1)
 	go func() {
 		sugar.Infof("fan-video 启动于 %s", addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			sugar.Errorf("服务器异常退出: %v", err)
+			srvErr <- err
 		}
 	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	select {
+	case err := <-srvErr:
+		signal.Stop(quit)
+		sugar.Fatalf("HTTP 监听失败（端口被占用或无权绑定 %s）: %v", addr, err)
+	case <-quit:
+	}
 	signal.Stop(quit)
 	sugar.Info("正在关闭 fan-video...")
 	if !desktopRuntime {

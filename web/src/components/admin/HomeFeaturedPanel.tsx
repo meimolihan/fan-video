@@ -11,24 +11,33 @@ const MIN_ITEMS = 2
 
 function EntryThumb({ entry, posterVersion }: { entry: HomeFeaturedEntry; posterVersion?: number }) {
   const [failed, setFailed] = useState(false)
-  const url = entry.item_type === 'movie'
+  const [useBackdrop, setUseBackdrop] = useState(true)
+
+  const movie = entry.item_type === 'movie'
+  const backdrop = movie
+    ? streamApi.getBackdropUrl(entry.item_id, posterVersion)
+    : streamApi.getSeriesBackdropUrl(entry.item_id, posterVersion)
+  const poster = movie
     ? streamApi.getPosterUrl(entry.item_id, posterVersion)
     : streamApi.getSeriesPosterUrl(entry.item_id, posterVersion)
 
   if (failed || !entry.valid) {
     return (
-      <div className="flex h-14 w-10 shrink-0 items-center justify-center rounded-[var(--nv-radius-control)] bg-[var(--nv-bg-hover)] text-[var(--nv-text-tertiary)]">
+      <div className="flex h-10 w-[72px] shrink-0 items-center justify-center rounded-[var(--nv-radius-control)] bg-[var(--nv-bg-hover)] text-[var(--nv-text-tertiary)]">
         <ImageOff size={14} aria-hidden="true" />
       </div>
     )
   }
   return (
     <img
-      src={url}
+      src={useBackdrop ? backdrop : poster}
       alt=""
       loading="lazy"
-      className="h-14 w-10 shrink-0 rounded-[var(--nv-radius-control)] object-cover"
-      onError={() => setFailed(true)}
+      className="h-10 w-[72px] shrink-0 rounded-[var(--nv-radius-control)] object-cover"
+      onError={() => {
+        if (useBackdrop) setUseBackdrop(false)
+        else setFailed(true)
+      }}
     />
   )
 }

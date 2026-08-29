@@ -131,7 +131,6 @@ export default function HistoryPage() {
     <PersonalWorkspace className="nv-history-page">
       <PersonalWorkspaceHeader
         icon={<Clock size={20} />}
-        eyebrow="WATCH HISTORY"
         title={t('history.title')}
         description="回到最近播放过的内容，并从上次位置继续观看。"
         statValue={total}
@@ -149,7 +148,7 @@ export default function HistoryPage() {
         titleId="recent-history-title"
         title="最近观看"
         description={total > 0 ? '按最近播放时间整理，点击即可继续观看。' : '最近播放过的媒体会出现在这里。'}
-        count={total > 0 ? `${total} 项` : undefined}
+        count={total > 0 ? <span className="text-[var(--nv-status-warning)] font-bold">{total} 项</span> : undefined}
       >
         {loading && (
           <div className="nv-history-grid" aria-busy="true" aria-label="正在加载观看历史">
@@ -197,7 +196,7 @@ export default function HistoryPage() {
                       alt=""
                       ratio="landscape"
                       className="absolute inset-0 !rounded-none !border-0 !shadow-none"
-                      imageClassName="transition-[filter,transform] duration-300 group-hover:scale-[1.02] group-hover:brightness-[.84]"
+                      imageClassName="transition-[filter,transform] duration-300 group-hover:scale-[1.015] group-hover:brightness-[.82]"
                       fallback={<Film size={22} aria-hidden="true" />}
                     />
                       <div className="nv-history-play-overlay" aria-hidden="true">

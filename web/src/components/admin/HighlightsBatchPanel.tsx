@@ -303,7 +303,7 @@ export default function HighlightsBatchPanel() {
                   )}
                 </div>
               </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--nv-surface-elevated)]">
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--nv-bg-elevated)]">
                 <div
                   className={`h-full rounded-full transition-[width] duration-300 ${status?.stop_requested ? 'bg-[var(--nv-status-warning)]' : 'bg-[var(--nv-accent)]'}`}
                   style={{ width: `${globalPercent}%` }}
@@ -322,7 +322,7 @@ export default function HighlightsBatchPanel() {
                     <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-300">停止中…</span>
                   )}
                 </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--nv-surface-elevated)]">
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--nv-bg-elevated)]">
                   <div className="h-full rounded-full bg-[var(--nv-status-success)] transition-[width] duration-300" style={{ width: `${currentPercent}%` }} />
                 </div>
                 <p className="mt-1 text-right text-xs tabular-nums text-[var(--nv-text-tertiary)]">{Math.round(currentPercent)}%</p>
@@ -353,7 +353,7 @@ export default function HighlightsBatchPanel() {
                   </span>
                 </div>
               </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--nv-surface-elevated)]">
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--nv-bg-elevated)]">
                 <div className="h-full rounded-full bg-[var(--nv-accent)] transition-[width] duration-300" style={{ width: `${coveragePercent}%` }} />
               </div>
               <p className="mt-1 text-right text-xs tabular-nums text-[var(--nv-text-tertiary)]">

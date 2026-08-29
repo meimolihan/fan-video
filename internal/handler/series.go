@@ -149,24 +149,20 @@ func (h *SeriesHandler) Poster(c *gin.Context) {
 	c.File(posterPath)
 }
 
-// Backdrop 获取剧集合集背景图片
+// Backdrop 获取剧集合集背景图片。
+// 与媒体背景图端点（Stream.Backdrop）保持一致：没有真实背景图时返回 404，
+// 让客户端回退到海报展示（如首页轮播精选的预览缩略图）。
 func (h *SeriesHandler) Backdrop(c *gin.Context) {
 	id := c.Param("id")
-	series, err := h.seriesService.GetSeriesDetail(id)
-	if err != nil || series.BackdropPath == "" {
-		// 返回透明占位图（禁止缓存）
-		c.Header("Content-Type", "image/svg+xml")
-		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
-		c.Header("Pragma", "no-cache")
-		c.String(http.StatusOK, `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><rect fill="#1e1e2e" width="1280" height="720"/></svg>`)
+	backdropPath, err := h.seriesService.GetSeriesBackdropPath(id)
+	if err != nil || backdropPath == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "剧集背景图不存在"})
 		return
 	}
 
-	fileInfo, statErr := os.Stat(series.BackdropPath)
+	fileInfo, statErr := os.Stat(backdropPath)
 	if statErr != nil {
-		c.Header("Content-Type", "image/svg+xml")
-		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
-		c.String(http.StatusOK, `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><rect fill="#1e1e2e" width="1280" height="720"/></svg>`)
+		c.JSON(http.StatusNotFound, gin.H{"error": "剧集背景图不可用"})
 		return
 	}
 
@@ -178,7 +174,7 @@ func (h *SeriesHandler) Backdrop(c *gin.Context) {
 		return
 	}
 
-	ext := strings.ToLower(filepath.Ext(series.BackdropPath))
+	ext := strings.ToLower(filepath.Ext(backdropPath))
 	switch ext {
 	case ".jpg", ".jpeg":
 		c.Header("Content-Type", "image/jpeg")
@@ -191,7 +187,7 @@ func (h *SeriesHandler) Backdrop(c *gin.Context) {
 	}
 
 	c.Header("Cache-Control", "public, max-age=86400, must-revalidate")
-	c.File(series.BackdropPath)
+	c.File(backdropPath)
 }
 
 // GetPersons 获取剧集合集的演职人员列表

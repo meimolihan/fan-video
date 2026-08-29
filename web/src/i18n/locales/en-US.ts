@@ -55,6 +55,7 @@ const enUS: Record<string, string> = {
   'auth.hasAccount': 'Already have an account?',
   'auth.loginFailed': 'Login failed',
   'auth.registerFailed': 'Registration failed',
+  'auth.forceChangePwdTitle': 'Account Security',
 
   // ==================== Home ====================
   'home.continueWatching': 'Continue Watching',
@@ -82,6 +83,8 @@ const enUS: Record<string, string> = {
   'media.trailer': 'Trailer',
   'media.addFavorite': 'Add to Favorites',
   'media.removeFavorite': 'Remove from Favorites',
+  'media.addWatchLater': 'Add to Watch Later',
+  'media.removeWatchLater': 'Remove from Watch Later',
   'media.noOverview': 'No overview available',
 
   // ==================== Player ====================
@@ -210,7 +213,7 @@ const enUS: Record<string, string> = {
   'auth.passwordPlaceholder': 'Enter password',
   'auth.switchToLogin': 'Already have an account? Sign in',
   'auth.switchToRegister': "Don't have an account? Create one",
-  'auth.defaultAccount': 'Default account: admin / admin123',
+  'auth.defaultAccount': 'Default account: admin; the initial password is generated and printed on first server startup',
   'auth.firstUserHint': '🚀 First time? The first registered account becomes admin',
   'auth.slogan': 'Deep Space Cinema · Future Hub',
   'auth.showPassword': 'Show password',
@@ -334,6 +337,18 @@ const enUS: Record<string, string> = {
   'favorites.empty': 'No favorites yet',
   'favorites.emptyHint': 'Browse the library and click the favorite button to add items here',
 
+  // ==================== Watch Later ====================
+  'watchLater.title': 'Watch Later',
+  'watchLater.loadFailed': 'Failed to load watch later list',
+  'watchLater.clearAll': 'Clear Watch Later',
+  'watchLater.clearConfirmTitle': 'Clear Watch Later',
+  'watchLater.clear': 'Clear',
+  'watchLater.clearConfirm': 'Clear all watch later items? This cannot be undone.',
+  'watchLater.cleared': 'Watch later list cleared',
+  'watchLater.clearFailed': 'Failed to clear watch later list',
+  'watchLater.empty': 'Nothing in watch later yet',
+  'watchLater.emptyHint': 'Browse the library and click the watch later button to add items here',
+
   // ==================== Playlists ====================
   'playlists.title': 'Playlists',
   'playlists.create': 'New Playlist',
@@ -453,6 +468,9 @@ const enUS: Record<string, string> = {
   // ==================== Media Detail (extra) ====================
   'mediaDetail.loadFailed': 'Failed to load media details',
   'mediaDetail.favoriteFailed': 'Favorite operation failed',
+  'mediaDetail.addedWatchLater': 'Added to watch later',
+  'mediaDetail.removedWatchLater': 'Removed from watch later',
+  'mediaDetail.watchLaterFailed': 'Watch later operation failed',
   'mediaDetail.scrapeSuccess': 'Metadata scraped successfully',
   'mediaDetail.scrapeFailed': 'Metadata scraping failed, please check TMDb config or network/proxy',
   'mediaDetail.addToPlaylistSuccess': 'Added to playlist',
@@ -651,6 +669,7 @@ const enUS: Record<string, string> = {
   // ==================== Person Detail Page ====================
   'personDetail.notFound': 'Person not found',
   'personDetail.goBack': 'Go Back',
+  'personDetail.personTag': 'Person',
   'personDetail.worksCount': '{count} works in library',
   'personDetail.movieCount': '{count} movies',
   'personDetail.seriesCount': '{count} TV shows',

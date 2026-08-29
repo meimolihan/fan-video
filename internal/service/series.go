@@ -167,6 +167,34 @@ func (s *SeriesService) GetSeriesPosterPath(id string) (string, error) {
 	return "", nil
 }
 
+// GetSeriesBackdropPath 获取剧集合集背景图文件路径。
+// 优先使用数据库中保存的背景图路径，随后回退到剧集目录下的标准背景图文件。
+// 与媒体背景图服务（GetBackdropPath）语义一致：无真实背景图时返回空串，
+// 由调用方决定（404/占位）处理，避免把占位图误当成真实背景。
+func (s *SeriesService) GetSeriesBackdropPath(id string) (string, error) {
+	series, err := s.seriesRepo.FindByIDOnly(id)
+	if err != nil {
+		return "", ErrMediaNotFound
+	}
+
+	if series.BackdropPath != "" {
+		if _, err := os.Stat(series.BackdropPath); err == nil {
+			return series.BackdropPath, nil
+		}
+	}
+
+	if series.FolderPath != "" {
+		for _, name := range standardBackdropNames {
+			candidate := filepath.Join(series.FolderPath, name)
+			if _, err := os.Stat(candidate); err == nil {
+				return candidate, nil
+			}
+		}
+	}
+
+	return "", nil
+}
+
 // pickEpisodeIndex 为剧集封面回退挑选分集下标：
 // 以 (剧集ID, 分集数) 做稳定散列——对同一剧集多次请求结果一致（封面不闪烁），
 // 不同剧集之间分布随机，分集数变化时自动重选。

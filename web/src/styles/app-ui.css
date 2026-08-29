@@ -104,42 +104,6 @@
   color: var(--nv-text-primary);
 }
 
-.nv-switch {
-  position: relative;
-  display: inline-flex;
-  width: 32px;
-  height: 18px;
-  flex: 0 0 auto;
-  align-items: center;
-  padding: 2px;
-  border: 1px solid var(--nv-border-default);
-  border-radius: var(--nv-radius-pill);
-  background: var(--nv-bg-control);
-  transition: background-color var(--nv-motion-fast) var(--nv-ease-standard), border-color var(--nv-motion-fast) var(--nv-ease-standard);
-}
-
-.nv-switch::after {
-  content: '';
-  width: 12px;
-  height: 12px;
-  border-radius: var(--nv-radius-pill);
-  background: var(--nv-text-tertiary);
-  transform: translateX(0);
-  transition: transform var(--nv-motion-fast) var(--nv-ease-standard), background-color var(--nv-motion-fast) var(--nv-ease-standard);
-}
-
-.nv-switch[aria-checked='true'],
-.nv-switch[data-checked='true'] {
-  border-color: var(--nv-border-strong);
-  background: var(--nv-fill-active);
-}
-
-.nv-switch[aria-checked='true']::after,
-.nv-switch[data-checked='true']::after {
-  background: var(--nv-text-primary);
-  transform: translateX(14px);
-}
-
 .nv-form-row {
   display: grid;
   grid-template-columns: minmax(110px, 160px) minmax(0, 1fr);
@@ -505,7 +469,7 @@
   color: var(--nv-text-tertiary);
 }
 
-@media (max-width: 767px) {
+@media (max-width: 47.999rem) {
   .nv-media-rail-arrow { display: none !important; }
   .nv-media-rail-track {
     margin-inline: calc(var(--nv-page-gutter) * -1);
@@ -575,7 +539,7 @@
   min-height: 30px !important;
   border-radius: 9px !important;
   padding-inline: 10px !important;
-  font-size: 11px !important;
+  font-size: 12px !important;
 }
 
 .nv-filter-chip[aria-pressed="true"] {
@@ -1217,7 +1181,7 @@
 .nv-history-card:hover .nv-history-thumb > img,
 .nv-history-card:focus-within .nv-history-thumb > img {
   transform: scale(1.025);
-  filter: brightness(.86);
+  filter: brightness(.82);
 }
 
 .nv-history-play-overlay {
@@ -1390,7 +1354,7 @@
   }
 }
 
-@media (max-width: 47.99rem) {
+@media (max-width: 47.999rem) {
   .nv-personal-workspace-header {
     align-items: flex-start;
     flex-direction: column;
@@ -2601,6 +2565,74 @@
   background: var(--nv-bg-canvas) !important;
 }
 
+.nv-back-to-top {
+  position: sticky;
+  bottom: 24px;
+  z-index: var(--nv-z-sticky);
+  display: block;
+  width: 44px;
+  height: 44px;
+  margin-left: auto;
+  margin-right: max(20px, env(safe-area-inset-right, 0px));
+  margin-top: 12px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--nv-border-default);
+  border-radius: var(--nv-radius-pill);
+  background: color-mix(in srgb, var(--nv-bg-surface) 88%, transparent);
+  backdrop-filter: blur(12px) saturate(112%);
+  -webkit-backdrop-filter: blur(12px) saturate(112%);
+  color: var(--nv-text-secondary);
+  box-shadow: var(--nv-shadow-card);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    color var(--nv-motion-fast) var(--nv-ease-standard),
+    border-color var(--nv-motion-fast) var(--nv-ease-standard),
+    background-color var(--nv-motion-fast) var(--nv-ease-standard),
+    box-shadow var(--nv-motion-fast) var(--nv-ease-standard),
+    transform var(--nv-motion-fast) var(--nv-ease-standard);
+}
+
+.nv-back-to-top > svg {
+  display: block;
+  margin: auto;
+}
+
+@media (max-width: 47.999rem) {
+  .nv-back-to-top {
+    bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+    margin-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+}
+
+.nv-back-to-top[hidden] {
+  display: none !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .nv-back-to-top:hover {
+    border-color: color-mix(in srgb, var(--nv-action-primary) 42%, var(--nv-border-strong));
+    color: var(--nv-action-primary);
+    box-shadow: 0 12px 32px color-mix(in srgb, var(--nv-text-primary) 22%, transparent), 0 0 0 3px color-mix(in srgb, var(--nv-action-primary) 12%, transparent);
+  }
+}
+
+.nv-back-to-top:active {
+  transform: translateY(1px);
+}
+
+.nv-back-to-top:focus-visible {
+  outline: 2px solid var(--nv-action-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-back-to-top {
+    transition: none;
+  }
+}
+
 .nv-page-container {
   max-width: none !important;
   padding-top: 12px !important;
@@ -3699,17 +3731,6 @@
     font-size: .478vw !important;
   }
 
-  body:has(.nv-home-page) .nv-page-header-actions {
-    gap: .718vw !important;
-  }
-
-  body:has(.nv-home-page) .nv-page-header-action,
-  body:has(.nv-home-page) .nv-page-header-action--label {
-    min-height: 1.914vw !important;
-    height: 1.914vw !important;
-    font-size: .598vw !important;
-  }
-
   body:has(.nv-home-page) .nv-page-container:has(> .nv-home-page) {
     padding-top: .837vw !important; /* hero top = 64 + 14 = 78 */
     padding-bottom: 2.392vw !important;
@@ -4368,7 +4389,7 @@
     height: clamp(440px, 66vh, 560px) !important;
     min-height: clamp(440px, 66vh, 560px) !important;
     max-height: clamp(440px, 66vh, 560px) !important;
-    border-radius: 16px !important;
+    border-radius: var(--nv-radius-hero) !important;
   }
 
   html body .nv-home-page .nv-hero-carousel img[data-artwork-kind="backdrop"] {
@@ -4512,24 +4533,36 @@
     display: none !important;
   }
 
-  /* 竖屏下收藏按钮为全宽行且贴近底部，指示点移到顶部居中，
-   * 从布局上彻底避开遮挡（顶部无任何其他控件） */
+  /* 指示点移至底部居中，统一为圆点：未选中 15px、选中 18px（紫色+微光）。
+   * 必须显式清零 min-width/min-height：base.css 在 ≤479px 会给所有 button
+   * 强制最小 44px，否则小圆点会被放大失效 */
   html body .nv-home-page .nv-home-hero-dots {
-    top: 14px !important;
+    top: auto !important;
     right: auto !important;
     left: 50% !important;
-    bottom: auto !important;
+    bottom: 12px !important;
     transform: translateX(-50%) !important;
-    gap: 6px !important;
+    gap: 7px !important;
   }
 
   html body .nv-home-page .nv-home-hero-dot {
-    width: 6px !important;
-    height: 6px !important;
+    width: 15px !important;
+    height: 15px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    border-radius: 999px !important;
+    background: color-mix(in srgb, var(--nv-text-primary) 38%, transparent) !important;
+    box-shadow: none !important;
   }
 
   html body .nv-home-page .nv-home-hero-dot[aria-selected="true"] {
-    width: 20px !important;
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    border-radius: 999px !important;
+    background: #765fff !important;
+    box-shadow: 0 0 6px rgba(118, 95, 255, .85) !important;
   }
 
   /* Horizontal content rails are swipe-first on phone. */
@@ -5027,18 +5060,53 @@
   [data-theme="light"] body .nv-home-page .nv-hero-carousel {
     --nv-hero-scrim: linear-gradient(
       180deg,
-      rgba(5, 8, 18, .08) 0%,
-      rgba(5, 8, 18, .03) 28%,
-      rgba(7, 10, 22, .16) 50%,
-      rgba(7, 10, 22, .54) 72%,
-      rgba(7, 10, 22, .94) 100%
+      rgba(247, 248, 253, .08) 0%,
+      rgba(247, 248, 253, .03) 28%,
+      rgba(244, 246, 251, .16) 50%,
+      rgba(244, 246, 251, .54) 72%,
+      rgba(244, 246, 251, .96) 100%
     ) !important;
     --nv-hero-bottom-scrim: linear-gradient(
       0deg,
-      rgba(5, 8, 18, .58) 0%,
-      rgba(5, 8, 18, .20) 34%,
+      rgba(244, 246, 251, .60) 0%,
+      rgba(244, 246, 251, .22) 34%,
       transparent 58%
     ) !important;
+  }
+
+  /* 浅色模式下移动端笼罩层改为浅色渐隐，前景文字同步切换为深色以保证可读性 */
+  html[data-theme="light"] body .nv-home-page .nv-hero-carousel h2.nv-media-hero-title,
+  [data-theme="light"] body .nv-home-page .nv-hero-carousel h2.nv-media-hero-title {
+    color: #171c2d !important;
+  }
+
+  html[data-theme="light"] body .nv-home-page .nv-media-hero-subtitle,
+  [data-theme="light"] body .nv-home-page .nv-media-hero-subtitle {
+    color: rgba(23, 28, 45, .74) !important;
+  }
+
+  html[data-theme="light"] body .nv-home-page .nv-media-hero-meta,
+  [data-theme="light"] body .nv-home-page .nv-media-hero-meta {
+    color: rgba(23, 28, 45, .82) !important;
+  }
+
+  html[data-theme="light"] body .nv-home-page .nv-media-hero-overview,
+  [data-theme="light"] body .nv-home-page .nv-media-hero-overview {
+    color: rgba(23, 28, 45, .78) !important;
+  }
+
+  html[data-theme="light"] body .nv-home-page .nv-media-hero-meta .nv-tag,
+  html[data-theme="light"] body .nv-home-page .nv-media-hero-badges .nv-tag,
+  [data-theme="light"] body .nv-home-page .nv-media-hero-meta .nv-tag,
+  [data-theme="light"] body .nv-home-page .nv-media-hero-badges .nv-tag {
+    border-color: rgba(45, 50, 75, .12) !important;
+    background: rgba(238, 241, 249, .72) !important;
+    color: rgba(23, 28, 45, .86) !important;
+  }
+
+  html[data-theme="light"] body .nv-home-page .nv-home-hero-watch-progress-label,
+  [data-theme="light"] body .nv-home-page .nv-home-hero-watch-progress-label {
+    color: rgba(23, 28, 45, .72) !important;
   }
 }
 
@@ -5669,21 +5737,8 @@ html body .nv-media-detail-page .nv-detail-main-column {
   gap: 12px;
 }
 
-html body .nv-media-detail-page .nv-detail-sidebar {
-  grid-column: 2;
-  grid-row: 2 / span 2;
-  position: sticky;
-  top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-  padding-top: 4px;
-}
-
 /* -------------------------------------------------------------------------- */
 /* Primary detail flow: intro → highlights → comments → recommendations        */
-/* -------------------------------------------------------------------------- */
 
 html body .nv-media-detail-page .nv-detail-section-tabs {
   order: 20;
@@ -6109,8 +6164,7 @@ html body .nv-media-detail-page .nv-detail-side-card--quiet { display: none !imp
 
   html body .nv-media-detail-page .nv-detail-local-toolbar,
   html body .nv-media-detail-page > .nv-detail-hero,
-  html body .nv-media-detail-page .nv-detail-main-column,
-  html body .nv-media-detail-page .nv-detail-sidebar {
+  html body .nv-media-detail-page .nv-detail-main-column {
     grid-column: 1;
     grid-row: auto;
   }
@@ -6264,20 +6318,6 @@ html body .nv-media-detail-page .nv-detail-side-card--quiet { display: none !imp
     overflow-x: auto;
   }
 
-  html body .nv-media-detail-page .nv-detail-sidebar {
-    position: static;
-    order: 30;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 10px;
-    padding: 0;
-  }
-
-  html body .nv-media-detail-page .nv-detail-sidebar > #detail-subtitles {
-    min-width: 0;
-  }
-
   html body .nv-media-detail-page .nv-detail-side-card {
     height: 100%;
     min-height: 156px;
@@ -6332,20 +6372,6 @@ html body .nv-media-detail-page .nv-detail-side-card--quiet { display: none !imp
     min-height: 46px !important;
     font-size: 12px !important;
   }
-
-  html body .nv-media-detail-page .nv-detail-sidebar {
-    display: grid;
-    grid-auto-flow: column;
-    grid-template-columns: none;
-    grid-auto-columns: minmax(238px, 82vw);
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    padding: 1px 1px 4px;
-    scrollbar-width: none;
-  }
-
-  html body .nv-media-detail-page .nv-detail-sidebar::-webkit-scrollbar { display: none; }
-  html body .nv-media-detail-page .nv-detail-sidebar > * { scroll-snap-align: start; }
 
   html body .nv-media-detail-page .nv-detail-recommendation-slot {
     --nv-media-rail-min-item-width: 118px;
@@ -6498,18 +6524,6 @@ html body .nv-media-detail-page .nv-media-hero-actions a[data-size="lg"] {
 html body .nv-media-detail-page > .nv-detail-content-shell,
 html body .nv-media-detail-page .nv-detail-body-grid {
   display: contents !important;
-}
-
-html body .nv-media-detail-page .nv-detail-sidebar {
-  grid-column: 2 !important;
-  grid-row: 2 !important;
-  position: static !important;
-  top: auto !important;
-  align-self: stretch !important;
-  display: grid !important;
-  grid-template-rows: auto auto 1fr !important;
-  gap: 12px !important;
-  min-width: 0 !important;
 }
 
 html body .nv-media-detail-page .nv-detail-side-card {
@@ -6788,20 +6802,6 @@ html body .nv-media-detail-page #detail-tech .nv-detail-tech-details {
     grid-row: 3 !important;
   }
 
-  html body .nv-media-detail-page .nv-detail-sidebar {
-    grid-column: 1 !important;
-    grid-row: 4 !important;
-    display: grid !important;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-    grid-template-rows: auto !important;
-    gap: 12px !important;
-    margin-top: 18px !important;
-  }
-
-  html body .nv-media-detail-page .nv-detail-sidebar > * {
-    min-width: 0;
-  }
-
   html body .nv-media-detail-page .nv-detail-side-card {
     height: 100%;
   }
@@ -6824,7 +6824,7 @@ html body .nv-media-detail-page #detail-tech .nv-detail-tech-details {
 /* Mobile: same information hierarchy, phone-native composition                */
 /* -------------------------------------------------------------------------- */
 
-@media (max-width: 767px) {
+@media (max-width: 47.999rem) {
   html body .nv-page-container--detail {
     padding-inline: 0 !important;
   }
@@ -7028,14 +7028,6 @@ html body .nv-media-detail-page #detail-tech .nv-detail-tech-details {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
-  /* Summary cards become the final media-info strip, mirroring the mobile mock. */
-  html body .nv-media-detail-page .nv-detail-sidebar {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-    gap: 8px !important;
-    margin-top: 12px !important;
-    padding-bottom: 2px;
-  }
-
   html body .nv-media-detail-page .nv-detail-side-card {
     min-width: 0;
     padding: 11px !important;
@@ -7087,21 +7079,6 @@ html body .nv-media-detail-page #detail-tech .nv-detail-tech-details {
 
   html body .nv-media-detail-page .nv-detail-recommendation-section .nv-media-rail-track {
     --nv-rail-visible-count: 2;
-  }
-
-  html body .nv-media-detail-page .nv-detail-sidebar {
-    grid-template-columns: repeat(3, minmax(190px, 1fr)) !important;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    scrollbar-width: none;
-  }
-
-  html body .nv-media-detail-page .nv-detail-sidebar::-webkit-scrollbar {
-    display: none;
-  }
-
-  html body .nv-media-detail-page .nv-detail-sidebar > * {
-    scroll-snap-align: start;
   }
 }
 
@@ -7278,7 +7255,7 @@ html body .nv-media-detail-page .nv-comment-section[data-expanded='true'] .nv-co
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 47.999rem) {
   html body .nv-media-detail-page #detail-overview > .nv-detail-tab-secondary-section {
     border-radius: 13px !important;
   }
@@ -7392,17 +7369,6 @@ html body .nv-media-detail-page .nv-detail-hero-inner {
   grid-template-columns: clamp(228px, 18vw, 272px) minmax(0, 1fr) !important;
 }
 
-html body .nv-media-detail-page .nv-detail-sidebar.nv-detail-summary-strip {
-  grid-column: 1 !important;
-  grid-row: 3 !important;
-  position: static !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
-  margin: 8px 0 0 !important;
-  padding: 0 !important;
-  background: transparent !important;
-}
-
 html body .nv-media-detail-page .nv-detail-summary-tags {
   display: flex !important;
   flex-wrap: wrap !important;
@@ -7509,10 +7475,6 @@ html body .nv-media-detail-page .nv-detail-main-column {
 
 /* Tablet: keep tags on one quiet line whenever space allows. */
 @media (max-width: 1199px) and (min-width: 768px) {
-  html body .nv-media-detail-page .nv-detail-sidebar.nv-detail-summary-strip {
-    margin-top: 7px !important;
-  }
-
   html body .nv-media-detail-page .nv-detail-status-tag strong {
     max-width: 120px !important;
   }
@@ -7520,15 +7482,9 @@ html body .nv-media-detail-page .nv-detail-main-column {
 
 /* Mobile: supporting diagnostics stay after the primary content flow. Tags
  * wrap naturally instead of becoming another horizontal card rail. */
-@media (max-width: 767px) {
+@media (max-width: 47.999rem) {
   html body .nv-media-detail-page .nv-detail-main-column {
     grid-row: 3 !important;
-  }
-
-  html body .nv-media-detail-page .nv-detail-sidebar.nv-detail-summary-strip {
-    grid-column: 1 !important;
-    grid-row: 4 !important;
-    margin-top: 12px !important;
   }
 
   html body .nv-media-detail-page .nv-detail-summary-tags {
@@ -7703,7 +7659,7 @@ html body .nv-media-detail-page .nv-detail-hero .nv-media-hero-badges {
   ) !important;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 47.999rem) {
   html body .nv-media-detail-page .nv-detail-hero .nv-media-hero-title,
   html body .nv-media-detail-page .nv-detail-hero h1.nv-detail-title-long,
   html body .nv-media-detail-page .nv-detail-hero h1.nv-detail-title-very-long {
@@ -7899,7 +7855,7 @@ html body .nv-media-detail-page #detail-cast .nv-cast-grid-toggle:focus-visible 
 /* Phone: exactly two full highlight cards per row and four cast slots per row.
  * Nothing is intentionally clipped; users never need to guess that more items
  * exist off-screen. */
-@media (max-width: 767px) {
+@media (max-width: 47.999rem) {
   html body .nv-media-detail-page #detail-highlights > .space-y-5 > .grid,
   html body .nv-media-detail-page #detail-highlights > .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -8004,14 +7960,14 @@ html body .nv-media-detail-page #detail-highlights .nv-highlight-card {
   min-width: 0 !important;
   max-width: 100% !important;
   height: 100% !important;
-  border-radius: 12px !important;
+  border-radius: var(--nv-radius-container) !important;
   box-shadow: none !important;
 }
 
 html body .nv-media-detail-page #detail-highlights .nv-highlight-card-media {
   width: 100% !important;
   min-width: 0 !important;
-  border-radius: 11px 11px 0 0 !important;
+  border-radius: calc(var(--nv-radius-container) - 1px) calc(var(--nv-radius-container) - 1px) 0 0 !important;
 }
 
 html body .nv-media-detail-page #detail-highlights .nv-highlight-card-copy {
@@ -8090,7 +8046,7 @@ html body .nv-media-detail-page #detail-highlights .nv-highlight-grid.is-expande
   overflow: visible !important;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 47.999rem) {
   html body .nv-media-detail-page #detail-highlights .nv-highlights-header,
   html body .nv-media-detail-page #detail-cast .nv-cast-grid-header {
     align-items: center !important;
@@ -8135,7 +8091,7 @@ html body .nv-media-detail-page #detail-highlights .nv-highlight-grid.is-expande
  *   primary action is forced to wrap.
  */
 
-@media (max-width: 767px) {
+@media (max-width: 47.999rem) {
   html body .nv-media-detail-page .nv-media-hero-actions {
     display: flex !important;
     flex-flow: row nowrap !important;
@@ -8382,7 +8338,7 @@ html body .nv-modal-backdrop[aria-label="字幕管理"] .nv-modal-body > .nv-sur
   max-width: 100% !important;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 47.999rem) {
   html body .nv-modal-backdrop[aria-label="字幕管理"] {
     align-items: flex-end !important;
     padding: 10px !important;
@@ -8768,7 +8724,7 @@ html body .nv-modal-backdrop[aria-label="字幕管理"] .nv-modal-body > .nv-sur
  * - actions stay compact enough to remain usable beside the poster on narrow phones.
  */
 
-@media (max-width: 767px) {
+@media (max-width: 47.999rem) {
   html body .nv-media-detail-page .nv-detail-hero .nv-detail-hero-inner {
     display: grid !important;
     grid-template-columns: clamp(118px, 31vw, 168px) minmax(0, 1fr) !important;
@@ -8963,7 +8919,7 @@ html body .nv-modal-backdrop[aria-label="字幕管理"] .nv-modal-body > .nv-sur
  * an oversized 2:3 poster.
  */
 
-@media (max-width: 767px) {
+@media (max-width: 47.999rem) {
   html body .nv-media-detail-page .nv-detail-hero,
   html body .nv-media-detail-page .nv-detail-hero-backdrop-shell,
   html body .nv-media-detail-page .nv-detail-hero .nv-detail-hero-inner {
@@ -9414,10 +9370,86 @@ html body .nv-home-page > .nv-empty-state {
     --nv-rail-visible-count: 3 !important;
   }
 
-  html body .nv-home-page .nv-media-rail-track:has(> .nv-home-recommendation-slot),
+  /* Recently added is the first compact shelf. Mobile uses the classic
+     flex + fixed-width scroller (mirror of the reference pattern):
+     - the track is a flex row that scrolls horizontally (overrides the shared grid)
+     - each poster keeps a fixed width and never shrinks
+     - spacing is controlled purely by `gap` -- one obvious value, no visible-count
+     - the width (flex basis) and the gap are the two knobs to tune.
+     Desktop is untouched; this only targets the first compact shelf. */
+  html body .nv-home-page .nv-home-shelf-grid > .nv-home-compact-shelf:first-child .nv-media-rail-track {
+    display: flex !important;
+    gap: 5px !important;
+    overflow-x: auto !important;
+    padding-inline: 16px !important;
+  }
+  html body .nv-home-page .nv-home-shelf-grid > .nv-home-compact-shelf:first-child .nv-media-rail-track > .nv-home-shelf-poster-slot {
+    flex: 0 0 140px !important;
+    width: 140px !important;
+    max-width: none !important;
+  }
+
+  /* For-you rail: classic flex + fixed-width scroller (mirror of the reference).
+     A fixed card width guarantees the first poster is always fully visible from
+     the left edge; the row scrolls freely so every extra card shows at a 5px gap
+     with no locked per-screen count. scroll-snap is disabled so nothing gets
+     pulled off the left edge. */
+  html body .nv-home-page .nv-media-rail-track:has(> .nv-home-recommendation-slot) {
+    display: flex !important;
+    gap: 5px !important;
+    overflow-x: auto !important;
+    scroll-snap-type: none !important;
+    scroll-padding-inline: 16px !important;
+    padding-inline: 16px !important;
+  }
+  html body .nv-home-page .nv-media-rail-track:has(> .nv-home-recommendation-slot) > * {
+    scroll-snap-align: none !important;
+    scroll-snap-stop: normal !important;
+  }
+  html body .nv-home-page .nv-media-rail-track:has(> .nv-home-recommendation-slot) > .nv-home-recommendation-slot {
+    flex: 0 0 200px !important;
+    width: 200px !important;
+    min-width: 200px !important;
+    max-width: none !important;
+  }
+
+  /* Kill the left/right borders on all homepage shelf containers so the rails
+     read edge-to-edge on mobile. overflow:hidden + the border clipped the first
+     poster, so lift the clip while keeping the card surface. */
+  html body .nv-home-page > .nv-section,
+  html body .nv-home-page .nv-home-shelf-grid > .nv-section {
+    border: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* The recommendation card's own inner frame (1px border + inset shadow on the
+     artwork) reads as a line inside the poster; drop it on the for-you cards. */
+  html body .nv-home-page .nv-home-recommendation-slot .nv-media-artwork {
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* The outer rail must not clip the track's horizontal padding, or the first /
+     last cards would stay cut off no matter how much padding the track has. */
+  html body .nv-home-page .nv-media-rail:has(> .nv-media-rail-track > .nv-home-recommendation-slot) {
+    overflow: visible !important;
+  }
+
+  /* Continue-watching rail: same classic flex + fixed-width scroller so the
+     number of visible cards is never locked -- it tracks however many happen
+     to fit and scrolls freely. Card width is the knob to tune. */
   html body .nv-home-page .nv-media-rail-track:has(> .nv-continue-card) {
-    --nv-rail-gap: 10px !important;
-    --nv-rail-visible-count: 2 !important;
+    display: flex !important;
+    gap: 5px !important;
+    overflow-x: auto !important;
+    padding-inline: 16px !important;
+  }
+  html body .nv-home-page .nv-media-rail-track:has(> .nv-continue-card) > .nv-continue-card {
+    flex: 0 0 240px !important;
+    width: 240px !important;
+    min-width: 240px !important;
+    max-width: none !important;
   }
 
   html body .nv-home-page .nv-home-shelf-poster-slot .nv-media-card-poster {
@@ -10565,7 +10597,7 @@ html body .nv-series-detail-page > .nv-series-hero .nv-menu {
     min-height: clamp(360px, 30vw, 430px) !important;
     margin: 0 !important;
     border: 1px solid color-mix(in srgb, var(--nv-border-default) 82%, transparent) !important;
-    border-radius: 22px !important;
+    border-radius: 16px !important;
     background: color-mix(in srgb, var(--nv-bg-surface) 78%, transparent) !important;
     box-shadow: 0 18px 54px color-mix(in srgb, var(--nv-text-primary) 7%, transparent) !important;
   }
@@ -11012,134 +11044,12 @@ html body div:has(> button[title='画质'])
 }
 
 
-/* ---- 来源: ui-home-mobile-immersive-chrome.css ---- */
-/* Nowen Video · immersive mobile homepage chrome
- *
- * Product contract:
- * - the phone homepage is content-first: no empty 56px toolbar above the hero;
- * - the only retained quick action floats inside the artwork instead of occupying
- *   its own white strip;
- * - desktop/tablet and every non-home route keep the shared PageHeader contract;
- * - the decorative unread dot is suppressed until a real unread state exists.
- *
- * Keep this file at the end of ui.css because several historical mobile reference
- * layers intentionally use !important for the topbar geometry.
- */
-
-@media (max-width: 47.999rem) {
-  /* Let the hero own the first viewport. The header remains in the DOM for its
-   * navigation action, but it no longer consumes layout height. */
-  html body .nv-main-scroll:has(.nv-home-page) > .nv-page-header.nv-topbar {
-    position: absolute !important;
-    inset: 0 0 auto !important;
-    z-index: 70 !important;
-    width: 100% !important;
-    min-height: 0 !important;
-    height: 0 !important;
-    display: block !important;
-    padding: 0 !important;
-    border: 0 !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    pointer-events: none !important;
-  }
-
-  /* Search and page-title chrome are duplicated by the mobile navigation/home
-   * content. Removing them prevents a second visual hierarchy above the hero. */
-  html body .nv-main-scroll:has(.nv-home-page) > .nv-page-header .nv-page-header-title-slot,
-  html body .nv-main-scroll:has(.nv-home-page) > .nv-page-header .nv-page-header-search-slot,
-  html body .nv-main-scroll:has(.nv-home-page) > .nv-page-header .nv-page-header-action--label {
-    display: none !important;
-  }
-
-  html body .nv-main-scroll:has(.nv-home-page) > .nv-page-header .nv-page-header-actions-slot {
-    position: absolute !important;
-    top: calc(env(safe-area-inset-top, 0px) + 20px) !important;
-    right: calc(env(safe-area-inset-right, 0px) + 22px) !important;
-    width: auto !important;
-    min-width: 0 !important;
-    height: auto !important;
-    display: block !important;
-    pointer-events: auto !important;
-  }
-
-  html body .nv-main-scroll:has(.nv-home-page) > .nv-page-header .nv-page-header-actions {
-    width: auto !important;
-    min-width: 0 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: flex-end !important;
-    gap: 0 !important;
-  }
-
-  /* A small dark glass control remains legible over both light and dark artwork,
-   * and visually belongs to the hero instead of looking like a detached toolbar. */
-  html body .nv-main-scroll:has(.nv-home-page) > .nv-page-header .nv-page-header-action--notification {
-    position: relative !important;
-    inset: auto !important;
-    width: 40px !important;
-    min-width: 40px !important;
-    max-width: 40px !important;
-    height: 40px !important;
-    min-height: 40px !important;
-    display: grid !important;
-    place-items: center !important;
-    padding: 0 !important;
-    border: 1px solid rgba(255, 255, 255, .18) !important;
-    border-radius: 13px !important;
-    background: rgba(8, 12, 24, .44) !important;
-    color: rgba(255, 255, 255, .94) !important;
-    box-shadow:
-      0 8px 24px rgba(3, 7, 18, .18),
-      inset 0 1px rgba(255, 255, 255, .14) !important;
-    backdrop-filter: blur(16px) saturate(125%) !important;
-    -webkit-backdrop-filter: blur(16px) saturate(125%) !important;
-    pointer-events: auto !important;
-    transition:
-      transform var(--nv-motion-fast) var(--nv-ease-standard),
-      background-color var(--nv-motion-fast) var(--nv-ease-standard),
-      border-color var(--nv-motion-fast) var(--nv-ease-standard) !important;
-  }
-
-  html body .nv-main-scroll:has(.nv-home-page) > .nv-page-header .nv-page-header-action--notification:hover,
-  html body .nv-main-scroll:has(.nv-home-page) > .nv-page-header .nv-page-header-action--notification:focus-visible {
-    transform: translateY(-1px) !important;
-    border-color: rgba(255, 255, 255, .30) !important;
-    background: rgba(8, 12, 24, .60) !important;
-    color: #fff !important;
-    outline: none !important;
-  }
-
-  html body .nv-main-scroll:has(.nv-home-page) > .nv-page-header .nv-page-header-action--notification:active {
-    transform: scale(.96) !important;
-  }
-
-  html body .nv-main-scroll:has(.nv-home-page) > .nv-page-header .nv-page-header-action--notification > svg {
-    width: 18px !important;
-    height: 18px !important;
-    stroke-width: 1.8 !important;
-  }
-
-  /* The old dot was always rendered, so it communicated unread state even when
-   * no unread source was connected. Hide it on this surface until state is real. */
-  html body .nv-main-scroll:has(.nv-home-page) > .nv-page-header .nv-page-header-notification-dot {
-    display: none !important;
-  }
-
-  /* With the toolbar removed, keep only a small breathing space before the hero.
-   * PWA safe-area still wins on devices with a display cutout. */
-  html body .nv-main-scroll:has(.nv-home-page) > .nv-page-container:has(> .nv-home-page) {
-    padding-top: max(12px, env(safe-area-inset-top, 0px)) !important;
-  }
-}
-
-@media (max-width: 47.999rem) and (prefers-reduced-motion: reduce) {
-  html body .nv-main-scroll:has(.nv-home-page) > .nv-page-header .nv-page-header-action--notification {
-    transition: none !important;
-  }
-}
+/* ---- 来源: ui-home-mobile-immersive-chrome.css (removed) ---- */
+/* Mobile home previously dropped the shared 58px topbar to float the action row
+ * over the hero. On real devices that still read as "buttons in a different
+ * place" versus every other route, so the immersive treatment is removed: the
+ * home route now renders the exact shared PageHeader grid (title left, the four
+ * actions right) and the four buttons share the single uniform block below.
 
 
 /* ---- 来源: ui-sidebar-icon-visibility-final.css ---- */
@@ -11803,6 +11713,201 @@ html body div:has(> button[title='画质'])
 
   .nv-auth-card {
     max-width: 420px;
+  }
+}
+
+/* ---------- Hero 背景圆角统一 (16px) ----------
+ * All hero background layers must share the same rounded corner so no square
+ * corner peeks through behind the rounded hero card. This block lives at the
+ * end of the last-loaded stylesheet so it wins on source order and specificity.
+ * The series hero SECTION stays overflow:visible on purpose (its "More" menu
+ * drops out of the box) — only its background layers are clipped, not itself.
+ */
+html body .nv-media-detail-page .nv-detail-hero-backdrop-shell,
+html body .nv-media-detail-page .nv-detail-hero-backdrop-shell .nv-detail-hero {
+  border-radius: 16px !important;
+  overflow: hidden !important;
+}
+
+html body .nv-media-detail-page .nv-detail-hero-backdrop-shell > .nv-detail-hero-local-backdrop {
+  border-radius: 16px !important;
+}
+
+html body .nv-series-detail-page .nv-series-hero {
+  border-radius: 16px !important;
+}
+
+html body .nv-series-detail-page .nv-series-hero > .nv-series-backdrop,
+html body .nv-series-detail-page .nv-series-hero > .nv-series-poster-slideshow {
+  border-radius: 16px !important;
+  overflow: hidden !important;
+}
+
+/* ---------- 右上角动作按钮统一 ----------
+ * 顶栏右上角的动作按钮（观看历史 / 我的收藏 / 稍后再看 / 主题切换）此前在不同宽度下
+ * 形态不一：宽屏前三项为“图标+文字”、宽度自动，最后一项为固定 32px 纯图标且图标居中；
+ * 移动端“稍后再看”为圆角方形、主题切换为圆形，导致按钮的位置与相互间距看起来
+ * 不一致。这里在所有断点将各项统一为等尺寸的 32px 圆形图标按钮并保持相等的间距，
+ * 文字仍通过 aria-label/title 保留。
+ * 放在文件末尾以保证覆盖所有分段样式。
+ */
+html body .nv-app-shell .nv-page-header-actions {
+  gap: 8px !important;
+}
+
+html body .nv-app-shell .nv-page-header-action,
+html body .nv-app-shell .nv-page-header-action--label {
+  width: 32px !important;
+  min-width: 32px !important;
+  max-width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 50%;
+}
+
+html body .nv-app-shell .nv-page-header-action--label > span {
+  display: none !important;
+}
+
+html body .nv-app-shell .nv-page-header-action--label > svg,
+html body .nv-app-shell .nv-page-header-action > svg {
+  margin: 0 !important;
+}
+
+/* 移动端图标放大到 16px（本文件统一块，首页与其他页面共用） */
+@media (max-width: 47.999rem) {
+  html body .nv-app-shell .nv-page-header-action--label > svg,
+  html body .nv-app-shell .nv-page-header-action > svg {
+    width: 16px !important;
+    height: 16px !important;
+  }
+}
+
+/* ---------- 首页动作按钮右侧间距对齐 ----------
+ * 首页的四个动作按钮要与其它页面保持同一条右对齐基线，距右侧留白一致：
+ * 桌面固定 24px；移动端由共享顶栏栅格提供 16px（并保留安全区）。
+ * 只对齐容器/间距，不触碰按钮自身样式。
+ */
+@media (min-width: 48rem) {
+  html body .nv-app-shell .nv-topbar.nv-topbar--navigation-only {
+    padding-inline: 24px !important;
+  }
+
+  body:has(.nv-home-page) .nv-page-header-actions-slot {
+    justify-self: end !important;
+  }
+}
+
+/* ---------- 首页四个动作按钮与其它页面最终一致化 ----------
+ * 历史首页校准脚本用 body:has(.nv-home-page) 编写了顶栏/按钮样式。CSS 规范中
+ * :has() 的参数会会计入优先级，因此这些历史规则的实际特异性为 (0,3,1)，
+ * 高于普通的 html body .nv-app-shell ... (0,2,2) 覆盖，造成首页与其它页面出现
+ * 教科书般的可见差异，此前零散的覆盖全部被压制：
+ *   1) 移动端首页只显示主题切换一个图标 —— 前三个带文字按钮被
+ *      body:has(.nv-home-page) .nv-page-header-action--label {display:none} 隐藏，
+ *      而其它页面四个按钮都可见；
+ *   2) 移动端首页按钮间距被改为 4px，其它页面为 8px；
+ *   3) 桌面端首页顶栏高度被改为视口相关的 3.828vw，平板改为 60px，
+ *      其它页面固定 72px，导致按钮的垂直位置不同；
+ *   4) 桌面端首页顶栏 gap 被改为 .957vw，与其它页面 20px 不同。
+ * 以下规则针对性作用于首页，并用重复类 + :has 参数一并计算出的更高特异性
+ * (0,6,2)，把首页顶栏与动作按钮的布局参数钉死为与其它普通页面完全相同的值。
+ * 仅影响首页，不改变普通页面；不触碰按钮的视觉（按钮统一块在上方）。
+ */
+@media (min-width: 48rem) {
+  html body .nv-app-shell.nv-app-shell:has(.nv-home-page) .nv-topbar.nv-topbar--navigation-only {
+    min-height: 72px !important;
+    height: 72px !important;
+    padding-inline: 24px !important;
+    row-gap: 0 !important;
+    column-gap: clamp(16px, 2vw, 28px) !important;
+  }
+}
+
+html body .nv-app-shell.nv-app-shell:has(.nv-home-page) .nv-page-header-actions {
+  gap: 8px !important;
+}
+
+html body .nv-app-shell.nv-app-shell:has(.nv-home-page) .nv-page-header-action--label {
+  display: grid !important;
+}
+
+/* 移动端：历史 ui-home 校准把首页顶栏改为 56px / 双列 / gap 8px / 内边距 14px，
+ * 与其它页面的共享移动端顶栏（58px / 三列 / gap 16px / 内边距 16px）不同，
+ * 使首页四个动作按钮的位置与间距仍与其它页面不一致。此处用更高特微性
+ * 把首页移动端顶栏参数钉死为与共享顶栏完全相同的值（含栅格、行列间距）。
+ */
+@media (max-width: 47.999rem) {
+  html body .nv-app-shell.nv-app-shell:has(.nv-home-page) {
+    --nv-page-gutter: 16px !important;
+    --nv-topbar-height: 58px !important;
+  }
+
+  html body .nv-app-shell.nv-app-shell:has(.nv-home-page) .nv-topbar.nv-topbar--navigation-only {
+    min-height: 58px !important;
+    height: 58px !important;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    gap: 16px !important;
+    padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)) !important;
+  }
+}
+
+/* ==========================================================================
+ * PJAX 轻量化局部刷新：全局路由过渡指示层
+ * 通过 X-PJAX 请求头与后端联动，客户端由 react-router 完成片段切换，
+ * 此层仅提供“加载进行中”的视觉反馈与失败降级入口。不参与 DOM 内容替换。
+ * ========================================================================== */
+.nv-pjax-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+}
+
+.nv-pjax-backdrop {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--nv-bg-surface) 26%, transparent);
+  backdrop-filter: blur(1px);
+  opacity: 0;
+  transition: opacity 0.28s ease;
+}
+
+.nv-pjax-layer[data-pjax-visible] .nv-pjax-backdrop {
+  opacity: 1;
+}
+
+.nv-pjax-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 42%;
+  border-radius: 0 999px 999px 0;
+  background: linear-gradient(90deg, var(--nv-action-primary), var(--nv-action-muted));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--nv-action-primary) 55%, transparent);
+  opacity: 0;
+  transition: opacity 0.28s ease;
+  animation: nv-pjax-slide 1.05s ease-in-out infinite;
+}
+
+.nv-pjax-layer[data-pjax-visible] .nv-pjax-bar {
+  opacity: 1;
+}
+
+@keyframes nv-pjax-slide {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(360%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-pjax-bar {
+    animation: none;
+    transform: none;
+    width: 100%;
   }
 }
 

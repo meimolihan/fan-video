@@ -190,6 +190,56 @@ func (r *FavoriteRepo) CleanOrphaned() (int64, error) {
 	return result.RowsAffected, result.Error
 }
 
+// ==================== WatchLaterRepo ====================
+
+type WatchLaterRepo struct {
+	db *gorm.DB
+}
+
+func (r *WatchLaterRepo) Add(wl *model.WatchLater) error {
+	return r.db.Create(wl).Error
+}
+
+func (r *WatchLaterRepo) Remove(userID, mediaID string) error {
+	return r.db.Where("user_id = ? AND media_id = ?", userID, mediaID).Delete(&model.WatchLater{}).Error
+}
+
+func (r *WatchLaterRepo) List(userID string, page, size int) ([]model.WatchLater, int64, error) {
+	var items []model.WatchLater
+	var total int64
+
+	query := r.db.Model(&model.WatchLater{}).
+		Joins("JOIN media ON media.id = watch_laters.media_id AND media.deleted_at IS NULL").
+		Where("watch_laters.user_id = ?", userID)
+	query.Count(&total)
+	err := query.Preload("Media").Order("watch_laters.created_at DESC").Offset((page - 1) * size).Limit(size).Find(&items).Error
+	return items, total, err
+}
+
+func (r *WatchLaterRepo) Exists(userID, mediaID string) bool {
+	var count int64
+	r.db.Model(&model.WatchLater{}).Where("user_id = ? AND media_id = ?", userID, mediaID).Count(&count)
+	return count > 0
+}
+
+func (r *WatchLaterRepo) DeleteByUser(userID string) (int64, error) {
+	result := r.db.Where("user_id = ?", userID).Delete(&model.WatchLater{})
+	return result.RowsAffected, result.Error
+}
+
+func (r *WatchLaterRepo) DeleteByMediaID(mediaID string) error {
+	return r.db.Where("media_id = ?", mediaID).Delete(&model.WatchLater{}).Error
+}
+
+func (r *WatchLaterRepo) DeleteByLibraryMediaIDs(libraryID string) error {
+	return r.db.Where("media_id IN (SELECT id FROM media WHERE library_id = ?)", libraryID).Delete(&model.WatchLater{}).Error
+}
+
+func (r *WatchLaterRepo) CleanOrphaned() (int64, error) {
+	result := r.db.Where("media_id NOT IN (SELECT id FROM media WHERE deleted_at IS NULL)").Delete(&model.WatchLater{})
+	return result.RowsAffected, result.Error
+}
+
 // ==================== BookmarkRepo ====================
 
 type BookmarkRepo struct {

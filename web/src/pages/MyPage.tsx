@@ -1,13 +1,15 @@
 import { Link } from 'react-router-dom'
-import { BarChart3, ChevronRight, Clock, Heart, ListVideo, Moon, Server, Settings, Sun, UserRound } from 'lucide-react'
+import { BarChart3, Bookmark, ChevronRight, Clock, Heart, ListVideo, Moon, Server, Settings, Sun, UserRound } from 'lucide-react'
 import { Button, Section, Tag } from '@/components/design-system'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
 import { useAuthStore } from '@/stores/auth'
 import { useServerProfileStore } from '@/stores/serverProfile'
 import { useThemeStore } from '@/stores/theme'
+import { PersonalWorkspaceHeader } from '@/ui'
 
 const entries = [
   { to: '/favorites', title: '我的收藏', description: '收藏的电影和剧集', icon: Heart },
+  { to: '/watch-later', title: '稍后再看', description: '先收起来的电影和剧集', icon: Bookmark },
   { to: '/history', title: '观看记录', description: '继续观看与历史进度', icon: Clock },
   { to: '/playlists', title: '播放列表', description: '整理个人片单', icon: ListVideo },
   { to: '/stats', title: '观影统计', description: '观看时间与内容偏好', icon: BarChart3 },
@@ -43,15 +45,12 @@ export default function MyPage() {
 
   return (
     <div className="nv-section-stack">
-      <section className="flex items-center gap-3 border-b border-[var(--nv-border-subtle)] pb-5">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--nv-radius-control)] bg-[var(--nv-fill-active)] text-[var(--nv-text-secondary)]">
-          <UserRound size={20} aria-hidden="true" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-[11px] text-[var(--nv-text-tertiary)]">我的影音空间</p>
-          <h1 className="truncate text-lg font-semibold tracking-[-0.015em] text-[var(--nv-text-primary)]">{user?.nickname || user?.username || 'Fan-Video 用户'}</h1>
-        </div>
-      </section>
+      <PersonalWorkspaceHeader
+        icon={<UserRound size={20} />}
+        eyebrow="我的影音空间"
+        title={user?.nickname || user?.username || 'Fan-Video 用户'}
+        description="管理收藏、观看记录、播放列表与个人设置。"
+      />
 
       <Section title="我的内容">
         <div className="divide-y divide-[var(--nv-border-subtle)] border-y border-[var(--nv-border-subtle)]">

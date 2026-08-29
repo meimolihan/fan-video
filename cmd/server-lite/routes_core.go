@@ -4,12 +4,12 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/gin-gonic/gin"
 	"github.com/fan-video/fan-video/internal/config"
 	"github.com/fan-video/fan-video/internal/handler"
 	"github.com/fan-video/fan-video/internal/middleware"
 	"github.com/fan-video/fan-video/internal/repository"
 	"github.com/fan-video/fan-video/internal/service"
+	"github.com/gin-gonic/gin"
 )
 
 func registerCoreAPI(
@@ -78,6 +78,7 @@ func registerCoreAPI(
 
 	api.GET("/libraries", handlers.Library.List)
 	api.GET("/libraries/scan-status", middleware.AdminOnly(), handlers.Library.ScanStatus)
+	api.GET("/settings/ui", handlers.Admin.GetUISettings)
 	api.POST("/libraries", middleware.AdminOnly(), handlers.Library.Create)
 	api.PUT("/libraries/:id", middleware.AdminOnly(), handlers.Library.Update)
 	api.POST("/libraries/:id/scan", middleware.AdminOnly(), handlers.Library.Scan)
@@ -197,6 +198,11 @@ func registerCoreAPI(
 	api.POST("/users/me/favorites/:mediaId", handlers.User.AddFavorite)
 	api.DELETE("/users/me/favorites/:mediaId", handlers.User.RemoveFavorite)
 	api.GET("/users/me/favorites/:mediaId/check", handlers.User.CheckFavorite)
+	api.GET("/users/me/watch-later", handlers.User.WatchLater)
+	api.DELETE("/users/me/watch-later", handlers.User.ClearWatchLater)
+	api.POST("/users/me/watch-later/:mediaId", handlers.User.AddWatchLater)
+	api.DELETE("/users/me/watch-later/:mediaId", handlers.User.RemoveWatchLater)
+	api.GET("/users/me/watch-later/:mediaId/check", handlers.User.CheckWatchLater)
 	api.GET("/users/me/history", handlers.User.History)
 	api.DELETE("/users/me/history/:mediaId", handlers.User.DeleteHistory)
 	api.DELETE("/users/me/history", handlers.User.ClearHistory)

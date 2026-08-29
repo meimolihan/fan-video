@@ -76,7 +76,7 @@ export default function CollectionMovieBrowser({ media }: CollectionMovieBrowser
       <div className="flex flex-col gap-3 border-b border-[var(--nv-border-subtle)] pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-display text-lg font-semibold tracking-tight text-[var(--nv-text-primary)]">系列电影</h2>
-          <p className="mt-1 text-xs text-[var(--nv-text-tertiary)]">{sortedMedia.length} 部电影</p>
+          <p className="mt-1 text-xs text-[var(--nv-text-tertiary)]"><span className="text-[var(--nv-status-warning)] font-bold">{sortedMedia.length}</span> 部电影</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

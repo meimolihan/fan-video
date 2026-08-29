@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Heart, Image, MoreHorizontal, Play, Share2, Trash2, Tv } from 'lucide-react'
+import { Heart, Image, MoreHorizontal, Play, Share2, Star, Trash2, Tv } from 'lucide-react'
 import type { Media, Series } from '@/types'
 import { streamApi } from '@/api'
 import { Button, Tag, buttonClassName } from '@/components/design-system'
@@ -9,6 +9,7 @@ import PosterImage from '@/components/PosterImage'
 
 interface SeriesHeroProps {
   series: Series
+  episodes: Media[]
   playEpisode: Media | null
   playLabel: string
   isFavorited: boolean
@@ -20,8 +21,11 @@ interface SeriesHeroProps {
   onPosterPicker: () => void
 }
 
+const SERIES_POSTER_SWITCH_MS = 6000
+
 export default function SeriesHero({
   series,
+  episodes,
   playEpisode,
   playLabel,
   isFavorited,
@@ -37,9 +41,79 @@ export default function SeriesHero({
   const menuContainerRef = useRef<HTMLDivElement>(null)
   const genres = (series.genres || '').split(',').map((item) => item.trim()).filter(Boolean)
 
+  const episodePosters = useMemo(() => {
+    const seen = new Set<string>()
+    const urls: string[] = []
+    for (const episode of episodes) {
+      const url = streamApi.getPosterUrl(episode.id, posterVersion)
+      if (!url || seen.has(url)) continue
+      seen.add(url)
+      urls.push(url)
+    }
+    return urls
+  }, [episodes, posterVersion])
+
+  const [posterShown, setPosterShown] = useState(0)
+  const [posterSwitching, setPosterSwitching] = useState(-1)
+  const [nextReady, setNextReady] = useState(false)
+  const activeTimerRef = useRef<number | null>(null)
+  const switchIndexRef = useRef(0)
+
   useEffect(() => {
     setImageLoaded(false)
   }, [posterVersion, series.backdrop_path, series.id])
+
+  useEffect(() => {
+    setPosterShown(0)
+    setPosterSwitching(-1)
+    setNextReady(false)
+    switchIndexRef.current = 0
+  }, [series.id])
+
+  // Warm the browser cache up front so a switch never waits on the network.
+  useEffect(() => {
+    const images: HTMLImageElement[] = []
+    for (const url of episodePosters) {
+      const img = new window.Image()
+      img.src = url
+      images.push(img)
+    }
+    return () => {
+      for (const img of images) img.src = ''
+    }
+  }, [episodePosters])
+
+  useEffect(() => {
+    if (episodePosters.length < 2) return
+    activeTimerRef.current = window.setInterval(() => {
+      const count = episodePosters.length
+      let next = switchIndexRef.current
+      while (episodePosters.length > 1 && next === switchIndexRef.current) {
+        next = Math.floor(Math.random() * count)
+      }
+      switchIndexRef.current = next
+      setPosterSwitching(next)
+      setNextReady(false)
+    }, SERIES_POSTER_SWITCH_MS)
+    return () => {
+      if (activeTimerRef.current) window.clearInterval(activeTimerRef.current)
+      activeTimerRef.current = null
+    }
+  }, [episodePosters.length])
+
+  // The incoming poster only fades in once its pixels are decoded, so the
+  // crossfade is smooth instead of popping on a half-loaded frame.
+  const handlePosterSwitchDone = useCallback(() => {
+    if (posterSwitching >= 0 && posterSwitching !== posterShown) {
+      setPosterShown(posterSwitching)
+      setPosterSwitching(-1)
+      setNextReady(false)
+    }
+  }, [posterShown, posterSwitching])
+
+  const isSwitching = posterSwitching >= 0 && posterSwitching !== posterShown
+  const hasEpisodePosters = episodePosters.length > 0
+  const showEpisodeSlideshow = hasEpisodePosters
 
   useEffect(() => {
     if (!menuOpen) return
@@ -93,7 +167,34 @@ export default function SeriesHero({
   )
 
   return (
-    <section className="nv-detail-hero nv-series-hero relative border-b border-[var(--nv-border-subtle)] bg-[var(--nv-bg-canvas)]">
+    <section
+      className={`nv-detail-hero nv-series-hero relative overflow-hidden rounded-2xl border-b border-[var(--nv-border-subtle)] bg-[var(--nv-bg-canvas)]${showEpisodeSlideshow ? ' nv-series-hero-has-poster-slides' : ''}`}
+      data-has-poster-slides={showEpisodeSlideshow ? 'true' : 'false'}
+    >
+      {showEpisodeSlideshow && (
+        <div className="nv-series-poster-slideshow" aria-hidden="true">
+          <img
+            key={`series-poster-active-${series.id}-${posterShown}-${posterVersion}`}
+            src={episodePosters[posterShown]}
+            alt=""
+            decoding="async"
+            className={`nv-series-poster-slide is-active${isSwitching && nextReady ? ' is-leaving' : ''}`}
+          />
+          {isSwitching && (
+            <img
+              key={`series-poster-next-${series.id}-${posterSwitching}-${posterVersion}`}
+              src={episodePosters[posterSwitching]}
+              alt=""
+              decoding="async"
+              loading="eager"
+              onLoad={() => setNextReady(true)}
+              onTransitionEnd={handlePosterSwitchDone}
+              className={`nv-series-poster-slide is-next${nextReady ? ' is-ready' : ''}`}
+            />
+          )}
+          <div className="nv-series-poster-slideshow-scrim" />
+        </div>
+      )}
       <div className="nv-series-backdrop absolute inset-0 overflow-hidden" aria-hidden="true">
         {series.backdrop_path ? (
           <PosterImage
@@ -115,7 +216,7 @@ export default function SeriesHero({
         <div className="nv-series-hero-edge-scrim absolute inset-0" />
       </div>
 
-      <div className="nv-detail-hero-inner nv-series-hero-inner relative mx-auto grid w-full max-w-[var(--nv-content-max)] items-center gap-6 px-[var(--nv-page-gutter)] sm:grid-cols-[11rem_minmax(0,1fr)] lg:grid-cols-[12rem_minmax(0,1fr)] lg:gap-8">
+      <div className="nv-detail-hero-inner nv-series-hero-inner relative mx-auto grid w-full max-w-[var(--nv-content-max)] items-center gap-6 px-[var(--nv-page-gutter)] sm:grid-cols-[12rem_minmax(0,1fr)] lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-8">
         <div className="hidden sm:block">
           <MediaArtwork
             src={series.poster_path ? streamApi.getSeriesPosterUrl(series.id, posterVersion) : null}
@@ -133,9 +234,8 @@ export default function SeriesHero({
           badges={(
             <>
               <Tag>剧集</Tag>
-              {series.rating > 0 && <Tag tone="rating">★ {series.rating.toFixed(1)}</Tag>}
+              {series.rating > 0 && <Tag tone="rating"><Star size={10} fill="currentColor" aria-hidden="true" /> {series.rating.toFixed(1)}</Tag>}
               {series.year > 0 && <Tag>{series.year}</Tag>}
-              <Tag>{series.season_count} 季 · {series.episode_count} 集</Tag>
             </>
           )}
           title={series.title}

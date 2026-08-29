@@ -1,4 +1,4 @@
-.PHONY: all build build-lite build-full build-server build-server-full build-web run run-full dev dev-full dev-server dev-server-full dev-web clean docker docker-full docker-stop tidy
+.PHONY: all build build-lite build-full build-server build-server-full build-web run run-full dev dev-full dev-server dev-server-full dev-web clean docker docker-full docker-stop tidy sync-pwa
 
 VERSION ?= $(shell git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null | sed 's/^v//' || echo 0.1.0)
 GO_VERSION_PKG := github.com/fan-video/fan-video/internal/version.Version
@@ -18,7 +18,17 @@ build-lite: build
 # 旧版完整服务仅保留迁移、回滚和兼容验证，不作为正式发行版本。
 build-full: build-web build-server-full
 
+# 保持 go:embed 内嵌的 PWA 资源（internal/pwa）与前端源文件同步。
+# 前端 PWA 文件（web/public/assets/sw.js、manifest.json）会被 Vite 复制进 dist，
+# 而运行时间是走二进制内嵌版本，因此后端构建前必须先同步，避免内嵌内容过期。
+.PHONY: sync-pwa
+sync-pwa:
+	@mkdir -p internal/pwa
+	@cp web/public/assets/sw.js internal/pwa/sw.js
+	@cp web/public/assets/manifest.json internal/pwa/manifest.json
+
 build-server:
+	@$(MAKE) -s sync-pwa
 	@CGO_ENABLED=1 NOWEN_VERSION=$(VERSION) go build -ldflags "$(GO_LDFLAGS)" -o bin/fan-video ./cmd/server-lite
 
 build-server-full:
@@ -32,6 +42,7 @@ build-web:
 # 它不再代表一个对外的 Lite 产品版本。
 # Go 服务直接读取 web/dist，因此每次启动前必须重建当前分支前端。
 dev: build-web
+	@$(MAKE) -s sync-pwa
 	@NOWEN_APP_PORT=$(DEV_SERVER_PORT) NOWEN_DEBUG=true NOWEN_VERSION=$(VERSION) go run -ldflags "$(GO_LDFLAGS)" ./cmd/server-lite
 
 # 旧版完整服务，仅用于兼容验证与必要回滚。
@@ -41,6 +52,7 @@ dev-full: build-web
 # 仅供明确需要复用现有 dist 的后端调试场景使用。
 # 常规开发请使用 make dev。
 dev-server:
+	@$(MAKE) -s sync-pwa
 	@NOWEN_APP_PORT=$(DEV_SERVER_PORT) NOWEN_DEBUG=true NOWEN_VERSION=$(VERSION) go run -ldflags "$(GO_LDFLAGS)" ./cmd/server-lite
 
 dev-server-full:

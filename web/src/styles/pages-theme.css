@@ -358,7 +358,7 @@ section[aria-labelledby="cast-grid-title"] { margin-top: 2px; }
 /* Tablet / mobile                                                             */
 /* -------------------------------------------------------------------------- */
 
-@media (max-width: 95rem) {
+@media (min-width: 72rem) and (max-width: 79.999rem) {
   :root { --nv-grid-column: 192px; }
 }
 
@@ -1125,7 +1125,7 @@ section[aria-labelledby="cast-grid-title"] { margin-top: 2px; }
   box-shadow: none !important;
 }
 
-@media (max-width: 47.99rem) {
+@media (max-width: 47.999rem) {
   [data-theme="light"] .nv-browse-toolbar {
     padding: 8px;
   }
@@ -1571,7 +1571,7 @@ body {
   box-shadow: var(--nv-shadow-card-hover) !important;
 }
 .nv-media-card:hover .nv-media-card-poster > img,
-.nv-media-card:focus-within .nv-media-card-poster > img { filter: brightness(.80) saturate(.92) !important; }
+.nv-media-card:focus-within .nv-media-card-poster > img { filter: brightness(.82) saturate(.92) !important; }
 .nv-media-card-overlay { background: rgba(4,5,7,.22) !important; }
 .nv-media-card-play {
   width: 34px !important;
@@ -1589,7 +1589,7 @@ body {
   font: 400 10.5px/1.35 var(--nv-font-mono) !important;
 }
 .nv-media-card-progress { height: 3px !important; background: rgba(0,0,0,.55) !important; }
-.nv-media-card-progress > span { background: #9b8cf5 !important; }
+.nv-media-card-progress > span { background: var(--nv-action-primary) !important; }
 .nv-continue-artwork { border-radius: 10px !important; box-shadow: none !important; }
 .nv-continue-card:hover .nv-continue-artwork { transform: translateY(-2px) !important; }
 
@@ -1883,7 +1883,7 @@ section[aria-labelledby="cast-grid-title"] [role="listitem"] > div:first-child {
   }
   .nv-mobile-nav .nv-rail-item[aria-current="page"]::before { display: none; }
 
-  .nv-hero-carousel { min-height: 430px !important; border-radius: 12px !important; }
+  .nv-hero-carousel { min-height: 430px !important; border-radius: var(--nv-radius-hero) !important; }
   .nv-hero-carousel > .relative.z-10 { max-width: 100% !important; padding-bottom: 54px !important; }
   .nv-hero-carousel h2 { max-width: 14ch !important; font-size: 32px !important; }
   .nv-hero-carousel p { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
@@ -2909,15 +2909,6 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
 /* Right summary sidebar                                                        */
 /* -------------------------------------------------------------------------- */
 
-.nv-detail-sidebar {
-  position: sticky;
-  top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-}
-
 .nv-detail-side-card {
   padding: 14px !important;
   border-color: var(--nv-border-default) !important;
@@ -3120,12 +3111,6 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
 
 @media (max-width: 980px) {
   .nv-detail-body-grid { grid-template-columns: minmax(0, 1fr); }
-  .nv-detail-sidebar {
-    position: static;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .nv-detail-sidebar > :last-child { grid-column: 1 / -1; }
 }
 
 @media (max-width: 760px) {
@@ -3146,8 +3131,6 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
 
   .nv-detail-section-tabs { margin-inline: -2px; }
   .nv-detail-content-section { padding-block: 18px; }
-  .nv-detail-sidebar { grid-template-columns: 1fr; }
-  .nv-detail-sidebar > :last-child { grid-column: auto; }
 }
 
 @media (max-width: 560px) {
@@ -3286,19 +3269,6 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
   box-shadow: none !important;
 }
 
-.nv-search-filter-chip {
-  min-height: 28px !important;
-  height: 28px !important;
-  padding-inline: 9px !important;
-  font-size: 11px !important;
-}
-
-.nv-search-filter-chip[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--nv-action-muted) 32%, var(--nv-border-default));
-  background: color-mix(in srgb, var(--nv-action-muted) 10%, var(--nv-bg-surface));
-  color: var(--nv-text-primary);
-}
-
 .nv-search-empty-state {
   min-height: min(48vh, 440px);
   border: 1px dashed var(--nv-border-subtle);
@@ -3313,7 +3283,7 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
   padding-block: 8px 4px;
 }
 
-@media (max-width: 47.99rem) {
+@media (max-width: 47.999rem) {
   .nv-search-page {
     padding-top: 0;
   }
@@ -3401,6 +3371,11 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
   --nv-radius-popover: 18px;
   --nv-radius-modal: 24px;
   --nv-radius-hero: 26px;
+
+  /* Accent resolves to the theme's primary action color; soft is a translucent
+   * tint for fills/badges. Consumed by highlights/progress panels. */
+  --nv-accent: var(--nv-action-primary);
+  --nv-accent-soft: color-mix(in srgb, var(--nv-action-primary) 14%, transparent);
 
   --nv-grid-column: 214px;
   --nv-grid-gap-x: clamp(13px, 1vw, 18px);
@@ -4130,15 +4105,15 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
 
 .nv-browse-poster-card > div:first-child {
   border-color: var(--nv-border-subtle) !important;
-  border-radius: 16px !important;
-  box-shadow: 0 12px 28px rgba(0,0,0,.23) !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
   transition: transform var(--nv-motion-normal) var(--nv-ease-emphasized), border-color var(--nv-motion-normal) var(--nv-ease-standard), box-shadow var(--nv-motion-normal) var(--nv-ease-standard) !important;
 }
 
 .nv-browse-poster-card:hover > div:first-child,
 .nv-browse-poster-card:focus-visible > div:first-child {
-  transform: translateY(-5px) scale(1.012) !important;
-  border-color: rgba(128, 147, 255, .28) !important;
+  transform: translateY(-2px) !important;
+  border-color: var(--nv-border-hover) !important;
   box-shadow: var(--nv-shadow-card-hover) !important;
 }
 
@@ -4299,11 +4274,6 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
 .nv-detail-tech-details,
 .nv-detail-side-card {
   border-radius: 16px !important;
-}
-
-.nv-detail-sidebar {
-  top: 76px;
-  gap: 14px;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -4470,11 +4440,14 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
   }
 }
 
-@media (max-width: 47.99rem) {
+@media (max-width: 47.999rem) {
   :root {
     --nv-grid-column: 166px;
     --nv-radius-card: 15px;
-    --nv-radius-hero: 20px;
+    --nv-radius-container: 18px;
+    --nv-radius-popover: 16px;
+    --nv-radius-modal: 20px;
+    --nv-radius-hero: 22px;
     --nv-section-gap: 26px;
   }
 
@@ -4489,7 +4462,7 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
 
   .nv-hero-carousel {
     min-height: 410px !important;
-    border-radius: 20px !important;
+    border-radius: var(--nv-radius-hero) !important;
   }
 
   .nv-hero-carousel h2 {
@@ -4510,11 +4483,6 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
 
   .nv-detail-body-grid {
     display: block;
-  }
-
-  .nv-detail-sidebar {
-    position: static;
-    margin-top: 12px;
   }
 
   .nv-detail-section-tabs {
@@ -5078,10 +5046,6 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
   padding-block: 22px !important;
 }
 
-.nv-detail-sidebar {
-  gap: 10px !important;
-}
-
 .nv-detail-side-card {
   border-color: rgba(179, 193, 255, .065) !important;
   background: rgba(12, 17, 31, .48) !important;
@@ -5186,7 +5150,7 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
   }
 }
 
-@media (max-width: 47.99rem) {
+@media (max-width: 47.999rem) {
   .nv-home-page .nv-hero-carousel {
     min-height: 390px !important;
   }
@@ -5532,11 +5496,13 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
   z-index: 21;
   min-height: 0 !important;
   overflow: visible !important;
+  border-radius: 16px;
 }
 
 .nv-series-detail-page .nv-series-backdrop {
   z-index: 0;
   overflow: hidden;
+  border-radius: 16px;
   pointer-events: none;
 }
 
@@ -5545,19 +5511,11 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
 }
 
 .nv-series-detail-page .nv-series-hero-reading-scrim {
-  background:
-    linear-gradient(90deg,
-      color-mix(in srgb, var(--nv-bg-canvas) 96%, transparent) 0%,
-      color-mix(in srgb, var(--nv-bg-canvas) 88%, transparent) 29%,
-      color-mix(in srgb, var(--nv-bg-canvas) 64%, transparent) 48%,
-      color-mix(in srgb, var(--nv-bg-canvas) 26%, transparent) 68%,
-      transparent 82%);
+  background: var(--nv-hero-scrim);
 }
 
 .nv-series-detail-page .nv-series-hero-edge-scrim {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--nv-bg-canvas) 7%, transparent) 0%, transparent 55%),
-    linear-gradient(0deg, color-mix(in srgb, var(--nv-bg-canvas) 78%, transparent) 0%, transparent 30%);
+  background: var(--nv-hero-bottom-scrim);
 }
 
 .nv-series-detail-page .nv-series-hero-inner {
@@ -5611,24 +5569,68 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
 
 .nv-series-detail-page .nv-series-hero-actions .nv-button,
 .nv-series-detail-page .nv-series-hero-actions a[data-size="lg"] {
-  min-height: 40px !important;
-  height: 40px !important;
-  border-radius: 10px !important;
-  font-size: 12px !important;
+  min-height: 48px !important;
+  height: 48px !important;
+  padding-inline: 18px !important;
+  border-radius: 12px !important;
+  font-size: 13px !important;
 }
 
-[data-theme="light"] .nv-series-detail-page .nv-series-hero-reading-scrim {
-  background:
-    linear-gradient(90deg,
-      rgba(248, 248, 247, .97) 0%,
-      rgba(248, 248, 247, .90) 30%,
-      rgba(248, 248, 247, .66) 49%,
-      rgba(248, 248, 247, .24) 68%,
-      rgba(248, 248, 247, 0) 82%);
+/* Episode-poster slideshow owns the hero background when the series has
+ * episodes. The scraped series backdrop remains only as the no-episode
+ * fallback, mirroring the media-detail highlight hero behaviour. */
+.nv-series-detail-page .nv-series-hero.nv-series-hero-has-poster-slides .nv-series-backdrop {
+  opacity: 0;
 }
 
-[data-theme="light"] .nv-series-detail-page .nv-series-hero-edge-scrim {
-  background: linear-gradient(0deg, rgba(248, 248, 247, .66) 0%, rgba(248, 248, 247, 0) 32%);
+.nv-series-poster-slideshow {
+  position: absolute;
+  inset: 0;
+  z-index: var(--nv-detail-hero-layer-highlight);
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--nv-bg-surface-soft);
+}
+
+.nv-series-poster-slide {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0;
+  transition: opacity .8s ease;
+  will-change: opacity;
+}
+
+.nv-series-poster-slide.is-active {
+  opacity: 1;
+}
+
+/* Outgoing layer: fade out as the incoming one fades in (true crossfade). */
+.nv-series-poster-slide.is-active.is-leaving {
+  opacity: 0;
+}
+
+/* Incoming layer stays hidden until its pixels are decoded (is-ready added
+ * after onLoad), so the crossfade never pops on a half-loaded frame. */
+.nv-series-poster-slide.is-next.is-ready {
+  opacity: 1;
+}
+
+/* Reading scrim scoped to the metadata side so the poster artwork stays the
+ * primary visual; only the left copy field and lower frame get a wash. Reuses
+ * the same --nv-hero-scrim token as the media-detail hero so both share the
+ * identical overlay across themes and breakpoints. */
+.nv-series-poster-slideshow-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: var(--nv-detail-hero-layer-scrim);
+  pointer-events: none;
+  background: var(--nv-hero-scrim);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -6028,10 +6030,7 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
 
   .nv-series-detail-page .nv-series-hero-reading-scrim,
   [data-theme="light"] .nv-series-detail-page .nv-series-hero-reading-scrim {
-    background: linear-gradient(180deg,
-      color-mix(in srgb, var(--nv-bg-canvas) 28%, transparent) 0%,
-      color-mix(in srgb, var(--nv-bg-canvas) 76%, transparent) 48%,
-      color-mix(in srgb, var(--nv-bg-canvas) 97%, transparent) 100%);
+    background: var(--nv-hero-scrim);
   }
 
   .nv-series-detail-page .nv-series-hero-overview {

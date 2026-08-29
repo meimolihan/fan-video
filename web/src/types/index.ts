@@ -310,6 +310,15 @@ export interface Favorite {
   media: Media
 }
 
+// ==================== 稍后再看 ====================
+export interface WatchLaterItem {
+  id: string
+  user_id: string
+  media_id: string
+  created_at: string
+  media: Media
+}
+
 // ==================== 播放列表 ====================
 export interface Playlist {
   id: string
@@ -759,6 +768,8 @@ export interface SystemSettings {
   auto_transcode_on_play: boolean    // 播放时自动触发转码
   prefer_direct_play: boolean        // 优先直接播放（禁用自动转码）
   default_autoplay: boolean          // 默认自动播放（进入播放页自动开始）
+  hide_overview: boolean             // 隐藏视频详情页的影片简介
+  hide_cast: boolean                 // 隐藏视频详情页的演职人员
 }
 
 // ==================== 豆瓣数据源 ====================
@@ -1989,34 +2000,7 @@ export interface GPUThresholdConfig {
   enabled: boolean
 }
 
-// ==================== 字幕预处理 ====================
-export interface SubtitlePreprocessTask {
-  id: string
-  media_id: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'skipped'
-  phase: 'check' | 'extract' | 'generate' | 'clean' | 'translate' | 'done'
-  progress: number
-  message: string
-  error: string
-  media_title: string
-  source_lang: string
-  target_langs: string
-  force_regenerate: boolean
-  original_vtt_path: string
-  translated_paths: string
-  subtitle_source: string
-  detected_language: string
-  cue_count: number
-  /** 翻译失败的语言列表（逗号分隔） */
-  failed_langs?: string
-  /** 字幕清洗详细报告（JSON 字符串） */
-  clean_report_json?: string
-  started_at: string | null
-  completed_at: string | null
-  elapsed_sec: number
-  created_at: string
-  updated_at: string
-}
+// ==================== 字幕清洗 ====================
 
 /** 字幕清洗报告（后端 CleanReport） */
 export interface SubtitleCleanReport {
@@ -2032,14 +2016,6 @@ export interface SubtitleCleanReport {
   split_cues: number
   encoding_converted: boolean
   warnings?: string[]
-}
-
-export interface SubtitlePreprocessStatistics {
-  status_counts: Record<string, number>
-  max_workers: number
-  active_workers: number
-  queue_size: number
-  asr_enabled: boolean
 }
 
 // P0: ASR 服务健康状态

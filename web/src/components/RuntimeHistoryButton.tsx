@@ -9,7 +9,6 @@ import {
   HardDrive,
   Loader2,
   RefreshCw,
-  Search,
   X,
 } from 'lucide-react'
 import { runtimeHistoryApi } from '@/api'
@@ -19,7 +18,7 @@ import type {
   RuntimeHistoryList,
   RuntimeHistorySummary,
 } from '@/api'
-import { Button, Input, Select, Surface, Tag, type TagTone } from '@/components/design-system'
+import { Button, SearchField, Select, Surface, Tag, type TagTone } from '@/components/design-system'
 import { useAuthStore } from '@/stores/auth'
 import { useServerProfileStore } from '@/stores/serverProfile'
 
@@ -341,10 +340,12 @@ export default function RuntimeHistoryButton() {
                   )}
 
                   <form onSubmit={submitSearch} className="flex flex-wrap gap-2">
-                    <div className="relative min-w-[14rem] flex-1">
-                      <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--nv-text-tertiary)]" aria-hidden="true" />
-                      <Input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="搜索媒体 ID、Job ID、Intent…" className="pl-9" />
-                    </div>
+                    <SearchField
+                      value={searchInput}
+                      onChange={(event) => setSearchInput(event.target.value)}
+                      placeholder="搜索媒体 ID、Job ID、Intent…"
+                      wrapperClassName="relative min-w-[14rem] flex-1"
+                    />
                     <Select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1) }} aria-label="运行状态">
                       <option value="">全部状态</option>
                       <option value="completed">已完成</option>

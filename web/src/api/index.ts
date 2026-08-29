@@ -39,7 +39,6 @@ export { libraryApi } from './library'
 export { mediaApi, personApi, collectionApi } from './media'
 export { streamApi } from './stream'
 export { subtitleApi, subtitleSearchApi } from './subtitle'
-export { subtitlePreprocessApi } from './subtitlePreprocess'
 export { userApi } from './user'
 export { playlistApi } from './playlist'
 export { seriesApi } from './series'
@@ -47,20 +46,16 @@ export { seriesApi } from './series'
 // 管理模块
 export { adminApi } from './admin'
 export { fileManagerApi } from './scrape'
-export { notificationApi, batchMetadataApi, importExportApi } from './backup'
-export { embyCompatApi } from './emby'
+export { batchMetadataApi, importExportApi } from './backup'
+
+// V6: P1~P3 新增功能
+export { batchMoveApi } from './v4'
 
 // 社交与互动
 export { recommendApi } from './recommend'
 export { homeApi } from './home'
 export type { HomeFeaturedEntry, HomeFeaturedListResult } from './home'
-export { castApi, bookmarkApi, commentApi, statsApi } from './social'
-
-// V2 扩展
-export { userProfileApi, offlineDownloadApi, pluginApi, musicApi, photoApi, federationApi, abrApi } from './v2'
-
-// V6: P1~P3 新增功能
-export { batchMoveApi } from './v4'
+export { bookmarkApi, commentApi, statsApi } from './social'
 
 // STRM 远程流管理
 export { strmApi } from './strm'

@@ -7,9 +7,10 @@ import { usePageCache, invalidatePageCachePrefix } from '@/hooks/usePageCache'
 import { usePosterVersion } from '@/stores/mediaRefresh'
 import type { Series, MixedItem, Library } from '@/types'
 import MediaCard from '@/components/MediaCard'
+import VirtualGrid from '@/components/VirtualGrid'
 import Pagination from '@/components/Pagination'
 import { Button, EmptyState, SearchField, Select, Surface, Tag as SemanticTag } from '@/components/design-system'
-import { MediaArtwork, MediaGrid } from '@/ui'
+import { FilterChip, MediaArtwork, MediaGrid } from '@/ui'
 import {
   X,
   Grid3X3,
@@ -104,21 +105,6 @@ function getItemPosterUrl(item: MixedItem, version: number): string {
   if (item.type === 'series' && item.series) return streamApi.getSeriesPosterUrl(item.series.id, version)
   // 分集与电影一律用各自的海报端点，禁止回退到剧集共享海报
   return streamApi.getPosterUrl(item.media?.id || '', version)
-}
-
-function FilterChip({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
-      className="nv-button !min-h-[30px] !rounded-[9px] !px-2.5 !text-[11px]"
-      data-variant={selected ? 'secondary' : 'ghost'}
-      data-size="sm"
-    >
-      {children}
-    </button>
-  )
 }
 
 function FilterGroup({ icon, label, count, children }: { icon: ReactNode; label: string; count?: number; children: ReactNode }) {
@@ -552,7 +538,7 @@ export default function BrowsePage() {
       {serverPaginated && (
         <div className="flex items-start gap-2 border-y border-[var(--nv-border-subtle)] py-2.5 text-[11px] leading-5 text-[var(--nv-text-tertiary)]" role="status">
           <Info size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-          <span>大型影视库模式（库内共 {probeData?.total || 0} 部），当前条件匹配 {totalCount} 部；筛选与排序先在服务端执行，再进行稳定分页。</span>
+          <span>大型影视库模式（库内共 <span className="text-[var(--nv-status-warning)] font-bold">{probeData?.total || 0}</span> 部），当前条件匹配 <span className="text-[var(--nv-status-warning)] font-bold">{totalCount}</span> 部；筛选与排序先在服务端执行，再进行稳定分页。</span>
         </div>
       )}
 
@@ -566,18 +552,29 @@ export default function BrowsePage() {
           action={hasSearchOrFilters ? <Button type="button" variant="secondary" size="sm" onClick={clearAllFilters}>清除所有筛选</Button> : undefined}
         />
       ) : viewMode === 'grid' ? (
-        <MediaGrid>
-          {pagedItems.map((item) => item.type === 'series' && item.series
-            ? <MediaCard key={`s-${item.series.id}`} series={item.series} />
-            : item.media ? (
-              <MediaCard
-                key={`${item.type}-${item.media.id}`}
-                media={item.media}
-                eyebrow={item.type === 'episode' ? item.media.series?.title : undefined}
-                quickActions
-              />
-            ) : null)}
-        </MediaGrid>
+        <VirtualGrid
+          count={pagedItems.length}
+          minItemWidth={150}
+          aria-label="浏览内容网格"
+        >
+          {(index) => {
+            const item = pagedItems[index]
+            if (!item) return null
+            if (item.type === 'series' && item.series) {
+              return <MediaCard series={item.series} />
+            }
+            if (item.media) {
+              return (
+                <MediaCard
+                  media={item.media}
+                  eyebrow={item.type === 'episode' ? item.media.series?.title : undefined}
+                  quickActions
+                />
+              )
+            }
+            return null
+          }}
+        </VirtualGrid>
       ) : viewMode === 'list' ? (
         <div className="nv-browse-list divide-y divide-[var(--nv-border-subtle)] border-y border-[var(--nv-border-subtle)]">
           {pagedItems.map((item) => <BrowseListItem key={item.type === 'series' ? `s-${item.series?.id}` : `m-${item.media?.id}`} item={item} />)}
@@ -600,7 +597,7 @@ function BrowseSkeleton({ viewMode }: { viewMode: ViewMode }) {
       <div className="divide-y divide-[var(--nv-border-subtle)] border-y border-[var(--nv-border-subtle)]">
         {Array.from({ length: 8 }).map((_, index) => (
           <div key={index} className="flex items-center gap-3 py-2.5">
-            <div className="skeleton h-16 w-11 shrink-0 rounded-[var(--nv-radius-control)]" />
+            <div className="skeleton h-16 w-11 shrink-0 rounded-[9px]" />
             <div className="flex-1 space-y-2"><div className="skeleton h-3 w-3/4" /><div className="skeleton h-2.5 w-1/2" /></div>
           </div>
         ))}
@@ -649,7 +646,7 @@ function BrowseListItem({ item }: { item: MixedItem }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2"><h3 className="truncate text-xs font-medium text-[var(--nv-text-primary)]">{title}</h3>{isSeries && <SemanticTag>剧集</SemanticTag>}{!isSeries && item.type === 'episode' && media?.series?.title && <SemanticTag tone="quality" className="shrink-0">{media.series.title}</SemanticTag>}</div>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] text-[var(--nv-text-tertiary)]">
-          {year > 0 && <span>{year}</span>}{country && <span>{country}</span>}{durationLabel && <span>{durationLabel}</span>}{isSeries && series && <span>{series.season_count} 季 · {series.episode_count} 集</span>}
+          {year > 0 && <span>{year}</span>}{country && <span>{country}</span>}{durationLabel && <span>{durationLabel}</span>}
         </div>
         {genreList.length > 0 && (
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
@@ -684,7 +681,7 @@ function PosterWallItem({ item }: { item: MixedItem }) {
         src={hasPoster ? posterUrl : null}
         alt=""
         ratio="poster"
-        className="shadow-[0_5px_16px_rgba(0,0,0,.12)] transition-[transform,box-shadow,border-color] duration-200 group-hover:-translate-y-[3px] group-hover:border-[var(--nv-border-default)] group-hover:shadow-[var(--nv-shadow-card-hover)]"
+        className="transition-[box-shadow,border-color] duration-200"
         imageClassName="transition-[filter] duration-200 group-hover:brightness-[.82]"
         fallback={(
           <div className="flex flex-col items-center justify-center gap-2 text-[var(--nv-text-tertiary)]">
@@ -700,12 +697,12 @@ function PosterWallItem({ item }: { item: MixedItem }) {
               onClick={(event) => { event.preventDefault(); event.stopPropagation(); navigate(`/play/${media.id}`) }}
               aria-label={`播放 ${title}`}
               title="立即播放"
-              className="grid h-8 w-8 place-items-center rounded-full bg-[var(--nv-action-primary)] text-[var(--nv-text-on-brand)] transition-transform duration-150 hover:scale-110"
+              className="grid h-[34px] w-[34px] place-items-center rounded-full bg-[var(--nv-action-primary)] text-[var(--nv-text-on-brand)] transition-transform duration-150 hover:scale-110"
             >
-              <Play size={12} fill="currentColor" aria-hidden="true" />
+              <Play size={13} fill="currentColor" aria-hidden="true" />
             </button>
           ) : (
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-[var(--nv-action-primary)] text-[var(--nv-text-on-brand)]"><Play size={12} fill="currentColor" /></span>
+            <span className="grid h-[34px] w-[34px] place-items-center rounded-full bg-[var(--nv-action-primary)] text-[var(--nv-text-on-brand)]"><Play size={13} fill="currentColor" /></span>
           )}
         </div>
         {rating > 0 && <SemanticTag tone="quality" className="absolute left-1.5 top-1.5 z-20"><Star size={9} fill="currentColor" />{rating.toFixed(1)}</SemanticTag>}

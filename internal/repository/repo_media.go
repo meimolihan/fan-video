@@ -283,6 +283,13 @@ func (r *MediaRepo) ListAllLocalVideos() ([]model.Media, error) {
 	return media, err
 }
 
+// ListAllImagePaths 返回所有媒体的海报/背景图路径（用于首帧缓存清理等批量收集）。
+func (r *MediaRepo) ListAllImagePaths() ([]model.Media, error) {
+	var media []model.Media
+	err := r.db.Select("poster_path", "backdrop_path").Find(&media).Error
+	return media, err
+}
+
 func (r *MediaRepo) ListBySeriesID(seriesID string) ([]model.Media, error) {
 	var media []model.Media
 	err := r.db.Where("series_id = ?", seriesID).
@@ -765,6 +772,7 @@ func (r *MediaRepo) DeleteRelatedDataByMediaIDs(mediaIDs []string) (int64, error
 	coreTables := []any{
 		&model.WatchHistory{},
 		&model.Favorite{},
+		&model.WatchLater{},
 		&model.PlaylistItem{},
 		&model.Bookmark{},
 		&model.Comment{},

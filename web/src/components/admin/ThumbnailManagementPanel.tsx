@@ -248,7 +248,7 @@ export default function ThumbnailManagementPanel() {
                   )}
                 </div>
               </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--nv-surface-elevated)]">
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--nv-bg-elevated)]">
                 <div
                   className={`h-full rounded-full transition-[width] duration-300 ${batchStatus?.stop_requested ? 'bg-[var(--nv-status-warning)]' : 'bg-[var(--nv-accent)]'}`}
                   style={{ width: `${globalPercent}%` }}
@@ -292,7 +292,7 @@ export default function ThumbnailManagementPanel() {
                   </span>
                 </div>
               </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--nv-surface-elevated)]">
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--nv-bg-elevated)]">
                 <div
                   className="h-full rounded-full bg-[var(--nv-accent)] transition-[width] duration-300"
                   style={{ width: `${coveragePercent}%` }}

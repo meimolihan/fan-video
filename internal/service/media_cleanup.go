@@ -267,6 +267,7 @@ func (s *ScannerService) CleanupResidualData() *ResidualCleanupResult {
 	coreTables := []any{
 		&model.WatchHistory{},
 		&model.Favorite{},
+		&model.WatchLater{},
 		&model.PlaylistItem{},
 		&model.Bookmark{},
 		&model.Comment{},

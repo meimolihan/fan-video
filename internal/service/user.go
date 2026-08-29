@@ -33,9 +33,6 @@ func generateSecurePassword() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// defaultAdminPassword 默认管理员密码（与前端登录页提示一致）
-const defaultAdminPassword = "admin123"
-
 // EnsureAdminExists 确保管理员账号存在（首次启动时）
 func (s *UserService) EnsureAdminExists() error {
 	count, err := s.repo.Count()
@@ -46,7 +43,13 @@ func (s *UserService) EnsureAdminExists() error {
 		return nil // 已有用户，跳过
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(defaultAdminPassword), bcrypt.DefaultCost)
+	// 生成一次性随机初始密码，避免使用公开默认凭据导致账号被抢先接管。
+	initialPassword, err := generateSecurePassword()
+	if err != nil {
+		return err
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(initialPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
@@ -62,12 +65,13 @@ func (s *UserService) EnsureAdminExists() error {
 		return err
 	}
 
-	s.logger.Infof("╔══════════════════════════════════════════════════╗")
-	s.logger.Infof("║  首次启动 — 已创建默认管理员账号                    ║")
-	s.logger.Infof("║  用户名: admin                                   ║")
-	s.logger.Infof("║  密码:   admin123                                ║")
-	s.logger.Infof("║  ⚠️  首次登录后需强制修改密码                       ║")
-	s.logger.Infof("╚══════════════════════════════════════════════════╝")
+	// 初始密码仅在首次启动时输出一次（不落盘保存明文），首次登录后强制修改密码。
+	s.logger.Infof("╔══════════════════════════════════════════════════════════╗")
+	s.logger.Infof("║  首次启动 — 已创建默认管理员账号（初始密码为一次性随机值）   ║")
+	s.logger.Infof("║  用户名: admin                                          ║")
+	s.logger.Infof("║  密码:     %s", initialPassword)
+	s.logger.Infof("║  ⚠️  首次登录后需强制修改密码                              ║")
+	s.logger.Infof("╚══════════════════════════════════════════════════════════╝")
 	return nil
 }
 

@@ -7,6 +7,7 @@ import { usePageCache, invalidatePageCachePrefix } from '@/hooks/usePageCache'
 import { usePagination } from '@/hooks/usePagination'
 import type { Favorite } from '@/types'
 import MediaCard from '@/components/MediaCard'
+import VirtualGrid from '@/components/VirtualGrid'
 import Pagination from '@/components/Pagination'
 import {
   MediaGrid as SharedMediaGrid,
@@ -70,7 +71,6 @@ export default function FavoritesPage() {
     <PersonalWorkspace className="nv-favorites-page">
       <PersonalWorkspaceHeader
         icon={<Heart size={20} />}
-        eyebrow="MY LIBRARY"
         title={t('favorites.title')}
         description="把喜欢的电影与剧集留在一个更容易再次找到的位置。"
         statValue={total}
@@ -88,7 +88,7 @@ export default function FavoritesPage() {
         titleId="favorite-media-title"
         title="收藏内容"
         description={total > 0 ? `当前共有 ${total} 个收藏，按最近收藏内容浏览。` : '收藏的内容会集中显示在这里。'}
-        count={total > 0 ? `${total} 项` : undefined}
+        count={total > 0 ? <span className="text-[var(--nv-status-warning)] font-bold">{total} 项</span> : undefined}
       >
         {loading && (
           <SharedMediaGrid aria-busy="true" aria-label="正在加载收藏内容">
@@ -103,9 +103,9 @@ export default function FavoritesPage() {
         )}
 
         {!loading && media.length > 0 && (
-          <SharedMediaGrid>
-            {media.map((item) => <MediaCard key={item.id} media={item} />)}
-          </SharedMediaGrid>
+          <VirtualGrid count={media.length} minItemWidth={150} aria-label="收藏内容网格">
+            {(index) => <MediaCard key={media[index].id} media={media[index]} />}
+          </VirtualGrid>
         )}
 
         {!loading && media.length === 0 && (

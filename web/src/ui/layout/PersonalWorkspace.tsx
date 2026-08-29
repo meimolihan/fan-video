@@ -12,7 +12,7 @@ export function PersonalWorkspace({ className, children }: PersonalWorkspaceProp
 
 export interface PersonalWorkspaceHeaderProps {
   icon: ReactNode
-  eyebrow: ReactNode
+  eyebrow?: ReactNode
   title: ReactNode
   description?: ReactNode
   statValue?: ReactNode
@@ -43,7 +43,7 @@ export function PersonalWorkspaceHeader({
       <div className="nv-page-title-lockup">
         <div className="nv-page-title-icon" aria-hidden="true">{icon}</div>
         <div className="min-w-0">
-          <span className="nv-personal-workspace-eyebrow">{eyebrow}</span>
+          {eyebrow !== undefined && <span className="nv-personal-workspace-eyebrow">{eyebrow}</span>}
           <h1 className="nv-page-title">{title}</h1>
           {description !== undefined && <p className="nv-page-subtitle">{description}</p>}
         </div>

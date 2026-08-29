@@ -158,7 +158,7 @@ export default function MediaCard({
           {isSeries && seriesData?.episode_count ? (
             <>
               {(year > 0 || rating > 0) && <span aria-hidden="true">·</span>}
-              <span className="shrink-0">{seriesData.episode_count} 集</span>
+              <span className="shrink-0"><span className="text-[var(--nv-status-warning)] font-bold">{seriesData.episode_count}</span> 项</span>
             </>
           ) : null}
         </div>

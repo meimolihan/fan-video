@@ -3,6 +3,7 @@ import type {
   User,
   WatchHistory,
   Favorite,
+  WatchLaterItem,
   PaginatedResponse,
   LoginLog,
 } from '@/types'
@@ -32,6 +33,31 @@ function publishFavoriteChanged(mediaId: string, favorited: boolean) {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('nowen:favorites-updated', {
       detail: { mediaId, favorited },
+    }))
+  }
+}
+
+// ==================== 稍后再看（Watch Later） ====================
+// 与收藏一致的“就近写 + 事件广播”模式，保证卡片/详情页/列表页状态始终一致，
+// 并让稍后再看列表缓存保持最新。
+type WatchLaterMutationState = {
+  revision: number
+  added: boolean
+}
+
+let watchLaterMutationRevision = 0
+const watchLaterMutationState = new Map<string, WatchLaterMutationState>()
+
+function publishWatchLaterChanged(mediaId: string, added: boolean) {
+  watchLaterMutationRevision += 1
+  watchLaterMutationState.set(mediaId, { revision: watchLaterMutationRevision, added })
+
+  invalidatePageCachePrefix('watch-later:')
+  invalidatePageCachePrefix('media-detail:')
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('nowen:watch-later-updated', {
+      detail: { mediaId, added },
     }))
   }
 }
@@ -93,6 +119,40 @@ export const userApi = {
 
   getProgress: (mediaId: string) =>
     api.get<{ data: import('@/types').WatchHistory | null }>(`/users/me/progress/${mediaId}`),
+
+  // ==================== 稍后再看 ====================
+  watchLater: (page = 1, size = 20) =>
+    api.get<PaginatedResponse<WatchLaterItem>>('/users/me/watch-later', { params: { page, size } }),
+
+  addWatchLater: async (mediaId: string) => {
+    const response = await api.post(`/users/me/watch-later/${mediaId}`)
+    publishWatchLaterChanged(mediaId, true)
+    return response
+  },
+
+  removeWatchLater: async (mediaId: string) => {
+    const response = await api.delete(`/users/me/watch-later/${mediaId}`)
+    publishWatchLaterChanged(mediaId, false)
+    return response
+  },
+
+  clearWatchLater: async () => {
+    const response = await api.delete<{ deleted?: number }>('/users/me/watch-later')
+    for (const [mediaId, state] of watchLaterMutationState) {
+      if (state.added) publishWatchLaterChanged(mediaId, false)
+    }
+    return response
+  },
+
+  checkWatchLater: async (mediaId: string) => {
+    const startedRevision = watchLaterMutationState.get(mediaId)?.revision ?? 0
+    const response = await api.get<{ data: boolean }>(`/users/me/watch-later/${mediaId}/check`)
+    const latestMutation = watchLaterMutationState.get(mediaId)
+    if (latestMutation && latestMutation.revision !== startedRevision) {
+      response.data.data = latestMutation.added
+    }
+    return response
+  },
 
   history: (page = 1, size = 20) =>
     api.get<PaginatedResponse<WatchHistory>>('/users/me/history', { params: { page, size } }),

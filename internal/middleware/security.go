@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/fan-video/fan-video/internal/serverprofile"
+	"github.com/gin-gonic/gin"
 )
 
 // PublicCapabilitiesProvider lets a server binary expose the typed public
@@ -71,7 +71,7 @@ func retirePulseRoute(c *gin.Context) bool {
 }
 
 func applyPWAUpgradeHeaders(c *gin.Context) {
-	if c.Request.URL.Path != "/sw.js" {
+	if c.Request.URL.Path != "/sw.js" && c.Request.URL.Path != "/assets/sw.js" {
 		return
 	}
 	// Service Worker 必须每次重新验证。否则 Full/Lite 更新镜像后，浏览器仍可能
