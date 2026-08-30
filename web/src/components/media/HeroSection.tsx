@@ -250,7 +250,7 @@ export default function HeroSection({
       <span className="truncate">{media.series?.title || media.title}</span>
       <ChevronRight size={14} aria-hidden="true" />
       <span className="shrink-0 text-[var(--nv-action-muted-hover)]">
-        {media.episode_title || `#${String(media.episode_num).padStart(2, '0')}`}
+        {media.episode_title || media.title}
       </span>
     </Link>
   ) : undefined

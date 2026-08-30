@@ -115,6 +115,8 @@ type RenamePlanItem struct {
 	MediaType  string `json:"media_type" gorm:"type:text"`
 	SeasonNum  int    `json:"season_num"`
 	EpisodeNum int    `json:"episode_num"`
+	// 个人视频片段（如日期/人名命名的家庭视频）：目标文件名不渲染 SxxExx 季集标签
+	IsPersonal bool `json:"is_personal"`
 
 	// 识别置信度（0~1，1 表示完全可信）
 	Confidence float64 `json:"confidence"`

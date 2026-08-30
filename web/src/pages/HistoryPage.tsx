@@ -175,9 +175,7 @@ export default function HistoryPage() {
             <div className="nv-history-grid">
               {group.items.map((item) => {
                 const progress = formatProgress(item.position, item.duration)
-                const displayTitle = item.media?.media_type === 'episode' && item.media?.series
-                  ? `${item.media.series.title} S${String(item.media.season_num || 0).padStart(2, '0')}E${String(item.media.episode_num || 0).padStart(2, '0')}`
-                  : (item.media?.title || t('history.unknownMedia'))
+                const displayTitle = item.media?.title || t('history.unknownMedia')
                 const historyArtwork = item.media?.media_type === 'episode' && item.media?.series?.backdrop_path
                   ? streamApi.getSeriesBackdropUrl(item.media.series.id)
                   : streamApi.getBackdropUrl(item.media_id)

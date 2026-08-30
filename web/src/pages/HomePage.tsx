@@ -250,9 +250,7 @@ function ContinueWatchingRow({
     >
       {items.map((item) => {
         const percent = formatProgress(item.position, item.duration)
-        const displayTitle = item.media.media_type === 'episode' && item.media.series
-          ? `${item.media.series.title} S${String(item.media.season_num || 0).padStart(2, '0')}E${String(item.media.episode_num || 0).padStart(2, '0')}`
-          : item.media.title
+        const displayTitle = item.media.title
         const artworkUrl = getContinueArtwork(item, posterVersion)
 
         return (

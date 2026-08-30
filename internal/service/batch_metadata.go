@@ -1,11 +1,7 @@
 package service
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -140,41 +136,6 @@ func (s *BatchMetadataService) BatchUpdateSeries(seriesIDs []string, updates map
 type MediaImportExportService struct {
 	db     *gorm.DB
 	logger *zap.SugaredLogger
-	client *http.Client
-}
-
-// EmbyLibrary Emby 媒体库信息
-type EmbyLibrary struct {
-	ID   string `json:"Id"`
-	Name string `json:"Name"`
-	Type string `json:"CollectionType"`
-}
-
-// EmbyItem Emby 媒体项
-type EmbyItem struct {
-	ID            string   `json:"Id"`
-	Name          string   `json:"Name"`
-	OriginalTitle string   `json:"OriginalTitle"`
-	Overview      string   `json:"Overview"`
-	Year          int      `json:"ProductionYear"`
-	Rating        float64  `json:"CommunityRating"`
-	Type          string   `json:"Type"`
-	Genres        []string `json:"Genres"`
-	Studios       []struct {
-		Name string `json:"Name"`
-	} `json:"Studios"`
-	Path string `json:"Path"`
-}
-
-// JellyfinItem Jellyfin 媒体项（与 Emby 兼容）
-type JellyfinItem = EmbyItem
-
-// ImportSource 导入来源
-type ImportSource struct {
-	Type      string `json:"type"`       // emby / jellyfin / nfo
-	ServerURL string `json:"server_url"` // 服务器地址
-	APIKey    string `json:"api_key"`    // API 密钥
-	UserID    string `json:"user_id"`    // 用户 ID（Emby/Jellyfin）
 }
 
 // ImportResult 导入结果
@@ -236,101 +197,7 @@ func NewMediaImportExportService(db *gorm.DB, logger *zap.SugaredLogger) *MediaI
 	return &MediaImportExportService{
 		db:     db,
 		logger: logger,
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
 	}
-}
-
-// TestConnection 测试与外部媒体服务器的连接
-func (s *MediaImportExportService) TestConnection(source ImportSource) error {
-	switch source.Type {
-	case "emby":
-		return s.testEmbyConnection(source)
-	case "jellyfin":
-		return s.testJellyfinConnection(source)
-	default:
-		return fmt.Errorf("不支持的导入来源: %s", source.Type)
-	}
-}
-
-// FetchLibraries 获取外部服务器的媒体库列表
-func (s *MediaImportExportService) FetchLibraries(source ImportSource) ([]EmbyLibrary, error) {
-	switch source.Type {
-	case "emby", "jellyfin":
-		return s.fetchEmbyLibraries(source)
-	default:
-		return nil, fmt.Errorf("不支持的导入来源: %s", source.Type)
-	}
-}
-
-// ImportFromEmby 从 Emby/Jellyfin 导入媒体库数据
-func (s *MediaImportExportService) ImportFromEmby(source ImportSource, libraryID string, targetLibraryID string) (*ImportResult, error) {
-	result := &ImportResult{
-		Errors: make([]string, 0),
-	}
-
-	// 获取媒体列表
-	items, err := s.fetchEmbyItems(source, libraryID)
-	if err != nil {
-		return result, fmt.Errorf("获取媒体列表失败: %w", err)
-	}
-
-	result.Total = len(items)
-
-	for _, item := range items {
-		// 检查是否已存在（按文件路径去重）
-		var count int64
-		s.db.Table("media").Where("file_path = ?", item.Path).Count(&count)
-		if count > 0 {
-			result.Skipped++
-			continue
-		}
-
-		// 转换并导入
-		genres := strings.Join(item.Genres, ",")
-		studio := ""
-		if len(item.Studios) > 0 {
-			studios := make([]string, 0, len(item.Studios))
-			for _, st := range item.Studios {
-				studios = append(studios, st.Name)
-			}
-			studio = strings.Join(studios, ",")
-		}
-
-		mediaType := "movie"
-		if item.Type == "Episode" || item.Type == "Series" {
-			mediaType = "episode"
-		}
-
-		media := map[string]interface{}{
-			"library_id": targetLibraryID,
-			"title":      item.Name,
-			"orig_title": item.OriginalTitle,
-			"year":       item.Year,
-			"overview":   item.Overview,
-			"rating":     item.Rating,
-			"genres":     genres,
-			"studio":     studio,
-			"file_path":  item.Path,
-			"media_type": mediaType,
-			"created_at": time.Now(),
-			"updated_at": time.Now(),
-		}
-
-		if err := s.db.Table("media").Create(media).Error; err != nil {
-			result.Failed++
-			result.Errors = append(result.Errors, fmt.Sprintf("导入 %s 失败: %v", item.Name, err))
-			continue
-		}
-
-		result.Imported++
-	}
-
-	s.logger.Infof("从 %s 导入完成: 总计 %d, 导入 %d, 跳过 %d, 失败 %d",
-		source.Type, result.Total, result.Imported, result.Skipped, result.Failed)
-
-	return result, nil
 }
 
 // ExportMediaLibrary 导出媒体库数据
@@ -474,80 +341,4 @@ func (s *MediaImportExportService) ImportFromExportData(data *ExportData, target
 	}
 
 	return result, nil
-}
-
-// ==================== 内部方法 ====================
-
-func (s *MediaImportExportService) testEmbyConnection(source ImportSource) error {
-	url := fmt.Sprintf("%s/System/Info?api_key=%s", strings.TrimRight(source.ServerURL, "/"), source.APIKey)
-	resp, err := s.client.Get(url)
-	if err != nil {
-		return fmt.Errorf("连接失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("服务器返回错误: HTTP %d", resp.StatusCode)
-	}
-	return nil
-}
-
-func (s *MediaImportExportService) testJellyfinConnection(source ImportSource) error {
-	url := fmt.Sprintf("%s/System/Info", strings.TrimRight(source.ServerURL, "/"))
-	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("X-Emby-Token", source.APIKey)
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("连接失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("服务器返回错误: HTTP %d", resp.StatusCode)
-	}
-	return nil
-}
-
-func (s *MediaImportExportService) fetchEmbyLibraries(source ImportSource) ([]EmbyLibrary, error) {
-	url := fmt.Sprintf("%s/Library/VirtualFolders?api_key=%s",
-		strings.TrimRight(source.ServerURL, "/"), source.APIKey)
-
-	resp, err := s.client.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("获取媒体库列表失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var libraries []EmbyLibrary
-	if err := json.NewDecoder(resp.Body).Decode(&libraries); err != nil {
-		return nil, fmt.Errorf("解析响应失败: %w", err)
-	}
-
-	return libraries, nil
-}
-
-func (s *MediaImportExportService) fetchEmbyItems(source ImportSource, libraryID string) ([]EmbyItem, error) {
-	url := fmt.Sprintf("%s/Items?ParentId=%s&Recursive=true&Fields=Overview,Genres,Studios,Path&api_key=%s",
-		strings.TrimRight(source.ServerURL, "/"), libraryID, source.APIKey)
-
-	resp, err := s.client.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("获取媒体列表失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("读取响应失败: %w", err)
-	}
-
-	var result struct {
-		Items []EmbyItem `json:"Items"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("解析响应失败: %w", err)
-	}
-
-	return result.Items, nil
 }

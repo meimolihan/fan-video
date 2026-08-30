@@ -24,7 +24,7 @@ func TestLiteCoreAndUnsupportedCapabilities(t *testing.T) {
 		}
 	}
 
-	for _, name := range []string{"preprocess", "emby_compat", "adult_scraper", "cast", "music", "photos", "federation", "plugins"} {
+	for _, name := range []string{"preprocess", "adult_scraper", "cast", "music", "photos", "federation", "plugins"} {
 		capability := manifest.Capabilities[name]
 		if capability.Available || capability.Enabled || capability.Configured {
 			t.Fatalf("lite-only exclusion %q must be unavailable: %+v", name, capability)
@@ -70,7 +70,7 @@ func TestFullManifestExposesAdvancedCapabilities(t *testing.T) {
 		t.Fatalf("unexpected full manifest identity: %+v", manifest)
 	}
 
-	for _, name := range []string{"preprocess", "subtitle_preprocess", "emby_compat", "cast", "music", "photos", "federation", "plugins", "offline_download", "user_profiles", "comments", "danmaku"} {
+	for _, name := range []string{"preprocess", "subtitle_preprocess", "cast", "music", "photos", "federation", "plugins", "offline_download", "user_profiles", "comments", "danmaku"} {
 		capability := manifest.Capabilities[name]
 		if !capability.Available || !capability.Enabled || !capability.Configured {
 			t.Fatalf("full capability %q must be available and enabled: %+v", name, capability)

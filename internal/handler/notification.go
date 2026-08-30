@@ -147,63 +147,6 @@ func (h *BatchMetadataHandler) BatchUpdateSeries(c *gin.Context) {
 	})
 }
 
-// TestImportConnection 测试导入连接
-func (h *BatchMetadataHandler) TestImportConnection(c *gin.Context) {
-	var source service.ImportSource
-	if err := c.ShouldBindJSON(&source); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求参数"})
-		return
-	}
-
-	if err := h.importExportSvc.TestConnection(source); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "连接成功"})
-}
-
-// FetchImportLibraries 获取外部服务器媒体库列表
-func (h *BatchMetadataHandler) FetchImportLibraries(c *gin.Context) {
-	var source service.ImportSource
-	if err := c.ShouldBindJSON(&source); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求参数"})
-		return
-	}
-
-	libraries, err := h.importExportSvc.FetchLibraries(source)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"data": libraries})
-}
-
-// ImportFromExternal 从外部服务器导入
-func (h *BatchMetadataHandler) ImportFromExternal(c *gin.Context) {
-	var req struct {
-		Source          service.ImportSource `json:"source"`
-		LibraryID       string               `json:"library_id"`
-		TargetLibraryID string               `json:"target_library_id"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求参数"})
-		return
-	}
-
-	result, err := h.importExportSvc.ImportFromEmby(req.Source, req.LibraryID, req.TargetLibraryID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "导入完成",
-		"data":    result,
-	})
-}
-
 // ExportLibrary 导出媒体库数据
 func (h *BatchMetadataHandler) ExportLibrary(c *gin.Context) {
 	libraryID := c.Query("library_id")

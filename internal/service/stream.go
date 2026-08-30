@@ -162,8 +162,8 @@ func (s *StreamService) SetSettingRepo(repo *repository.SystemSettingRepo) {
 }
 
 // ShouldRemux 判断给定媒体在当前客户端 UA 下是否应该走 Remux（零转码）。
-// 这是"秒开"的关键判定：一旦返回 true，应让客户端直接请求 /api/stream/:id/remux
-// 或 /emby/Videos/:id/stream（Emby 层走 remux 分支），完全绕过 HLS 转码。
+// 这是"秒开"的关键判定：一旦返回 true，应让客户端直接请求 /api/stream/:id/remux，
+// 完全绕过 HLS 转码。
 //
 // 判定规则：
 //  1. 文件必须是本地（非 STRM）
@@ -1004,7 +1004,7 @@ func (s *StreamService) guessContentType(url string) string {
 
 // RemuxStream 实时将 MKV 等格式 remux 为 fragmented MP4 流式输出（零转码，仅转封装）
 // 使用 FFmpeg -c copy 模式，CPU 占用极低，速度接近磁盘 I/O
-// 支持 ?start=秒数 参数实现快速 Seek 跳转（类似 Emby 的拖动进度条体验）
+// 支持 ?start=秒数 参数实现快速 Seek 跳转（类似主流播放器的拖动进度条体验）
 func (s *StreamService) RemuxStream(mediaID string, w http.ResponseWriter, r *http.Request) error {
 	media, err := s.mediaRepo.FindByID(mediaID)
 	if err != nil {

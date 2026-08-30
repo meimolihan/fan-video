@@ -109,6 +109,29 @@ func DeleteThumbnail(posterPath string) error {
 	return nil
 }
 
+// PurgeThumbnails 一键清空数据/清理缓存时删除全部海报缩略图（含其目录结构）。
+// 缩略图属可再生缓存，直接删除整个 /cache/thumbs 目录树（父目录一起移除，
+// 后续 EnsureThumbnail 会自动重建）；目录不存在时返回 0 而非报错。
+func PurgeThumbnails() (int, error) {
+	if _, err := os.Stat(thumbBaseDir); os.IsNotExist(err) {
+		return 0, nil
+	}
+	count := 0
+	_ = filepath.Walk(thumbBaseDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) == "."+thumbnailFormat {
+			count++
+		}
+		return nil
+	})
+	if err := os.RemoveAll(thumbBaseDir); err != nil {
+		return count, fmt.Errorf("清理海报缩略图目录失败: %w", err)
+	}
+	return count, nil
+}
+
 // GetThumbnailStats 统计全库缩略图覆盖情况
 func GetThumbnailStats(db *gorm.DB) (ThumbnailStats, error) {
 	var medias []model.Media

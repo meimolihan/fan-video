@@ -95,7 +95,6 @@ function isBackendRequest(request, url) {
   return (
     url.pathname === '/api' ||
     url.pathname.startsWith('/api/') ||
-    url.pathname.startsWith('/emby/') ||
     url.pathname.includes('/stream/') ||
     request.destination === '' ||
     accept.includes('application/json')

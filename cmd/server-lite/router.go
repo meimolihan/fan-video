@@ -188,7 +188,7 @@ func registerPublicRoutes(
 		data := gin.H{
 			"status":         "ok",
 			"version":        appVer,
-			"server_name":    cfg.Emby.ServerName,
+			"server_name":    cfg.App.ServerName,
 			"profile":        manifest.Profile,
 			"schema_version": manifest.SchemaVersion,
 			"capabilities":   manifest.Capabilities,

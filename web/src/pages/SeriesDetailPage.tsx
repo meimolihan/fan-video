@@ -49,7 +49,7 @@ function historyUpdatedAt(history?: WatchHistory) {
 }
 
 function episodeCode(episode: Media) {
-  return episode.episode_title || `#${String(episode.episode_num).padStart(2, '0')}`
+  return episode.episode_title || episode.title
 }
 
 function chooseSeriesPlayback(episodes: Media[], historyMap: Record<string, WatchHistory>): SeriesPlaybackChoice {

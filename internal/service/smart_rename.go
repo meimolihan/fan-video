@@ -374,6 +374,7 @@ func (s *SmartRenameService) buildItem(
 		item.MediaType = mediaInfo.MediaType
 		item.SeasonNum = mediaInfo.SeasonNum
 		item.EpisodeNum = mediaInfo.EpisodeNum
+		item.IsPersonal = mediaInfo.IsPersonal
 	}
 
 	// 兜底：未识别 Title 时使用文件名主体
@@ -686,6 +687,7 @@ func (s *SmartRenameService) renderTargetName(style, customTpl string, p ParsedF
 		IMDbID:     p.IMDbID,
 		SeasonNum:  item.SeasonNum,
 		EpisodeNum: item.EpisodeNum,
+		IsPersonal: item.IsPersonal,
 		Style:      style,
 		CustomTpl:  customTpl,
 	})

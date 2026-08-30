@@ -1,12 +1,15 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { SystemInfo, SystemSettings } from '@/types'
 import type { ScanProgressData, ScrapeProgressData, TranscodeProgressData, ScanPhaseData } from '@/hooks/useWebSocket'
 import {
   Activity,
   AlertTriangle,
+  ArchiveRestore,
   Check,
   Cpu,
   Clock,
+  DatabaseBackup,
+  Download,
   EyeOff,
   FolderCog,
   HardDrive,
@@ -16,17 +19,22 @@ import {
   MonitorPlay,
   Play,
   PlayCircle,
+  RefreshCw,
   Save,
   Scan,
   Server,
   Settings,
   ShieldAlert,
   Trash2,
+  Upload,
   UserX,
   X,
   Zap,
 } from 'lucide-react'
 import { adminApi } from '@/api'
+import { systemBackupApi } from '@/api/backup'
+import type { SystemBackupEntry } from '@/api/backup'
+import { bumpPosterVersion } from '@/stores/mediaRefresh'
 import { AdminPanel, AdminStatus } from '@/components/admin/AdminPrimitives'
 import { Button, Input, Modal, ModalBody, ModalFooter, ModalHeader, Tag } from '@/components/design-system'
 
@@ -42,6 +50,7 @@ interface DashboardTabProps {
   scanPhase: Record<string, ScanPhaseData>
   realtimeMessages: string[]
   switchTab: (tab: string) => void
+  onDataCleared: () => void
 }
 
 type MergeResult = {
@@ -68,6 +77,7 @@ export default function DashboardTab({
   scrapeProgress,
   transcodeProgress,
   scanPhase,
+  onDataCleared,
 }: DashboardTabProps) {
   const [sysSettingsSaving, setSysSettingsSaving] = useState(false)
   const [sysSettingsMsg, setSysSettingsMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -83,6 +93,17 @@ export default function DashboardTab({
     count: number
     series: { id: string; title: string; season_count: number; episode_count: number }[]
   }[] | null>(null)
+
+  const [backups, setBackups] = useState<SystemBackupEntry[] | null>(null)
+  const [backupsLoading, setBackupsLoading] = useState(false)
+  const [backupCreating, setBackupCreating] = useState(false)
+  const [backupMsg, setBackupMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
+  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false)
+  const [restoreFile, setRestoreFile] = useState<File | null>(null)
+  const [restoreTarget, setRestoreTarget] = useState<string | null>(null)
+  const [restoreConfirmText, setRestoreConfirmText] = useState('')
+  const [restoreLoading, setRestoreLoading] = useState(false)
+  const restoreFileInputRef = useRef<HTMLInputElement>(null)
 
   const hasActiveProgress = Object.keys(scanProgress).length > 0
     || Object.keys(scrapeProgress).length > 0
@@ -142,6 +163,10 @@ export default function DashboardTab({
       setClearResult(res.data.data)
       setClearDialogOpen(false)
       setClearConfirmText('')
+      // 数据已清空：刷新海报版本戳（浏览器/SW 立即丢弃旧封面与缩略图缓存），
+      // 并重新拉取设置/统计/媒体库数据，避免页面继续显示历史信息。
+      bumpPosterVersion()
+      onDataCleared()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '清空数据失败，请稍后重试'
       setClearResult({
@@ -197,6 +222,104 @@ export default function DashboardTab({
       setMergeResult({ type: 'error', message: msg })
     } finally {
       setMergeLoading(false)
+    }
+  }
+
+  const loadBackups = async () => {
+    setBackupsLoading(true)
+    setBackupMsg(null)
+    try {
+      const res = await systemBackupApi.list()
+      setBackups(res.data.data.backups)
+    } catch (err: unknown) {
+      setBackupMsg({ type: 'error', text: extractApiError(err, '读取备份列表失败，请稍后重试') })
+    } finally {
+      setBackupsLoading(false)
+    }
+  }
+
+  const handleCreateBackup = async () => {
+    setBackupCreating(true)
+    setBackupMsg(null)
+    try {
+      const res = await systemBackupApi.create()
+      setBackupMsg({ type: 'success', text: `备份创建成功：${res.data.data.name}` })
+      loadBackups()
+    } catch (err: unknown) {
+      setBackupMsg({ type: 'error', text: extractApiError(err, '创建备份失败，请稍后重试') })
+    } finally {
+      setBackupCreating(false)
+    }
+  }
+
+  const handleDownloadBackup = async (name: string) => {
+    try {
+      const res = await systemBackupApi.download(name)
+      const blob = res.data as Blob
+      if (!blob || blob.size === 0) throw new Error('下载内容为空')
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = name
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+    } catch (err: unknown) {
+      setBackupMsg({ type: 'error', text: extractApiError(err, '下载备份失败，请稍后重试') })
+    }
+  }
+
+  const handleDeleteBackup = async (name: string) => {
+    if (!window.confirm(`确定要删除备份文件 ${name} 吗？此操作不可恢复。`)) return
+    setBackupMsg(null)
+    try {
+      await systemBackupApi.remove(name)
+      setBackupMsg({ type: 'success', text: `已删除备份 ${name}` })
+      loadBackups()
+    } catch (err: unknown) {
+      setBackupMsg({ type: 'error', text: extractApiError(err, '删除备份失败，请稍后重试') })
+    }
+  }
+
+  const handleRestoreFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null
+    event.target.value = ''
+    if (!file) return
+    setRestoreFile(file)
+    setRestoreTarget(null)
+    setRestoreConfirmText('')
+    setRestoreDialogOpen(true)
+  }
+
+  const openBackupRestore = (name: string) => {
+    setRestoreTarget(name)
+    setRestoreFile(null)
+    setRestoreConfirmText('')
+    setRestoreDialogOpen(true)
+  }
+
+  const handleConfirmRestore = async () => {
+    const hasSource = !!restoreFile || !!restoreTarget
+    if (!hasSource || restoreConfirmText !== '确认还原') return
+    setRestoreLoading(true)
+    try {
+      const res = restoreFile
+        ? await systemBackupApi.restore(restoreFile, 'CONFIRM_RESTORE')
+        : await systemBackupApi.restoreLocal(restoreTarget as string, 'CONFIRM_RESTORE')
+      setRestoreDialogOpen(false)
+      setRestoreConfirmText('')
+      setRestoreFile(null)
+      setRestoreTarget(null)
+      setBackupMsg({
+        type: 'info',
+        text: `还原完成：${res.data.message}${res.data.data.restart_required ? '，重启服务后数据库生效。' : ''}`,
+      })
+      loadBackups()
+    } catch (err: unknown) {
+      setBackupMsg({ type: 'error', text: extractApiError(err, '还原失败，请稍后重试') })
+    } finally {
+      setRestoreLoading(false)
     }
   }
 
@@ -499,6 +622,123 @@ export default function DashboardTab({
       </AdminPanel>
 
       <AdminPanel
+        title="全量备份还原"
+        description="备份数据库、配置文件与业务资源目录到服务器本地，可下载到本地妥善保存，并随时通过上传备份文件还原。还原前会自动创建一份当前状态备份。"
+        icon={<DatabaseBackup size={18} />}
+        actions={(
+          <>
+            <input
+              ref={restoreFileInputRef}
+              type="file"
+              accept=".zip,application/zip"
+              className="hidden"
+              onChange={handleRestoreFileChange}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => restoreFileInputRef.current?.click()}
+              disabled={backupCreating || backupsLoading}
+            >
+              <Upload size={14} />
+              上传并还原
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={loadBackups}
+              disabled={backupsLoading || backupCreating}
+            >
+              {backupsLoading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              {backupsLoading ? '读取中...' : '刷新列表'}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleCreateBackup}
+              disabled={backupCreating || backupsLoading}
+            >
+              {backupCreating ? <Loader2 size={14} className="animate-spin" /> : <DatabaseBackup size={14} />}
+              {backupCreating ? '备份中...' : '立即备份'}
+            </Button>
+          </>
+        )}
+        bodyClassName="space-y-4"
+      >
+        {backupMsg && (
+          <AdminStatus tone={backupMsg.type === 'success' ? 'success' : backupMsg.type === 'error' ? 'danger' : 'active'}>
+            {backupMsg.type === 'success' ? <Check size={13} /> : backupMsg.type === 'error' ? <X size={13} /> : <ArchiveRestore size={13} />}
+            {backupMsg.text}
+          </AdminStatus>
+        )}
+
+        {backups && backups.length > 0 ? (
+          <div className="overflow-hidden rounded-[var(--nv-radius-control)] border border-[var(--nv-border-subtle)]">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[680px] text-sm">
+                <thead className="bg-[var(--nv-bg-surface-soft)] text-left text-xs text-[var(--nv-text-tertiary)]">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">备份文件</th>
+                    <th className="px-4 py-3 text-center font-semibold">版本</th>
+                    <th className="px-4 py-3 text-right font-semibold">大小</th>
+                    <th className="px-4 py-3 font-semibold">创建时间</th>
+                    <th className="px-4 py-3 text-right font-semibold">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {backups.map((backup) => (
+                    <tr key={backup.name} className="border-t border-[var(--nv-border-subtle)]">
+                      <td className="px-4 py-3 font-mono text-xs text-[var(--nv-text-primary)]">{backup.name}</td>
+                      <td className="px-4 py-3 text-center">
+                        <Tag tone="brand">{backup.version || '-'}</Tag>
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-xs text-[var(--nv-text-secondary)]">{formatBytes(backup.size)}</td>
+                      <td className="px-4 py-3 text-xs text-[var(--nv-text-tertiary)]">
+                        {new Date(backup.created_at).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleDownloadBackup(backup.name)}
+                          >
+                            <Download size={13} />
+                            下载
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => openBackupRestore(backup.name)}
+                            disabled={backupCreating}
+                          >
+                            <ArchiveRestore size={13} />
+                            还原
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => handleDeleteBackup(backup.name)}
+                          >
+                            <Trash2 size={13} />
+                            删除
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs leading-6 text-[var(--nv-text-tertiary)]">
+            {backups === null ? '点击「刷新列表」或「立即备份」加载备份记录。' : '暂无备份，点击「立即备份」创建第一份全量备份。'}
+          </p>
+        )}
+      </AdminPanel>
+
+      <AdminPanel
         title="危险区域"
         description="这些操作会永久改变服务器数据，请确认影响范围后再执行。"
         icon={<ShieldAlert size={18} />}
@@ -631,8 +871,101 @@ export default function DashboardTab({
           </Button>
         </ModalFooter>
       </Modal>
+
+      <Modal
+        open={restoreDialogOpen}
+        onClose={() => {
+          if (!restoreLoading) {
+            setRestoreDialogOpen(false)
+            setRestoreConfirmText('')
+          }
+        }}
+        size="sm"
+        closeOnBackdrop={!restoreLoading}
+        closeOnEscape={!restoreLoading}
+        ariaLabel="确认全量还原"
+      >
+        <ModalHeader
+          title="确认全量还原"
+          description="此操作会覆盖当前服务器数据，请确认影响范围后再执行。"
+          icon={<AlertTriangle size={18} className="text-[var(--nv-status-danger)]" />}
+          onClose={restoreLoading ? undefined : () => {
+            setRestoreDialogOpen(false)
+            setRestoreConfirmText('')
+          }}
+        />
+        <ModalBody className="space-y-4">
+          <div className="rounded-[var(--nv-radius-control)] border border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)] p-4 text-xs leading-6 text-[var(--nv-text-tertiary)]">
+            <p className="font-semibold text-[var(--nv-text-secondary)]">将执行：</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              <li>覆盖配置文件、数据文件与业务资源目录</li>
+              <li>数据库将替换为备份版本，<span className="text-[var(--nv-status-warning)]">重启服务后生效</span></li>
+              <li>还原前会自动创建一份当前状态备份（可在列表中下载）</li>
+            </ul>
+            {restoreFile && (
+              <p className="mt-3">
+                还原来源（上传）：<span className="font-mono text-[var(--nv-text-primary)]">{restoreFile.name}</span>
+              </p>
+            )}
+            {restoreTarget && (
+              <p className="mt-3">
+                还原来源（服务器备份）：<span className="font-mono text-[var(--nv-text-primary)]">{restoreTarget}</span>
+              </p>
+            )}
+            <p className="mt-3 font-semibold text-[var(--nv-status-danger)]">提示：请先下载重要数据备份到本地，再执行还原。</p>
+          </div>
+          <div>
+            <label htmlFor="restore-confirm" className="mb-2 block text-xs font-semibold text-[var(--nv-text-secondary)]">
+              请输入 <span className="text-[var(--nv-status-danger)]">确认还原</span> 以确认
+            </label>
+            <Input
+              id="restore-confirm"
+              value={restoreConfirmText}
+              onChange={(event) => setRestoreConfirmText(event.target.value)}
+              placeholder="确认还原"
+              disabled={restoreLoading}
+              invalid={restoreConfirmText.length > 0 && restoreConfirmText !== '确认还原'}
+              autoFocus
+            />
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setRestoreDialogOpen(false)
+              setRestoreConfirmText('')
+            }}
+            disabled={restoreLoading}
+          >
+            取消
+          </Button>
+          <Button
+            variant="danger"
+            onClick={handleConfirmRestore}
+            disabled={restoreConfirmText !== '确认还原' || restoreLoading}
+            loading={restoreLoading}
+          >
+            {restoreLoading ? <Loader2 size={14} className="animate-spin" /> : <ArchiveRestore size={14} />}
+            {restoreLoading ? '正在还原...' : '确认还原'}
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   )
+}
+
+function extractApiError(err: unknown, fallback: string): string {
+  const axiosErr = err as { response?: { data?: { error?: string } } }
+  return axiosErr?.response?.data?.error || (err instanceof Error ? err.message : fallback) || fallback
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  const value = bytes / Math.pow(1024, i)
+  return `${value >= 100 ? value.toFixed(0) : value.toFixed(1)} ${units[i]}`
 }
 
 function ProgressItem({

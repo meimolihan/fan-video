@@ -161,7 +161,6 @@ function EpisodeListCard({
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <Tag tone="brand">{formatEpisodeNo(episode)}</Tag>
           <h3 className={`min-w-0 flex-1 truncate text-sm font-medium ${status.watched ? 'text-[var(--nv-text-tertiary)]' : 'text-[var(--nv-text-primary)]'}`}>
             {episodeTitle(episode, seriesTitle)}
           </h3>
@@ -201,7 +200,7 @@ function EpisodeSlideCard({
       to={`/media/${episode.id}`}
       className="nv-episode-slide-card group w-[13.5rem] shrink-0 snap-start overflow-hidden rounded-[var(--nv-radius-card)] border border-[var(--nv-border-default)] bg-[var(--nv-bg-surface)] transition-[background-color,border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-[var(--nv-border-hover)] hover:shadow-[var(--nv-shadow-card-hover)]"
     >
-      <EpisodeThumb episode={episode} status={status} posterVersion={posterVersion} className="aspect-video w-full !rounded-none !border-0" showEpisodeLabel />
+      <EpisodeThumb episode={episode} status={status} posterVersion={posterVersion} className="aspect-video w-full !rounded-none !border-0" />
 
       <div className="p-3">
         <h3 className={`truncate text-sm font-medium ${status.watched ? 'text-[var(--nv-text-tertiary)]' : 'text-[var(--nv-text-primary)]'}`}>
@@ -223,13 +222,11 @@ function EpisodeThumb({
   status,
   posterVersion,
   className,
-  showEpisodeLabel = false,
 }: {
   episode: Media
   status: { watched: boolean; progress: number }
   posterVersion: number
   className: string
-  showEpisodeLabel?: boolean
 }) {
   return (
     <MediaArtwork
@@ -247,8 +244,6 @@ function EpisodeThumb({
           <Play size={16} fill="currentColor" className="ml-0.5" aria-hidden="true" />
         </div>
       </div>
-
-      {showEpisodeLabel && <div className="absolute left-2 top-2 z-30"><Tag tone="brand">{pad(episode.episode_num)}</Tag></div>}
 
       {status.watched && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/45">
@@ -274,20 +269,11 @@ function getWatchStatus(historyRecord?: WatchHistory) {
   }
 }
 
-// 平铺编号：不再区分季与集，只保留顺序号（如 03、12）。
-function formatEpisodeNo(episode: Media) {
-  return `#${pad(episode.episode_num)}`
-}
-
 function episodeTitle(episode: Media, seriesTitle: string) {
-  return episode.episode_title || (episode.episode_num > 0 ? `#${pad(episode.episode_num)}` : seriesTitle)
+  return episode.episode_title || episode.title || seriesTitle
 }
 
 function formatDuration(seconds: number) {
   if (!seconds) return ''
   return `${Math.floor(seconds / 60)}分钟`
-}
-
-function pad(value: number) {
-  return String(value || 0).padStart(2, '0')
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/fan-video/fan-video/internal/model"
+	"github.com/fan-video/fan-video/internal/service"
 )
 
 // ==================== 批量操作 ====================
@@ -604,6 +605,9 @@ func (h *AdminHandler) ClearAllData(c *gin.Context) {
 		{name: "视频高光", model: &model.VideoHighlight{}},
 		{name: "封面候选", model: &model.CoverCandidate{}},
 
+		// 首页手动精选轮播
+		{name: "首页轮播精选", model: &model.HomeFeatured{}},
+
 		// 其他
 		{name: "用户权限", model: &model.UserPermission{}},
 
@@ -632,6 +636,18 @@ func (h *AdminHandler) ClearAllData(c *gin.Context) {
 		}
 		results = append(results, result)
 	}
+
+	// 删除磁盘上的海报缩略图缓存（DB 媒体记录已在上方清空，但缩略图文件需要单独清理）
+	thumbsCleared, thumbErr := service.PurgeThumbnails()
+	thumbResult := ClearTableResult{Table: "海报缩略图", Cleared: int64(thumbsCleared)}
+	if thumbErr != nil {
+		thumbResult.Status = "error"
+		thumbResult.Message = thumbErr.Error()
+		h.logger.Errorf("清理海报缩略图失败: %v", thumbErr)
+	} else {
+		thumbResult.Status = "success"
+	}
+	results = append(results, thumbResult)
 
 	// 清空系统设置（全部删除）
 	sysResult := ClearTableResult{Table: "系统设置"}

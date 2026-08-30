@@ -236,6 +236,22 @@ export default function AdminPage() {
     if (window.location.hash !== nextHash) window.location.hash = tab
   }, [])
 
+  // 清空数据等破坏性操作完成后，重新拉取面板数据，避免「设置/系统状态」继续显示历史信息。
+  const refreshAll = useCallback(async () => {
+    const [systemResult, libraryResult, userResult, settingsResult] = await Promise.allSettled([
+      adminApi.systemInfo(),
+      libraryApi.list(),
+      adminApi.listUsers(),
+      adminApi.getSystemSettings(),
+    ])
+    if (systemResult.status === 'fulfilled') setSystemInfo(systemResult.value.data.data)
+    if (libraryResult.status === 'fulfilled') setLibraries(libraryResult.value.data.data || [])
+    if (userResult.status === 'fulfilled') setUsers(userResult.value.data.data || [])
+    if (settingsResult.status === 'fulfilled' && settingsResult.value.data.data) {
+      setSysSettings(settingsResult.value.data.data)
+    }
+  }, [])
+
   useEffect(() => {
     const handleHashChange = () => {
       setActiveTab(resolveAdminTab(window.location.hash))
@@ -510,6 +526,7 @@ export default function AdminPage() {
             scanPhase={scanPhase}
             realtimeMessages={realtimeMessages}
             switchTab={(tab) => switchTab(tab as TabId)}
+            onDataCleared={() => void refreshAll()}
           />
         )}
 

@@ -361,13 +361,6 @@ export default function FileListView({
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="truncate font-medium text-[var(--nv-text-primary)]">{file.title}</span>
-                              {file.media_type === 'episode' && file.episode_num > 0 && (
-                                <Tag className="shrink-0 text-[10px]">
-                                  {file.season_num > 0
-                                    ? `S${String(file.season_num).padStart(2, '0')}E${String(file.episode_num).padStart(2, '0')}`
-                                    : `EP${String(file.episode_num).padStart(2, '0')}`}
-                                </Tag>
-                              )}
                             </div>
                             {file.media_type === 'episode' && file.episode_title ? (
                               <div className="mt-0.5 truncate text-xs text-[var(--nv-text-secondary)]">{file.episode_title}</div>
@@ -490,13 +483,6 @@ export default function FileListView({
                 <div className="px-0.5 pt-2.5">
                   <div className="flex min-w-0 items-center gap-1.5">
                     <div className="truncate text-sm font-medium text-[var(--nv-text-primary)]">{file.title}</div>
-                    {file.media_type === 'episode' && file.episode_num > 0 && (
-                      <span className="shrink-0 text-[10px] font-medium text-[var(--nv-text-tertiary)]">
-                        {file.season_num > 0
-                          ? `S${String(file.season_num).padStart(2, '0')}E${String(file.episode_num).padStart(2, '0')}`
-                          : `EP${String(file.episode_num).padStart(2, '0')}`}
-                      </span>
-                    )}
                   </div>
                   {file.media_type === 'episode' && file.episode_title && (
                     <div className="mt-0.5 truncate text-xs text-[var(--nv-text-secondary)]">{file.episode_title}</div>

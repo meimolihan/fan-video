@@ -12,6 +12,8 @@ services:
       volumes:
          - ./data:/data
          - ./cache:/cache
+         # 全量备份默认存储在 <data_dir>/backups（即挂载的 ./data/backups），
+         # 随数据卷持久化，重建容器不会丢失。如需独立位置可改为 ./backups:/data/backups
          - /vol2/1000/mydisk/Video:/media:ro
       devices:
          - /dev/dri:/dev/dri

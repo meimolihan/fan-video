@@ -74,6 +74,14 @@ func registerAdminAPI(r *gin.Engine, cfg *config.Config, handlers *handler.Handl
 	admin.POST("/system/clear-data", handlers.Admin.ClearAllData)
 	admin.POST("/system/cleanup-residuals", handlers.Admin.CleanupResidualData)
 
+	// 全量备份 / 还原
+	admin.GET("/backups", handlers.Admin.ListBackups)
+	admin.POST("/backups", handlers.Admin.CreateBackup)
+	admin.GET("/backups/:name/download", handlers.Admin.DownloadBackup)
+	admin.DELETE("/backups/:name", handlers.Admin.DeleteBackup)
+	admin.POST("/backups/:name/restore", handlers.Admin.RestoreBackupLocal)
+	admin.POST("/backups/restore", handlers.Admin.RestoreBackup)
+
 	admin.GET("/stats/:userId", handlers.Stats.GetUserStatsAdmin)
 
 	admin.GET("/files", handlers.FileManager.ListFiles)
@@ -99,9 +107,6 @@ func registerAdminAPI(r *gin.Engine, cfg *config.Config, handlers *handler.Handl
 
 	admin.POST("/batch/metadata/media", handlers.BatchMetadata.BatchUpdateMedia)
 	admin.POST("/batch/metadata/series", handlers.BatchMetadata.BatchUpdateSeries)
-	admin.POST("/import/test", handlers.BatchMetadata.TestImportConnection)
-	admin.POST("/import/libraries", handlers.BatchMetadata.FetchImportLibraries)
-	admin.POST("/import/external", handlers.BatchMetadata.ImportFromExternal)
 	admin.GET("/export/library", handlers.BatchMetadata.ExportLibrary)
 	admin.POST("/import/data", handlers.BatchMetadata.ImportFromExportData)
 

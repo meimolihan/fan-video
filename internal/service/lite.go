@@ -11,9 +11,9 @@ import (
 // NewLiteServices creates the NAS-oriented server profile.
 //
 // The lite profile keeps the complete movie/series experience while avoiding
-// startup of unrelated subsystems such as music, photos, federation, plugins,
-// preprocessing workers and Emby compatibility. Metadata artwork is resolved
-// locally only (NFO + same-name images); no network scraping is performed.
+// startup of unrelated subsystems such as music, photos, federation, plugins
+// and preprocessing workers. Metadata artwork is resolved locally only
+// (NFO + same-name images); no network scraping is performed.
 func NewLiteServices(repos *repository.Repositories, cfg *config.Config, logger *zap.SugaredLogger) *Services {
 	mediaExecution, err := NewMediaExecutionService(repos.DB(), cfg, logger)
 	if err != nil {

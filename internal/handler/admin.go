@@ -35,6 +35,7 @@ type AdminHandler struct {
 	cfg               *config.Config
 	logger            *zap.SugaredLogger
 	db                *gorm.DB
+	backupService     *service.SystemBackupService
 }
 
 // ==================== 用户管理 ====================

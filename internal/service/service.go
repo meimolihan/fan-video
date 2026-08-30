@@ -3,7 +3,7 @@ package service
 // Services 聚合所有服务（fan-video 精简版）
 //
 // 注意：仅保留 Lite/NAS 发行版实际构造的服务字段。全功能轨
-//（Cast/Danmaku/Notification/Webhook/EmbyCompat/UserProfile/OfflineDownload/
+//（Cast/Danmaku/Notification/Webhook/UserProfile/OfflineDownload/
 // ABR/Plugin/Music/Photo/Federation/Preprocess/SubtitlePreprocess/GPUMonitor/
 // SmartRename/ScanPostProcess/LazyIngest）在 Lite 路径中从不赋值、也从不被读取，
 // 属于不可达死代码，已连同其 service 源码一并移除。

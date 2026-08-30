@@ -215,6 +215,9 @@ type Series struct {
 	FolderPath   string  `json:"folder_path" gorm:"uniqueIndex;type:text;not null"` // 剧集根目录路径
 	SeasonCount  int     `json:"season_count"`                                      // 季数
 	EpisodeCount int     `json:"episode_count"`                                     // 总集数
+	// 个人视频合集（如人名/日期命名的家庭视频）：不对外生成 SxxExx 季集标签，
+	// 季集编号仅用于内部排序与续播定位；分类剧集逻辑不受影响。
+	IsPersonal bool `json:"is_personal" gorm:"default:false"`
 	// V2 扩展字段
 	TMDbID    int    `json:"tmdb_id" gorm:"index"`
 	IMDbID    string `json:"imdb_id" gorm:"index;type:text"` // IMDB ID (tt开头)
@@ -336,6 +339,9 @@ type Media struct {
 	SeasonNum    int    `json:"season_num"`
 	EpisodeNum   int    `json:"episode_num"`
 	EpisodeTitle string `json:"episode_title" gorm:"type:text"` // 单集标题（如有）
+	// 个人视频（如人名/日期命名的家庭视频片段）：不对外生成 SxxExx 季集标签，
+	// 季集编号仅用于内部排序与续播定位；分类剧集逻辑不受影响。
+	IsPersonal bool `json:"is_personal" gorm:"default:false"`
 	// 时间戳
 	CreatedAt time.Time      `json:"created_at" gorm:"index"`
 	UpdatedAt time.Time      `json:"updated_at"`
@@ -346,21 +352,18 @@ type Media struct {
 	Collection *MovieCollection `json:"collection,omitempty" gorm:"foreignKey:CollectionID"`
 }
 
-// DisplayTitle 返回带集数信息的显示标题
-// 对于剧集类型，格式为 "标题 S01E02" 或 "标题 S01E02 - 单集标题"
+// DisplayTitle 返回展示标题。
+// [个人影视库] 分集一律以真实文件名为准，不再叠加 SxxExx 季集编号；
+// 季集编号仅用于内部排序与续播定位（分类剧集逻辑不受影响）。
 func (m *Media) DisplayTitle() string {
-	if m.MediaType == "episode" && m.EpisodeNum > 0 {
-		title := fmt.Sprintf("%s S%02dE%02d", m.Title, m.SeasonNum, m.EpisodeNum)
-		if m.EpisodeTitle != "" {
-			title += " - " + m.EpisodeTitle
-		}
-		return title
+	if m.MediaType == "episode" && m.EpisodeTitle != "" && m.EpisodeTitle != m.Title {
+		return m.Title + " - " + m.EpisodeTitle
 	}
 	return m.Title
 }
 
 // DescriptiveTitle 返回带辨识信息的展示标题，主要用于列表展示场景。
-//   - 剧集：与 DisplayTitle 等价（保持 SxxExx 集数信息）
+//   - 剧集：与 DisplayTitle 等价（以真实文件名为准，不含 SxxExx）
 //   - 电影：Title 之后追加 "(Year)" 与 " · OrigTitle"（仅当字段非空且与 Title 不同时）
 //
 // 与 DisplayTitle 区分开是为了避免影响那些只想看主标题的场景（如播放器顶栏）。
@@ -955,6 +958,7 @@ func ensureSQLiteColumns(db *gorm.DB) {
 			{Column: "tags", DDL: "ALTER TABLE `media` ADD COLUMN `tags` text DEFAULT ''"},
 			{Column: "website", DDL: "ALTER TABLE `media` ADD COLUMN `website` text DEFAULT ''"},
 			{Column: "release_date", DDL: "ALTER TABLE `media` ADD COLUMN `release_date` text DEFAULT ''"},
+			{Column: "is_personal", DDL: "ALTER TABLE `media` ADD COLUMN `is_personal` numeric DEFAULT 0"},
 		},
 		"users": {
 			{Column: "nickname", DDL: "ALTER TABLE `users` ADD COLUMN `nickname` text DEFAULT ''"},
@@ -974,6 +978,7 @@ func ensureSQLiteColumns(db *gorm.DB) {
 			{Column: "language", DDL: "ALTER TABLE `series` ADD COLUMN `language` text DEFAULT ''"},
 			{Column: "studio", DDL: "ALTER TABLE `series` ADD COLUMN `studio` text DEFAULT ''"},
 			{Column: "tagline", DDL: "ALTER TABLE `series` ADD COLUMN `tagline` text DEFAULT ''"},
+			{Column: "is_personal", DDL: "ALTER TABLE `series` ADD COLUMN `is_personal` numeric DEFAULT 0"},
 		},
 		"watch_histories": {
 			{Column: "profile_id", DDL: "ALTER TABLE `watch_histories` ADD COLUMN `profile_id` text DEFAULT ''"},

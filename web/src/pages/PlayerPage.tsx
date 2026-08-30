@@ -201,16 +201,16 @@ export default function PlayerPage() {
   })
   const browserPlaybackResetKey = `${id}:${isPreprocessed ? playInfo.preprocessed_url : 'planned'}:${webcodecsFailed ? 'wc-fallback' : 'initial'}:${highlightMode ? `${clipStart}-${clipEnd}` : 'full'}`
   // 个人影视库：分集标题已是真实文件名，直接展示「剧名 - 文件名」，
-  // 不再叠加 SxxEyy 编号前缀（编号仅在后端无标题时兜底显示）
+  // 不再叠加 SxxEyy 编号前缀。
   const playerTitle = media.media_type === 'episode'
     ? (media.episode_title
         ? `${media.series?.title || ''}${media.series?.title && media.episode_title ? ' - ' : ''}${media.episode_title}`
-        : `${media.series?.title || media.title} #${String(media.episode_num).padStart(2, '0')}`)
+        : `${media.series?.title || media.title}`)
     : media.title
   const nextTitle = nextEpisode
     ? (nextEpisode.episode_title
         ? `${nextEpisode.series?.title ? `${nextEpisode.series.title} - ` : ''}${nextEpisode.episode_title}`
-        : `#${String(nextEpisode.episode_num).padStart(2, '0')}`)
+        : undefined)
     : undefined
 
   const handleBack = () => {

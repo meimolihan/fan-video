@@ -76,7 +76,6 @@ function legacyManifest(features: Record<string, unknown> = {}, profileHint?: st
       alist: capability('alist'),
       s3: capability('s3'),
       preprocess: capability('preprocess', profile === 'full'),
-      emby_compat: capability('emby_compat', profile === 'full'),
       cast: capability('cast', profile === 'full'),
       music: capability('music', profile === 'full'),
       photos: capability('photos', profile === 'full'),

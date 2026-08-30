@@ -221,6 +221,8 @@ export interface Media {
   season_num: number
   episode_num: number
   episode_title: string
+  // 个人视频片段（日期/人名命名）：前端不渲染 SxxExx / #NN 等派生季集标签
+  is_personal?: boolean
   created_at: string
   series?: Series
 }
@@ -240,6 +242,8 @@ export interface Series {
   folder_path: string
   season_count: number
   episode_count: number
+  // 个人视频合集：前端不渲染 SxxExx / #NN 等派生季集标签
+  is_personal?: boolean
   // V2 扩展字段
   tmdb_id: number
   douban_id: string
@@ -1332,13 +1336,6 @@ export interface BatchUpdateResult {
 }
 
 // ==================== 媒体库导入/导出 ====================
-export interface ImportSource {
-  type: 'emby' | 'jellyfin' | 'nfo'
-  server_url: string
-  api_key: string
-  user_id?: string
-}
-
 export interface ImportResult {
   total: number
   imported: number
@@ -1380,12 +1377,6 @@ export interface ExportSeries {
   genres: string
   folder_path: string
   tmdb_id?: number
-}
-
-export interface EmbyLibrary {
-  Id: string
-  Name: string
-  CollectionType: string
 }
 
 // ==================== V3: AI 场景识别与内容理解 ====================

@@ -139,7 +139,7 @@ func (s *ScannerService) DebugScanPlan(libraryPath string, kind string) []string
 			add("     收集到 %d 个分集:", len(eps))
 			for _, ep := range eps {
 				rel, _ := filepath.Rel(path, ep.FilePath)
-				add("       · %-40s S%02d E%02d", rel, ep.SeasonNum, ep.EpisodeNum)
+				add("       · %-40s", rel)
 			}
 		}
 

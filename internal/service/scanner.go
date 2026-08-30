@@ -2212,6 +2212,9 @@ type EpisodeInfo struct {
 	AirDate       string // 日期格式集号：2024-01-15（脱口秀/日播剧）
 	FilePath      string
 	FileInfo      os.FileInfo
+	// 个人视频标记：collectEpisodes 在做「日期命名归一化」时置位，
+	// 表示该片段属于个人视频（不对外生成 SxxExx 季集标签）。
+	IsPersonal bool
 }
 
 // scanTVShowLibrary 扫描剧集库（基于文件夹的合集识别 + 根目录散落文件智能归类）
@@ -2482,13 +2485,13 @@ func (s *ScannerService) scanTVShowLibrary(library *model.Library) (int, error) 
 			seasonSet[ep.SeasonNum] = true
 			newCount++
 
-			s.logger.Debugf("发现散落剧集: %s S%02dE%02d [%s]", actualSeriesName, ep.SeasonNum, ep.EpisodeNum, media.Resolution)
+			s.logger.Debugf("发现散落剧集: %s [%s]", filepath.Base(ep.FilePath), media.Resolution)
 			s.broadcastScanEvent(EventScanProgress, &ScanProgressData{
 				LibraryID:   library.ID,
 				LibraryName: library.Name,
 				Phase:       "scanning",
 				NewFound:    newCount,
-				Message:     fmt.Sprintf("发现: %s S%02dE%02d", actualSeriesName, ep.SeasonNum, ep.EpisodeNum),
+				Message:     fmt.Sprintf("发现: %s", filepath.Base(ep.FilePath)),
 			})
 		}
 
@@ -2686,6 +2689,8 @@ func (s *ScannerService) scanMultiSeasonSeries(library *model.Library, seriesTit
 
 	var totalNewCount int
 	seasonSet := make(map[int]bool)
+	// [个人影视库] 多季目录中任一带日期归一化的个人视频，合集整体打标
+	isPersonalSeries := false
 
 	// 扫描每个季目录
 	for _, f := range folders {
@@ -2693,6 +2698,9 @@ func (s *ScannerService) scanMultiSeasonSeries(library *model.Library, seriesTit
 		if len(episodes) == 0 {
 			s.logger.Debugf("多季合集目录无视频文件: %s", f.path)
 			continue
+		}
+		if episodes[0].IsPersonal {
+			isPersonalSeries = true
 		}
 
 		// 如果目录名带有明确的季号，且剧集文件未识别出季号，则使用目录季号
@@ -2797,6 +2805,11 @@ func (s *ScannerService) scanMultiSeasonSeries(library *model.Library, seriesTit
 					existing.EpisodeTitle = displayTitle
 					needUpdate = true
 				}
+				// [个人影视库] 旧数据重扫时补打个人视频标记，保证 SxxExx 展示抑制生效
+				if ep.IsPersonal && !existing.IsPersonal {
+					existing.IsPersonal = true
+					needUpdate = true
+				}
 				if existing.SeasonNum != seasonNum {
 					existing.SeasonNum = seasonNum
 					needUpdate = true
@@ -2842,6 +2855,7 @@ func (s *ScannerService) scanMultiSeasonSeries(library *model.Library, seriesTit
 				SeasonNum:    seasonNum,
 				EpisodeNum:   ep.EpisodeNum,
 				EpisodeTitle: strings.TrimSuffix(filepath.Base(ep.FilePath), filepath.Ext(ep.FilePath)),
+				IsPersonal:   ep.IsPersonal,
 			}
 
 			s.probeMediaInfo(media)
@@ -2856,14 +2870,14 @@ func (s *ScannerService) scanMultiSeasonSeries(library *model.Library, seriesTit
 			seasonSet[seasonNum] = true
 			totalNewCount++
 
-			s.logger.Debugf("发现剧集(多季): %s S%02dE%02d [%s | %s]",
-				seriesTitle, seasonNum, ep.EpisodeNum, media.Resolution, media.VideoCodec)
+			s.logger.Debugf("发现剧集(多季): %s [%s | %s]",
+				filepath.Base(ep.FilePath), media.Resolution, media.VideoCodec)
 			s.broadcastScanEvent(EventScanProgress, &ScanProgressData{
 				LibraryID:   library.ID,
 				LibraryName: library.Name,
 				Phase:       "scanning",
 				NewFound:    totalNewCount,
-				Message:     fmt.Sprintf("发现: %s S%02dE%02d", seriesTitle, seasonNum, ep.EpisodeNum),
+				Message:     fmt.Sprintf("发现: %s", filepath.Base(ep.FilePath)),
 			})
 		}
 	}
@@ -2872,6 +2886,9 @@ func (s *ScannerService) scanMultiSeasonSeries(library *model.Library, seriesTit
 	allEpisodes, _ := s.mediaRepo.ListBySeriesID(series.ID)
 	series.EpisodeCount = len(allEpisodes)
 	series.SeasonCount = len(seasonSet)
+	if isPersonalSeries {
+		series.IsPersonal = true
+	}
 	s.seriesRepo.Update(series)
 
 	if totalNewCount > 0 {
@@ -2990,6 +3007,11 @@ func (s *ScannerService) scanSeriesFolder(library *model.Library, folderPath, se
 				existing.EpisodeTitle = displayTitle
 				needUpdate = true
 			}
+			// [个人影视库] 旧数据重扫时补打个人视频标记，保证 SxxExx 展示抑制生效
+			if ep.IsPersonal && !existing.IsPersonal {
+				existing.IsPersonal = true
+				needUpdate = true
+			}
 			if existing.SeasonNum != ep.SeasonNum {
 				existing.SeasonNum = ep.SeasonNum
 				needUpdate = true
@@ -3039,6 +3061,7 @@ func (s *ScannerService) scanSeriesFolder(library *model.Library, folderPath, se
 			SeasonNum:    ep.SeasonNum,
 			EpisodeNum:   ep.EpisodeNum,
 			EpisodeTitle: displayTitle,
+			IsPersonal:   ep.IsPersonal,
 		}
 
 		s.probeMediaInfo(media)
@@ -3053,13 +3076,13 @@ func (s *ScannerService) scanSeriesFolder(library *model.Library, folderPath, se
 		seasonSet[ep.SeasonNum] = true
 		newCount++
 
-		s.logger.Debugf("发现剧集: %s S%02dE%02d [%s | %s]", seriesTitle, ep.SeasonNum, ep.EpisodeNum, media.Resolution, media.VideoCodec)
+		s.logger.Debugf("发现剧集: %s [%s | %s]", filepath.Base(ep.FilePath), media.Resolution, media.VideoCodec)
 		s.broadcastScanEvent(EventScanProgress, &ScanProgressData{
 			LibraryID:   library.ID,
 			LibraryName: library.Name,
 			Phase:       "scanning",
 			NewFound:    newCount,
-			Message:     fmt.Sprintf("发现: %s S%02dE%02d", seriesTitle, ep.SeasonNum, ep.EpisodeNum),
+			Message:     fmt.Sprintf("发现: %s", displayTitle),
 		})
 	}
 
@@ -3067,6 +3090,10 @@ func (s *ScannerService) scanSeriesFolder(library *model.Library, folderPath, se
 	allEpisodes, _ := s.mediaRepo.ListBySeriesID(series.ID)
 	series.EpisodeCount = len(allEpisodes)
 	series.SeasonCount = len(seasonSet)
+	// [个人影视库] 个人视频合集：同目录任一文件被归一化为个人视频，则整个合集同步标记
+	if len(episodes) > 0 && episodes[0].IsPersonal {
+		series.IsPersonal = true
+	}
 	s.seriesRepo.Update(series)
 
 	s.logger.Infof("剧集扫描完成: %s, 新增 %d 集, 共 %d 季 %d 集",
@@ -3138,7 +3165,10 @@ func (s *ScannerService) collectEpisodes(folderPath string) []EpisodeInfo {
 		}
 	}
 	majorityDated := len(episodes) > 0 && datedCount*2 >= len(episodes) && !hasExplicitNumbering
-	if majorityDated {
+	// [个人影视库] 目录本身被判为「日期命名的个人视频」归组（如人名目录下出现日期视频）
+	// 时，即使日期文件不是绝对多数，也按个人视频处理：时间顺序编号、不打 SxxExx。
+	personalFolder := len(episodes) > 0 && !hasExplicitNumbering && s.hasDatedVideo(folderPath)
+	if majorityDated || personalFolder {
 		sort.SliceStable(episodes, func(i, j int) bool {
 			di, dj := episodes[i].AirDate != "", episodes[j].AirDate != ""
 			if di != dj {
@@ -3152,6 +3182,7 @@ func (s *ScannerService) collectEpisodes(folderPath string) []EpisodeInfo {
 		for i := range episodes {
 			episodes[i].SeasonNum = 1
 			episodes[i].EpisodeNum = i + 1
+			episodes[i].IsPersonal = true
 			if episodes[i].AirDate != "" {
 				episodes[i].EpisodeTitle = episodes[i].AirDate
 			}

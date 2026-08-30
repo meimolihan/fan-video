@@ -44,6 +44,9 @@ type StandardNameInput struct {
 	SeasonNum int
 	// EpisodeNum 剧集集号；<=0 表示未识别（仅剧集场景需要）
 	EpisodeNum int
+	// IsPersonal 个人视频片段（日期/人名命名的家庭视频）：
+	// 目标文件名不渲染 SxxExx 季集标签，但保留 Season 目录结构以维持分类。
+	IsPersonal bool
 	// Style "jellyfin" / "plex"，默认 jellyfin
 	Style string
 	// CustomTpl 自定义文件名模板（仅电影；为空则用默认）
@@ -162,9 +165,18 @@ func BuildStandardNames(in StandardNameInput) StandardNames {
 
 		// 3) 文件名（集号未知时不渲染文件名 → 调用方应将其归入 _unsorted）
 		if in.EpisodeNum > 0 {
-			base := fmt.Sprintf("%s S%02dE%02d", title, seasonNum, in.EpisodeNum)
-			if in.Year > 0 {
-				base = fmt.Sprintf("%s (%d) S%02dE%02d", title, in.Year, seasonNum, in.EpisodeNum)
+			var base string
+			if in.IsPersonal {
+				// [个人影视库] 个人视频不渲染 SxxExx，保留原标题 + 年份标签
+				base = title
+				if in.Year > 0 {
+					base = fmt.Sprintf("%s (%d)", title, in.Year)
+				}
+			} else {
+				base = fmt.Sprintf("%s S%02dE%02d", title, seasonNum, in.EpisodeNum)
+				if in.Year > 0 {
+					base = fmt.Sprintf("%s (%d) S%02dE%02d", title, in.Year, seasonNum, in.EpisodeNum)
+				}
 			}
 			base += renderIDTag(style, in.TMDbID, in.IMDbID)
 			out.FileName = collapseWhitespace(base) + ext

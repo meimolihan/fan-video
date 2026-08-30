@@ -18,7 +18,7 @@ const entries = [
 
 const capabilityLabels: Record<string, string> = {
   ai: 'AI', webdav: 'WebDAV', alist: 'Alist', s3: 'S3', preprocess: '预处理',
-  emby_compat: 'Emby 兼容', cast: '投屏', music: '音乐', photos: '相册', federation: '联邦', plugins: '插件',
+  cast: '投屏', music: '音乐', photos: '相册', federation: '联邦', plugins: '插件',
 }
 
 export default function MyPage() {

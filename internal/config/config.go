@@ -37,6 +37,8 @@ type SecretsConfig struct {
 
 // AppConfig 应用运行环境配置
 type AppConfig struct {
+	// 服务器对外显示名称（留空则使用主机名或 "fan-video"）
+	ServerName string `mapstructure:"server_name"`
 	// 服务器监听端口，默认 8080
 	Port int `mapstructure:"port"`
 	// 调试模式，默认 false
@@ -54,6 +56,8 @@ type AppConfig struct {
 	// VAAPI 设备路径，如 /dev/dri/renderD128
 	// 保留该字段作为 Linux Intel 核显的逃生门，不在 UI 暴露。
 	VAAPIDevice string `mapstructure:"vaapi_device"`
+	// 全量备份存储目录，默认 <data_dir>/backups（Docker 下随 /data 卷持久化）
+	BackupDir string `mapstructure:"backup_dir"`
 	// 允许的跨域来源列表
 	CORSOrigins []string `mapstructure:"cors_origins"`
 }
@@ -140,30 +144,6 @@ type RegistrationConfig struct {
 	Enabled bool `mapstructure:"enabled"`
 	// 邀请码（设置后注册时需提供正确的邀请码）
 	InviteCode string `mapstructure:"invite_code"`
-}
-
-// EmbyConfig Emby/Jellyfin 兼容层配置（供移动端/桌面 Emby/Infuse/Jellyfin 客户端登录与播放）
-type EmbyConfig struct {
-	// 服务器对外显示名称（留空则使用主机名或 "fan-video"）
-	ServerName string `mapstructure:"server_name"`
-	// 是否启用 UDP 7359 局域网服务器自动发现（Emby / Jellyfin 标准协议）
-	// 开启后同网段的客户端会在"添加服务器"时自动发现本机
-	EnableAutoDiscovery bool `mapstructure:"enable_auto_discovery"`
-	// UDP 自动发现监听端口，默认 7359（Emby/Jellyfin 标准）
-	AutoDiscoveryPort int `mapstructure:"auto_discovery_port"`
-	// 是否在 /Users/Public 暴露用户列表（登录页展示用户头像点击登录）
-	// 默认 false 以保护用户名隐私；开启更适合家庭共享场景
-	PublicUserListEnabled bool `mapstructure:"public_user_list_enabled"`
-	// 是否启用 WebSocket（/embywebsocket），消除客户端连接失败告警
-	EnableWebSocket bool `mapstructure:"enable_websocket"`
-	// 登录品牌自定义文案（Jellyfin 客户端 /Branding/Configuration 使用）
-	// 登录页顶部欢迎语
-	LoginDisclaimer string `mapstructure:"login_disclaimer"`
-	// 自定义 CSS（Jellyfin Web 客户端 /Branding/Css）
-	CustomCss string `mapstructure:"custom_css"`
-	// 是否允许 query 参数登录（默认关闭，更安全）
-	// 某些旧版客户端（如 EmbyCon）可能需要 query 登录
-	AllowQueryLogin bool `mapstructure:"allow_query_login"`
 }
 
 // StorageConfig 存储配置（支持本地、WebDAV、网盘等多种存储后端）
@@ -309,7 +289,6 @@ type Config struct {
 	Subtitle     SubtitleConfig     `mapstructure:"subtitle"`
 	Registration RegistrationConfig `mapstructure:"registration"`
 	Storage      StorageConfig      `mapstructure:"storage"`
-	Emby         EmbyConfig         `mapstructure:"emby"`
 	STRM         STRMConfig         `mapstructure:"strm"`
 
 	// ==================== 兼容性字段（向后兼容旧的扁平配置） ====================
@@ -373,7 +352,7 @@ func Load() (*Config, error) {
 	cfg.migrateFromFlatConfig()
 
 	// 5. 确保目录存在
-	for _, dir := range []string{cfg.App.DataDir, cfg.Cache.CacheDir} {
+	for _, dir := range []string{cfg.App.DataDir, cfg.Cache.CacheDir, cfg.BackupDir()} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return nil, fmt.Errorf("创建目录 %s 失败: %w", dir, err)
 		}
@@ -428,6 +407,7 @@ func setDefaults() {
 	viper.SetDefault("secrets.jwt_secret", "fan-video-secret-change-me")
 
 	// ---- 应用 ----
+	viper.SetDefault("app.server_name", "")
 	viper.SetDefault("app.port", 8080)
 	viper.SetDefault("app.debug", false)
 	viper.SetDefault("app.env", "production")
@@ -436,6 +416,7 @@ func setDefaults() {
 	viper.SetDefault("app.ffmpeg_path", "ffmpeg")
 	viper.SetDefault("app.ffprobe_path", "ffprobe")
 	viper.SetDefault("app.vaapi_device", "/dev/dri/renderD128")
+	viper.SetDefault("app.backup_dir", "")
 	viper.SetDefault("app.cors_origins", []string{})
 
 	// ---- 日志 ----
@@ -479,16 +460,6 @@ func setDefaults() {
 	// ---- 注册控制 ----
 	viper.SetDefault("registration.enabled", false)
 	viper.SetDefault("registration.invite_code", "")
-
-	// ---- Emby 兼容层 ----
-	viper.SetDefault("emby.server_name", "")
-	viper.SetDefault("emby.enable_auto_discovery", true)
-	viper.SetDefault("emby.auto_discovery_port", 7359)
-	viper.SetDefault("emby.public_user_list_enabled", false)
-	viper.SetDefault("emby.enable_websocket", true)
-	viper.SetDefault("emby.login_disclaimer", "")
-	viper.SetDefault("emby.custom_css", "")
-	viper.SetDefault("emby.allow_query_login", false)
 
 	// ---- 存储配置 ----
 	// WebDAV 存储配置
@@ -699,6 +670,15 @@ func (c *Config) migrateFromFlatConfig() {
 }
 
 // ==================== 便捷访问方法（保持已有 API 兼容） ====================
+
+// BackupDir 返回全量备份存储目录。
+// 未显式配置时默认使用 <data_dir>/backups（Docker 下随数据卷持久化）。
+func (c *Config) BackupDir() string {
+	if strings.TrimSpace(c.App.BackupDir) != "" {
+		return c.App.BackupDir
+	}
+	return filepath.Join(c.App.DataDir, "backups")
+}
 
 // IsDefaultJWTSecret 检查是否使用自动生成的 JWT Secret（未在配置文件中显式设置）
 // 注意：由于 Load() 中会自动替换默认值，此方法现在检查是否为用户显式配置

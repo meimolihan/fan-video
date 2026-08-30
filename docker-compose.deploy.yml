@@ -55,6 +55,9 @@ services:
       - ./data:/data
       # 转码缓存
       - ./cache:/cache
+      # 全量备份（系统管理 → 全量备份还原）默认写入 <data_dir>/backups，
+      # 即 ./data/backups，随上方 /data 卷持久化；如需独立目录：
+      # - ./backups:/data/backups
       # ---- 媒体目录挂载（按你的 NAS 实际路径改）----
       # 飞牛 OS 的存储池一般挂在 /vol01 /vol02，按实际情况：
       # - /vol01/Media:/media

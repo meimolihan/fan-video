@@ -42,6 +42,9 @@ func main() {
 	defer logger.Sync()
 	sugar := logger.Sugar()
 
+	// 若存在暂存还原（还原接口在运行期生成的数据库替换），先于打开数据库前应用。
+	// 此时进程尚未持有 SQLite 文件句柄，可直接安全替换。
+	service.ApplyPendingDatabaseRestore(cfg, sugar)
 	db := openDatabase(cfg, sugar)
 	if err := model.AutoMigrateLite(db); err != nil {
 		sugar.Fatalf("数据库迁移失败: %v", err)
@@ -66,7 +69,7 @@ func main() {
 	services.Library.CleanOrphanedData()
 
 	router := buildRouter(cfg, services, playbackSessions, handlers, repos, appVer, sugar)
-	mdnsService := service.NewMdnsService(cfg.Emby.ServerName, cfg.App.Port, appVer, sugar)
+	mdnsService := service.NewMdnsService(cfg.App.ServerName, cfg.App.Port, appVer, sugar)
 	if !desktopRuntime {
 		if err := mdnsService.Start(); err != nil {
 			sugar.Warnf("mDNS 服务发现启动失败（可忽略）: %v", err)
