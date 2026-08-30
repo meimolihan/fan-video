@@ -6,6 +6,7 @@ import BackToTop from './BackToTop'
 import { PageContainer } from './design-system'
 import { AppShell, PageHeader } from '@/ui'
 import { useThemeStore } from '@/stores/theme'
+import { useContentWidthStore, MOBILE_BREAKPOINT } from '@/stores/contentWidth'
 
 const SCROLL_KEY_PREFIX = 'nowen_scroll_'
 const SIDEBAR_COLLAPSED_KEY = 'nowen_sidebar_collapsed'
@@ -108,8 +109,29 @@ export default function Layout() {
   const location = useLocation()
   const mainRef = useRef<HTMLElement>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readInitialSidebarCollapsed)
+  const contentWidth = useContentWidthStore((state) => state.width)
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth > MOBILE_BREAKPOINT)
   const isWidePage = WIDE_PAGE_PREFIXES.some((prefix) => location.pathname.startsWith(prefix))
   const usesLocalDetailChrome = location.pathname.startsWith('/media/') || location.pathname.startsWith('/series/')
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(`(min-width: ${MOBILE_BREAKPOINT + 1}px)`)
+    const update = () => setIsDesktop(mediaQuery.matches)
+    update()
+    mediaQuery.addEventListener('change', update)
+    return () => mediaQuery.removeEventListener('change', update)
+  }, [])
+
+  // Constrain and center the whole app shell (sidebar + main) so the content
+  // block stays centered in the viewport when the main width shrinks. The
+  // sidebar keeps its own fixed width (--nv-rail-width); only the main content
+  // region's available width is controlled by the slider.
+  const shellWidthStyle = isDesktop
+    ? {
+        maxWidth: `calc(${contentWidth}px + var(--nv-rail-width))`,
+        marginInline: 'auto',
+      }
+    : undefined
 
   useEffect(() => {
     try {
@@ -157,6 +179,7 @@ export default function Layout() {
         />
       )}
       sidebarCollapsed={sidebarCollapsed}
+      style={shellWidthStyle}
     >
       <main
         ref={mainRef}

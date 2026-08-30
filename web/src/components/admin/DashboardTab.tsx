@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { SystemInfo, SystemSettings } from '@/types'
 import type { ScanProgressData, ScrapeProgressData, TranscodeProgressData, ScanPhaseData } from '@/hooks/useWebSocket'
 import {
@@ -15,6 +15,7 @@ import {
   HardDrive,
   Link,
   Loader2,
+  Maximize2,
   Merge,
   MonitorPlay,
   Play,
@@ -37,6 +38,13 @@ import type { SystemBackupEntry } from '@/api/backup'
 import { bumpPosterVersion } from '@/stores/mediaRefresh'
 import { AdminPanel, AdminStatus } from '@/components/admin/AdminPrimitives'
 import { Button, Input, Modal, ModalBody, ModalFooter, ModalHeader, Tag } from '@/components/design-system'
+import {
+  useContentWidthStore,
+  MIN_CONTENT_WIDTH,
+  MAX_CONTENT_WIDTH,
+  STEP_CONTENT_WIDTH,
+  DEFAULT_CONTENT_WIDTH,
+} from '@/stores/contentWidth'
 
 const webAppVersion = import.meta.env.VITE_APP_VERSION || '1.0.1'
 
@@ -81,6 +89,14 @@ export default function DashboardTab({
 }: DashboardTabProps) {
   const [sysSettingsSaving, setSysSettingsSaving] = useState(false)
   const [sysSettingsMsg, setSysSettingsMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const contentWidth = useContentWidthStore((state) => state.width)
+  const setContentWidth = useContentWidthStore((state) => state.setWidth)
+  const resetContentWidth = useContentWidthStore((state) => state.resetWidth)
+  const [widthDraft, setWidthDraft] = useState(String(contentWidth))
+
+  useEffect(() => {
+    setWidthDraft(String(contentWidth))
+  }, [contentWidth])
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
   const [clearConfirmText, setClearConfirmText] = useState('')
   const [clearLoading, setClearLoading] = useState(false)
@@ -555,6 +571,55 @@ export default function DashboardTab({
             {sysSettingsSaving ? '保存中...' : '保存设置'}
           </Button>
         </div>
+      </AdminPanel>
+
+      <AdminPanel
+        title="页面内容宽度"
+        description="调节桌面端主内容区的最大宽度（960px – 1920px），拖动滑块实时预览生效；仅影响桌面端，移动端保持原生布局。"
+        icon={<Maximize2 size={18} />}
+        className="hidden md:block"
+        bodyClassName="space-y-4"
+      >
+        <div className="flex flex-wrap items-center gap-4">
+          <input
+            type="range"
+            min={MIN_CONTENT_WIDTH}
+            max={MAX_CONTENT_WIDTH}
+            step={STEP_CONTENT_WIDTH}
+            value={contentWidth}
+            onChange={(event) => setContentWidth(parseInt(event.target.value, 10))}
+            className="h-2 w-full max-w-xl cursor-pointer"
+            style={{ accentColor: 'var(--nv-action-primary)' }}
+            aria-label="页面内容最大宽度"
+          />
+          <div className="flex shrink-0 items-center gap-2">
+            <Input
+              type="number"
+              min={MIN_CONTENT_WIDTH}
+              max={MAX_CONTENT_WIDTH}
+              step={STEP_CONTENT_WIDTH}
+              value={widthDraft}
+              onChange={(event) => {
+                const value = event.target.value
+                setWidthDraft(value)
+                const parsed = parseInt(value, 10)
+                if (Number.isFinite(parsed)) setContentWidth(parsed)
+              }}
+              onBlur={() => setWidthDraft(String(contentWidth))}
+              className="w-28 text-right font-mono tabular-nums"
+              aria-label="页面内容最大宽度（精确输入）"
+            />
+            <span className="font-mono text-sm text-[var(--nv-text-tertiary)]">px</span>
+          </div>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={resetContentWidth}
+        >
+          <RefreshCw size={14} />
+          恢复默认 {DEFAULT_CONTENT_WIDTH}px
+        </Button>
       </AdminPanel>
 
       <AdminPanel

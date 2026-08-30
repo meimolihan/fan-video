@@ -1,5 +1,6 @@
 import { streamApi } from '@/api'
 import { mediaAnalysisApi, type MediaHighlight } from '@/api/mediaAnalysis'
+import { runHeroParticleFx } from '@/utils/heroParticleFx'
 
 const HERO_SELECTOR = '.nv-media-detail-page .nv-detail-hero'
 const INNER_SELECTOR = '.nv-detail-hero-inner'
@@ -15,6 +16,7 @@ interface HeroSession {
   slideTimer: number | null
   refreshTimer: number | null
   layer: HTMLDivElement | null
+  fxLayer: HTMLDivElement | null
 }
 
 let session: HeroSession | null = null
@@ -60,9 +62,41 @@ function clearSlides(target: HeroSession) {
     window.clearInterval(target.slideTimer)
     target.slideTimer = null
   }
+  target.fxLayer?.remove()
+  target.fxLayer = null
   target.layer?.remove()
   target.layer = null
   target.hero.classList.remove('nv-detail-hero-has-highlight-slides')
+}
+
+function reducedMotionPreferred() {
+  return typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+// Recreates the homepage hero's particle shatter for the highlight slideshow:
+// the outgoing frame shatters into light points while the next one assembles.
+// Same engine as HeroParticleTransition, driven imperatively since this carousel
+// is vanilla JS. Source is the outgoing slide's artwork.
+function fireParticles(target: HeroSession, sourceSrc: string | null) {
+  if (!target.layer) return
+  target.fxLayer?.remove()
+  const wrapper = document.createElement('div')
+  wrapper.className = 'nv-detail-highlight-fx'
+  wrapper.setAttribute('aria-hidden', 'true')
+  const canvas = document.createElement('canvas')
+  canvas.className = 'h-full w-full'
+  wrapper.appendChild(canvas)
+  target.layer.appendChild(wrapper)
+  target.fxLayer = wrapper
+  runHeroParticleFx(canvas, {
+    sourceSrc,
+    direction: 1,
+    onDone: () => {
+      if (target.fxLayer === wrapper) target.fxLayer = null
+      wrapper.remove()
+    },
+  })
 }
 
 function renderSlides(target: HeroSession, urls: string[]) {
@@ -103,9 +137,15 @@ function renderSlides(target: HeroSession, urls: string[]) {
   target.slideTimer = window.setInterval(() => {
     if (document.hidden || !target.hero.isConnected) return
     const nextIndex = (activeIndex + 1) % slides.length
+    const outgoing = slides[activeIndex]
     slides[activeIndex]?.classList.remove('is-active')
     slides[nextIndex]?.classList.add('is-active')
     activeIndex = nextIndex
+
+    const outgoingImage = outgoing?.querySelector<HTMLImageElement>('img')
+    if (outgoingImage && !reducedMotionPreferred()) {
+      fireParticles(target, outgoingImage.src || null)
+    }
   }, SLIDE_INTERVAL_MS)
 }
 
@@ -151,6 +191,7 @@ function syncHero() {
     slideTimer: null,
     refreshTimer: null,
     layer: null,
+    fxLayer: null,
   }
   session = next
   void refreshHighlights(next)

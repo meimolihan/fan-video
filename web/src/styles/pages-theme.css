@@ -2251,7 +2251,7 @@ section[aria-labelledby="cast-grid-title"] [role="listitem"] > div:first-child {
 .nv-browse-list > *:hover { background: rgba(255,255,255,.035); }
 
 .nv-browse-poster-grid {
-  grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
   gap: 16px 12px !important;
 }
 
@@ -2424,8 +2424,7 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
 /* -------------------------------------------------------------------------- */
 
 @media (max-width: 1180px) {
-  .nv-media-grid,
-  .nv-browse-poster-grid { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; }
+  .nv-media-grid { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; }
   .nv-pagination { grid-template-columns: 1fr; justify-items: center; }
   .nv-pagination-summary { justify-self: start; }
   .nv-pagination-options { justify-self: center; }
@@ -2441,8 +2440,7 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
   }
   .nv-topbar .nv-search { width: min(58vw, 280px) !important; }
   .nv-page-container { padding: 12px 16px 88px !important; }
-  .nv-media-grid,
-  .nv-browse-poster-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+  .nv-media-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
   .nv-detail-hero-inner {
     grid-template-columns: 160px minmax(0, 1fr) !important;
     gap: 22px !important;
@@ -2475,8 +2473,7 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
   }
   .nv-hero-carousel > .relative.z-10 { padding: 90px 16px 42px !important; }
   .nv-hero-carousel h2 { font-size: 30px !important; max-width: 13ch !important; }
-  .nv-media-grid,
-  .nv-browse-poster-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 14px 8px !important; }
+  .nv-media-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 14px 8px !important; }
   .nv-browse-type-tabs { width: 100%; overflow-x: auto; flex-wrap: nowrap !important; }
   .nv-browse-toolbar { align-items: stretch !important; }
   .nv-browse-toolbar .nv-search { flex-basis: 100%; max-width: none !important; }
@@ -5253,6 +5250,16 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
   background: var(--nv-bg-surface-soft);
 }
 
+/* Particle shatter overlay (homepage hero particle effect) layered above the
+ * highlight slides and scrims while a new frame assembles. Purely decorative,
+ * never intercepts interaction. */
+.nv-detail-highlight-fx {
+  position: absolute;
+  inset: 0;
+  z-index: calc(var(--nv-detail-hero-layer-highlight) + 10);
+  pointer-events: none;
+}
+
 /* Generated highlights fully own the hero background. The scraped/local
  * backdrop remains only as the no-highlight fallback. */
 .nv-detail-hero.nv-detail-hero-has-highlight-slides > .absolute.inset-0 {
@@ -5349,6 +5356,24 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
 .nv-detail-highlight-slide.is-active {
   opacity: 1;
   transform: scale(1);
+  animation: nv-detail-highlight-in .95s ease-out .12s both;
+}
+
+/* Match the homepage hero carousel's switching animation: the incoming frame
+ * starts slightly blurred, scaled up and near-transparent, then sharpens and
+ * settles (ease-out, ~0.12s delay). Shared with .nv-series-poster-slideshow via
+ * the same values as the framer-motion hero. */
+@keyframes nv-detail-highlight-in {
+  0% {
+    opacity: .04;
+    transform: scale(1.045);
+    filter: blur(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
 }
 
 .nv-detail-highlight-slide.is-failed {
@@ -5470,6 +5495,9 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
   .nv-detail-highlight-slide {
     transition: none;
     transform: none;
+  }
+  .nv-detail-highlight-slide.is-active {
+    animation: none;
   }
 }
 

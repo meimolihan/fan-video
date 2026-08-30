@@ -11935,3 +11935,21 @@ html body .nv-app-shell.nv-app-shell:has(.nv-home-page) .nv-page-header-action--
   }
 }
 
+
+/* ==========================================================================
+ * 剧集详情 Hero 海报轮播 · 背景处理
+ * 轮播激活时，彻底隐藏背景里的系列海报（它常常就是第一集海报，模糊后也容易
+ * 被当成“第一张海报的鬼影”）。用 !important 钉死整棵 backdrop 子树不透明。
+ * 海报切换动画由 SeriesHero 内的 framer-motion 跨图层实现（与首页轮播一致），
+ * 无需额外 CSS 关键帧。
+ * ========================================================================== */
+html body .nv-series-hero.nv-series-hero-has-poster-slides .nv-series-backdrop,
+html body .nv-series-hero.nv-series-hero-has-poster-slides .nv-series-backdrop > img,
+html body .nv-series-hero.nv-series-hero-has-poster-slides .nv-series-backdrop > * {
+  opacity: 0 !important;
+}
+
+/* 侧边栏品牌图标：logo 图片已铺满圆角盒，去掉紫色底背景 */
+html body .nv-app-shell .nv-rail-brand {
+  background: transparent !important;
+}

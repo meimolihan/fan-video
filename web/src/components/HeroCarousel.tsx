@@ -10,7 +10,7 @@ import { Button, buttonClassName } from '@/components/design-system'
 import { MediaArtwork, MediaHeroContent } from '@/ui'
 import HeroParticleTransition from '@/components/HeroParticleTransition'
 
-const AUTO_PLAY_INTERVAL = 7000
+const AUTO_PLAY_INTERVAL = 6000
 const SWIPE_THRESHOLD = 50
 // 手动精选轮播生效的最小条目数：不足时回落默认推荐/最近添加逻辑
 const MIN_FEATURED_ITEMS = 2

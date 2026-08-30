@@ -18,6 +18,7 @@ import {
   Sun,
   UserRound,
 } from 'lucide-react'
+import sidebarLogo from '@/assets/sidebar-logo.png'
 
 interface SidebarProps {
   isMobileOpen?: boolean
@@ -58,7 +59,14 @@ export default function Sidebar({ collapsed = false, onCollapsedChange }: Sideba
     <>
       <aside id="main-sidebar" className="nv-rail" aria-label="主导航" data-collapsed={collapsed ? 'true' : 'false'}>
         <div className="nv-rail-brand-row">
-          <div className="nv-rail-brand" aria-hidden="true">F</div>
+          <div className="nv-rail-brand" aria-hidden="true">
+            <img
+              src={sidebarLogo}
+              alt=""
+              className="h-full w-full object-cover rounded-[inherit]"
+              draggable={false}
+            />
+          </div>
           <div className="nv-rail-brand-copy">
             <strong>Fan-Video</strong>
             <span>MEDIA LIBRARY</span>

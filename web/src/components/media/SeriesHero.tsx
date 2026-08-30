@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Heart, Image, MoreHorizontal, Play, Share2, Star, Trash2, Tv } from 'lucide-react'
 import type { Media, Series } from '@/types'
 import { streamApi } from '@/api'
 import { Button, Tag, buttonClassName } from '@/components/design-system'
 import { HeroContent, MediaArtwork } from '@/ui'
 import PosterImage from '@/components/PosterImage'
+import HeroParticleTransition from '@/components/HeroParticleTransition'
 
 interface SeriesHeroProps {
   series: Series
@@ -22,6 +24,9 @@ interface SeriesHeroProps {
 }
 
 const SERIES_POSTER_SWITCH_MS = 6000
+// Cap the decorative poster carousel so the DOM stays light while still cycling
+// enough distinct posters for a lively crossfade.
+const SERIES_POSTER_SLIDES_MAX = 8
 
 export default function SeriesHero({
   series,
@@ -39,6 +44,7 @@ export default function SeriesHero({
   const [imageLoaded, setImageLoaded] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuContainerRef = useRef<HTMLDivElement>(null)
+  const prefersReducedMotion = useReducedMotion()
   const genres = (series.genres || '').split(',').map((item) => item.trim()).filter(Boolean)
 
   const episodePosters = useMemo(() => {
@@ -53,22 +59,39 @@ export default function SeriesHero({
     return urls
   }, [episodes, posterVersion])
 
-  const [posterShown, setPosterShown] = useState(0)
-  const [posterSwitching, setPosterSwitching] = useState(-1)
-  const [nextReady, setNextReady] = useState(false)
-  const activeTimerRef = useRef<number | null>(null)
+  // Decorative poster carousel. Uses the exact same switching animation as the
+  // homepage hero carousel (framer-motion crossfade: blur-in + scale 1.045→1
+  // over ~0.95s easeOut, reduced-motion falls back to a quick opacity fade).
+  const posterUrls = useMemo(() => episodePosters.slice(0, SERIES_POSTER_SLIDES_MAX), [episodePosters])
+  const [activeIndex, setActiveIndex] = useState(0)
   const switchIndexRef = useRef(0)
+  const posterSrcRef = useRef<{ id: string; src: string | null } | null>(null)
+  const fxSeqRef = useRef(0)
+  const [fx, setFx] = useState<{ src: string | null; seq: number } | null>(null)
 
   useEffect(() => {
     setImageLoaded(false)
   }, [posterVersion, series.backdrop_path, series.id])
 
   useEffect(() => {
-    setPosterShown(0)
-    setPosterSwitching(-1)
-    setNextReady(false)
+    setActiveIndex(0)
     switchIndexRef.current = 0
+    posterSrcRef.current = null
   }, [series.id])
+
+  // Fires the same particle shatter used by the homepage hero whenever the
+  // decorative poster crossfades to a new one: the outgoing poster shatters
+  // into light points while the next frame assembles from the particles.
+  useEffect(() => {
+    const src = posterUrls.length ? posterUrls[Math.min(activeIndex, posterUrls.length - 1)] : null
+    const id = `${series.id}-${activeIndex}`
+    const prev = posterSrcRef.current
+    posterSrcRef.current = { id, src }
+    if (prev && prev.id !== id && posterUrls.length > 1 && !prefersReducedMotion && prev.src) {
+      fxSeqRef.current += 1
+      setFx({ src: prev.src, seq: fxSeqRef.current })
+    }
+  }, [activeIndex, posterUrls, series.id, prefersReducedMotion])
 
   // Warm the browser cache up front so a switch never waits on the network.
   useEffect(() => {
@@ -84,35 +107,19 @@ export default function SeriesHero({
   }, [episodePosters])
 
   useEffect(() => {
-    if (episodePosters.length < 2) return
-    activeTimerRef.current = window.setInterval(() => {
-      const count = episodePosters.length
+    if (posterUrls.length < 2) return
+    const activeTimer = window.setInterval(() => {
       let next = switchIndexRef.current
-      while (episodePosters.length > 1 && next === switchIndexRef.current) {
-        next = Math.floor(Math.random() * count)
+      while (posterUrls.length > 1 && next === switchIndexRef.current) {
+        next = Math.floor(Math.random() * posterUrls.length)
       }
       switchIndexRef.current = next
-      setPosterSwitching(next)
-      setNextReady(false)
+      setActiveIndex(next)
     }, SERIES_POSTER_SWITCH_MS)
-    return () => {
-      if (activeTimerRef.current) window.clearInterval(activeTimerRef.current)
-      activeTimerRef.current = null
-    }
-  }, [episodePosters.length])
+    return () => window.clearInterval(activeTimer)
+  }, [posterUrls.length])
 
-  // The incoming poster only fades in once its pixels are decoded, so the
-  // crossfade is smooth instead of popping on a half-loaded frame.
-  const handlePosterSwitchDone = useCallback(() => {
-    if (posterSwitching >= 0 && posterSwitching !== posterShown) {
-      setPosterShown(posterSwitching)
-      setPosterSwitching(-1)
-      setNextReady(false)
-    }
-  }, [posterShown, posterSwitching])
-
-  const isSwitching = posterSwitching >= 0 && posterSwitching !== posterShown
-  const hasEpisodePosters = episodePosters.length > 0
+  const hasEpisodePosters = posterUrls.length > 0
   const showEpisodeSlideshow = hasEpisodePosters
 
   useEffect(() => {
@@ -173,26 +180,39 @@ export default function SeriesHero({
     >
       {showEpisodeSlideshow && (
         <div className="nv-series-poster-slideshow" aria-hidden="true">
-          <img
-            key={`series-poster-active-${series.id}-${posterShown}-${posterVersion}`}
-            src={episodePosters[posterShown]}
-            alt=""
-            decoding="async"
-            className={`nv-series-poster-slide is-active${isSwitching && nextReady ? ' is-leaving' : ''}`}
-          />
-          {isSwitching && (
-            <img
-              key={`series-poster-next-${series.id}-${posterSwitching}-${posterVersion}`}
-              src={episodePosters[posterSwitching]}
-              alt=""
-              decoding="async"
-              loading="eager"
-              onLoad={() => setNextReady(true)}
-              onTransitionEnd={handlePosterSwitchDone}
-              className={`nv-series-poster-slide is-next${nextReady ? ' is-ready' : ''}`}
+          <AnimatePresence initial={false} mode="sync">
+            <motion.div
+              key={`series-poster-${series.id}-${activeIndex}-${posterVersion}`}
+              className="absolute inset-0 overflow-hidden rounded-[inherit]"
+              initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0.04, scale: 1.045, filter: 'blur(14px)' }}
+              animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1, filter: 'blur(0px)' }}
+              exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 1.015 }}
+              transition={{
+                duration: prefersReducedMotion ? 0.1 : 0.95,
+                ease: 'easeOut',
+                delay: prefersReducedMotion ? 0 : 0.12,
+              }}
+            >
+              <img
+                src={posterUrls[Math.min(activeIndex, posterUrls.length - 1)]}
+                alt=""
+                decoding="async"
+                loading="eager"
+                draggable={false}
+                className="h-full w-full select-none rounded-[inherit] object-cover object-center"
+              />
+            </motion.div>
+          </AnimatePresence>
+          <div className="nv-series-poster-slideshow-scrim" />
+          {fx && !prefersReducedMotion && (
+            <HeroParticleTransition
+              key={fx.seq}
+              className="pointer-events-none absolute inset-0 z-20"
+              sourceSrc={fx.src}
+              direction={1}
+              onDone={() => setFx(null)}
             />
           )}
-          <div className="nv-series-poster-slideshow-scrim" />
         </div>
       )}
       <div className="nv-series-backdrop absolute inset-0 overflow-hidden" aria-hidden="true">
