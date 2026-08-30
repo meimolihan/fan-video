@@ -12,6 +12,8 @@ import {
   Calendar,
   ChevronRight,
   Database,
+  Eye,
+  EyeOff,
   Film,
   FolderOpen,
   FolderPlus,
@@ -78,16 +80,20 @@ function LibraryManager({
   const [scanAllLoading, setScanAllLoading] = useState(false)
   const [editingLibrary, setEditingLibrary] = useState<Library | null>(null)
   const [deletingLibraries, setDeletingLibraries] = useState<Set<string>>(new Set())
+  const [togglingHidden, setTogglingHidden] = useState<Set<string>>(new Set())
   // ref 在 React 状态提交前就能立即生效，用于拦截快速连点造成的重复确认/重复 DELETE。
   const deleteFlowRef = useRef<Set<string>>(new Set())
 
-  const sortedLibraries = [...libraries].sort((a, b) => {
-    let cmp = 0
-    if (sortBy === 'name') cmp = a.name.localeCompare(b.name)
-    else if (sortBy === 'type') cmp = a.type.localeCompare(b.type)
-    else cmp = new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    return sortAsc ? -cmp : cmp
-  })
+  const sortedLibraries = [...libraries]
+    .sort((a, b) => {
+      let cmp = 0
+      if (sortBy === 'name') cmp = a.name.localeCompare(b.name)
+      else if (sortBy === 'type') cmp = a.type.localeCompare(b.type)
+      else cmp = new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      return sortAsc ? -cmp : cmp
+    })
+    // 隐藏的媒体库固定在列表末尾，与正常库区分开
+    .sort((a, b) => Number(a.hidden) - Number(b.hidden))
 
   const handleCreate = async (data: CreateLibraryRequest) => {
     const response = await libraryApi.create(data)
@@ -221,6 +227,37 @@ function LibraryManager({
     }
   }
 
+  const handleToggleHidden = async (library: Library) => {
+    if (togglingHidden.has(library.id)) return
+    const nextHidden = !library.hidden
+
+    if (nextHidden) {
+      const ok = await dialog.confirm({
+        title: '隐藏媒体库',
+        message: '隐藏后，该媒体库将不再出现在浏览、首页和搜索结果中，所有媒体记录、收藏与观看历史都会完整保留，可随时恢复显示。确定隐藏此媒体库？',
+        confirmText: '隐藏',
+        variant: 'danger',
+      })
+      if (!ok) return
+    }
+
+    setTogglingHidden((current) => new Set(current).add(library.id))
+    try {
+      const response = await libraryApi.update(library.id, { hidden: nextHidden })
+      invalidateMediaListCaches()
+      setLibraries((current) => current.map((l) => (l.id === library.id ? response.data.data : l)))
+      toast.success(nextHidden ? '媒体库已隐藏，数据完整保留' : '媒体库已恢复显示')
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || '切换媒体库显示状态失败')
+    } finally {
+      setTogglingHidden((current) => {
+        const next = new Set(current)
+        next.delete(library.id)
+        return next
+      })
+    }
+  }
+
   const handleReindex = async (id: string) => {
     if (deletingLibraries.has(id)) return
     const ok = await dialog.confirm({
@@ -305,7 +342,7 @@ function LibraryManager({
       >
         {libraries.length > 0 ? (
           <div className="overflow-visible">
-            <div className="hidden grid-cols-[minmax(240px,2fr)_minmax(260px,2fr)_170px_140px] gap-4 border-b border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)] px-5 py-3 text-xs font-semibold uppercase tracking-wide text-[var(--nv-text-tertiary)] lg:grid">
+            <div className="hidden grid-cols-[minmax(240px,2fr)_minmax(260px,2fr)_150px_172px] gap-4 border-b border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)] px-5 py-3 text-xs font-semibold uppercase tracking-wide text-[var(--nv-text-tertiary)] lg:grid">
               <SortHeader active={sortBy === 'name'} asc={sortAsc} onClick={() => toggleSort('name')}>媒体库</SortHeader>
               <span>媒体文件夹</span>
               <SortHeader active={sortBy === 'created'} asc={sortAsc} onClick={() => toggleSort('created')}>最近更新</SortHeader>
@@ -326,6 +363,8 @@ function LibraryManager({
                 onDelete={() => handleDelete(library.id)}
                 onEdit={() => setEditingLibrary(library)}
                 onReindex={() => handleReindex(library.id)}
+                onToggleHidden={() => handleToggleHidden(library)}
+                isTogglingHidden={togglingHidden.has(library.id)}
                 formatDate={formatDate}
               />
             ))}
@@ -402,6 +441,8 @@ function LibraryRow({
   onDelete,
   onEdit,
   onReindex,
+  onToggleHidden,
+  isTogglingHidden,
   formatDate,
 }: {
   library: Library
@@ -415,6 +456,8 @@ function LibraryRow({
   onDelete: () => void
   onEdit: () => void
   onReindex: () => void
+  onToggleHidden: () => void
+  isTogglingHidden: boolean
   formatDate: (date: string | null) => string
 }) {
   const typeConfig = TYPE_CONFIG[library.type] || TYPE_CONFIG.movie
@@ -442,16 +485,24 @@ function LibraryRow({
     : progress?.message || phase?.message || '正在入库...'
 
   return (
-    <div className={clsx('relative', !isLast && 'border-b border-[var(--nv-border-subtle)]')}>
-      <div className="grid gap-4 px-4 py-4 transition-colors hover:bg-[var(--nv-bg-hover)] sm:px-5 lg:grid-cols-[minmax(240px,2fr)_minmax(260px,2fr)_170px_140px] lg:items-center">
+    <div className={clsx('relative', !isLast && 'border-b border-[var(--nv-border-subtle)]', library.hidden && 'opacity-70')}>
+      <div className="grid gap-4 px-4 py-4 transition-colors hover:bg-[var(--nv-bg-hover)] sm:px-5 lg:grid-cols-[minmax(240px,2fr)_minmax(260px,2fr)_150px_172px] lg:items-center">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--nv-radius-control)] border border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)] text-[var(--nv-action-primary)]">
+          <div className={clsx(
+            'flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--nv-radius-control)] border',
+            library.hidden
+              ? 'border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)] text-[var(--nv-text-tertiary)] saturate-0'
+              : 'border-[var(--nv-border-subtle)] bg-[var(--nv-bg-surface-soft)] text-[var(--nv-action-primary)]',
+          )}>
             <TypeIcon size={19} />
           </div>
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
-              <h3 className="truncate text-sm font-semibold text-[var(--nv-text-primary)]">{library.name}</h3>
+              <h3 className={clsx('truncate text-sm font-semibold', library.hidden ? 'text-[var(--nv-text-secondary)]' : 'text-[var(--nv-text-primary)]')}>{library.name}</h3>
               <span className="shrink-0"><Tag>{typeConfig.label}</Tag></span>
+              {library.hidden && (
+                <span className="shrink-0"><AdminStatus tone="neutral">已隐藏</AdminStatus></span>
+              )}
             </div>
             {isDeleting ? (
               <div className="mt-1 flex items-center gap-2">
@@ -486,6 +537,21 @@ function LibraryRow({
           </Button>
           <Button variant="ghost" size="sm" iconOnly onClick={onReindex} disabled={isScanning || isDeleting} title="重建索引" aria-label="重建索引">
             <Database size={16} className={isScanning ? 'animate-pulse text-[var(--nv-action-primary)]' : undefined} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            iconOnly
+            onClick={onToggleHidden}
+            disabled={isScanning || isDeleting || isTogglingHidden}
+            title={library.hidden ? '恢复显示媒体库' : isScanning ? '媒体库正在扫描，暂不可隐藏' : '隐藏媒体库（数据完整保留）'}
+            aria-label={library.hidden ? '恢复显示媒体库' : '隐藏媒体库'}
+          >
+            {isTogglingHidden
+              ? <RefreshCw size={16} className="animate-spin" />
+              : library.hidden
+                ? <Eye size={16} className="text-[var(--nv-action-primary)]" />
+                : <EyeOff size={16} />}
           </Button>
           <Button
             variant="danger"

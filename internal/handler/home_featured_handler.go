@@ -22,6 +22,7 @@ type HomeFeaturedHandler struct {
 	featuredRepo *repository.HomeFeaturedRepo
 	mediaRepo    *repository.MediaRepo
 	seriesRepo   *repository.SeriesRepo
+	libRepo      *repository.LibraryRepo
 	logger       *zap.SugaredLogger
 }
 
@@ -29,12 +30,14 @@ func NewHomeFeaturedHandler(
 	featuredRepo *repository.HomeFeaturedRepo,
 	mediaRepo *repository.MediaRepo,
 	seriesRepo *repository.SeriesRepo,
+	libRepo *repository.LibraryRepo,
 	logger *zap.SugaredLogger,
 ) *HomeFeaturedHandler {
 	return &HomeFeaturedHandler{
 		featuredRepo: featuredRepo,
 		mediaRepo:    mediaRepo,
 		seriesRepo:   seriesRepo,
+		libRepo:      libRepo,
 		logger:       logger,
 	}
 }
@@ -179,6 +182,22 @@ func (h *HomeFeaturedHandler) Remove(c *gin.Context) {
 	})
 }
 
+// hiddenLibraryIDSet 返回隐藏媒体库的 ID 集合（首页轮播排除用）。
+func (h *HomeFeaturedHandler) hiddenLibraryIDSet() map[string]struct{} {
+	if h.libRepo == nil {
+		return nil
+	}
+	ids, err := h.libRepo.HiddenIDs()
+	if err != nil || len(ids) == 0 {
+		return nil
+	}
+	set := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		set[id] = struct{}{}
+	}
+	return set
+}
+
 // ListForHome 首页：条目数达标时返回拼装好的 MixedItem 列表，
 // 否则返回空数组，前端据此回落默认推荐逻辑。失效引用自动跳过。
 func (h *HomeFeaturedHandler) ListForHome(c *gin.Context) {
@@ -195,6 +214,8 @@ func (h *HomeFeaturedHandler) ListForHome(c *gin.Context) {
 		return
 	}
 
+	hidden := h.hiddenLibraryIDSet()
+
 	for _, row := range rows {
 		switch row.ItemType {
 		case "movie":
@@ -202,10 +223,16 @@ func (h *HomeFeaturedHandler) ListForHome(c *gin.Context) {
 			if err != nil || media == nil || media.MediaType == "episode" {
 				continue
 			}
+			if _, skip := hidden[media.LibraryID]; skip {
+				continue
+			}
 			items = append(items, service.MixedItem{Type: "movie", Media: media})
 		case "series":
 			series, err := h.seriesRepo.FindByIDOnly(row.ItemID)
 			if err != nil || series == nil {
+				continue
+			}
+			if _, skip := hidden[series.LibraryID]; skip {
 				continue
 			}
 			items = append(items, service.MixedItem{Type: "series", Series: series})

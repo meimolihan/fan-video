@@ -547,7 +547,16 @@ func (s *LibraryService) Delete(id string) error {
 
 // Update 更新媒体库信息
 func (s *LibraryService) Update(lib *model.Library) error {
-	return s.repo.Update(lib)
+	err := s.repo.Update(lib)
+	if err == nil && s.wsHub != nil {
+		s.wsHub.BroadcastEvent(EventLibraryUpdated, &LibraryChangedData{
+			LibraryID:   lib.ID,
+			LibraryName: lib.Name,
+			Action:      "updated",
+			Message:     "媒体库设置已更新",
+		})
+	}
+	return err
 }
 
 // DeleteMedia 删除单个媒体记录（仅从数据库移除，不删除文件）

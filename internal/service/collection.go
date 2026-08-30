@@ -13,6 +13,7 @@ import (
 type CollectionService struct {
 	collRepo  *repository.MovieCollectionRepo
 	mediaRepo *repository.MediaRepo
+	libRepo   *repository.LibraryRepo
 	logger    *zap.SugaredLogger
 }
 
@@ -27,6 +28,47 @@ func NewCollectionService(
 		mediaRepo: mediaRepo,
 		logger:    logger,
 	}
+}
+
+// SetLibraryRepo 延迟注入 LibraryRepo（用于排除隐藏媒体库）
+func (s *CollectionService) SetLibraryRepo(repo *repository.LibraryRepo) {
+	s.libRepo = repo
+}
+
+// hiddenLibraryIDs 返回处于隐藏状态的媒体库 ID（合集浏览排除用）。
+// 查询失败时按无隐藏库处理，避免隐藏状态本身干扰正常浏览。
+func (s *CollectionService) hiddenLibraryIDs() []string {
+	if s.libRepo == nil {
+		return nil
+	}
+	ids, err := s.libRepo.HiddenIDs()
+	if err != nil || len(ids) == 0 {
+		return nil
+	}
+	return ids
+}
+
+// visibleMedia 过滤掉来自隐藏媒体库的电影，合集详情只展示可见媒体。
+func (s *CollectionService) visibleMedia(media []model.Media) []model.Media {
+	if len(media) == 0 {
+		return media
+	}
+	hidden := s.hiddenLibraryIDs()
+	if len(hidden) == 0 {
+		return media
+	}
+	hiddenSet := make(map[string]struct{}, len(hidden))
+	for _, id := range hidden {
+		hiddenSet[id] = struct{}{}
+	}
+	result := make([]model.Media, 0, len(media))
+	for _, m := range media {
+		if _, skip := hiddenSet[m.LibraryID]; skip {
+			continue
+		}
+		result = append(result, m)
+	}
+	return result
 }
 
 // CollectionWithMedia 合集及其包含的电影
@@ -67,7 +109,7 @@ func (s *CollectionService) GetCollectionByMediaID(mediaID string) (*CollectionW
 		Media:      make([]CollectionMediaItem, 0, len(coll.Media)),
 	}
 
-	for _, m := range coll.Media {
+	for _, m := range s.visibleMedia(coll.Media) {
 		result.Media = append(result.Media, CollectionMediaItem{
 			ID:         m.ID,
 			Title:      m.Title,
@@ -106,7 +148,7 @@ func (s *CollectionService) GetCollectionDetail(collectionID string) (*Collectio
 		Media:      make([]CollectionMediaItem, 0, len(coll.Media)),
 	}
 
-	for _, m := range coll.Media {
+	for _, m := range s.visibleMedia(coll.Media) {
 		result.Media = append(result.Media, CollectionMediaItem{
 			ID:         m.ID,
 			Title:      m.Title,
@@ -140,7 +182,11 @@ func (s *CollectionService) ListCollections(page, size int) ([]model.MovieCollec
 
 // ListCollectionsWithOptions 支持排序和来源筛选的分页查询
 func (s *CollectionService) ListCollectionsWithOptions(page, size int, sort, autoFilter, libraryID string) ([]model.MovieCollection, int64, error) {
-	colls, total, err := s.collRepo.ListWithOptions(page, size, sort, autoFilter, libraryID)
+	var exclude []string
+	if libraryID == "" {
+		exclude = s.hiddenLibraryIDs()
+	}
+	colls, total, err := s.collRepo.ListWithOptions(page, size, sort, autoFilter, libraryID, exclude...)
 	if err != nil {
 		return colls, total, err
 	}
@@ -559,7 +605,7 @@ func (s *CollectionService) DeleteCollection(id string) error {
 
 // SearchCollections 搜索合集
 func (s *CollectionService) SearchCollections(keyword string, limit int) ([]model.MovieCollection, error) {
-	return s.collRepo.Search(keyword, limit)
+	return s.collRepo.Search(keyword, limit, s.hiddenLibraryIDs()...)
 }
 
 // GetDuplicateCollectionStats 获取重复合集统计信息

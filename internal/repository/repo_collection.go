@@ -173,7 +173,8 @@ func (r *MovieCollectionRepo) List(page, size int) ([]model.MovieCollection, int
 // sort: created_desc | created_asc | updated_desc | updated_asc | name_asc | name_desc | count_desc | count_asc
 // autoFilter: "" 全部 | "true" 自动匹配 | "false" 手动创建
 // libraryID: "" 全部 | 指定媒体库 ID（通过子查询关联 media 表筛选）
-func (r *MovieCollectionRepo) ListWithOptions(page, size int, sort, autoFilter, libraryID string) ([]model.MovieCollection, int64, error) {
+// excludeLibraryIDs: 排除完全由这些隐藏媒体库构成的合集（全部电影都来自隐藏库时隐藏该合集）
+func (r *MovieCollectionRepo) ListWithOptions(page, size int, sort, autoFilter, libraryID string, excludeLibraryIDs ...string) ([]model.MovieCollection, int64, error) {
 	var colls []model.MovieCollection
 	var total int64
 
@@ -185,6 +186,14 @@ func (r *MovieCollectionRepo) ListWithOptions(page, size int, sort, autoFilter, 
 	}
 	if libraryID != "" {
 		query = query.Where("id IN (SELECT DISTINCT collection_id FROM media WHERE library_id = ? AND collection_id != '' AND collection_id IS NOT NULL)", libraryID)
+	} else if len(excludeLibraryIDs) > 0 {
+		// 完全由隐藏媒体库构成的合集不出现在浏览列表中
+		query = query.Where(`id NOT IN (
+			SELECT media.collection_id FROM media
+			WHERE media.collection_id != '' AND media.collection_id IS NOT NULL
+			GROUP BY media.collection_id
+			HAVING COUNT(*) = COUNT(CASE WHEN media.library_id IN ? THEN 1 END)
+		)`, excludeLibraryIDs)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -306,10 +315,19 @@ func (r *MovieCollectionRepo) ListMoviesWithoutCollection() ([]model.Media, erro
 	return media, err
 }
 
-// Search 搜索合集（排除空壳合集）
-func (r *MovieCollectionRepo) Search(keyword string, limit int) ([]model.MovieCollection, error) {
+// Search 搜索合集（排除空壳合集和完全由隐藏媒体库构成的合集）
+func (r *MovieCollectionRepo) Search(keyword string, limit int, excludeLibraryIDs ...string) ([]model.MovieCollection, error) {
+	query := r.db.Where("name LIKE ? AND media_count > 0", "%"+keyword+"%")
+	if len(excludeLibraryIDs) > 0 {
+		query = query.Where(`id NOT IN (
+			SELECT media.collection_id FROM media
+			WHERE media.collection_id != '' AND media.collection_id IS NOT NULL
+			GROUP BY media.collection_id
+			HAVING COUNT(*) = COUNT(CASE WHEN media.library_id IN ? THEN 1 END)
+		)`, excludeLibraryIDs)
+	}
 	var colls []model.MovieCollection
-	err := r.db.Where("name LIKE ? AND media_count > 0", "%"+keyword+"%").
+	err := query.
 		Order("media_count DESC").
 		Limit(limit).
 		Find(&colls).Error

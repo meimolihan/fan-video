@@ -62,13 +62,15 @@ func (r *SeriesRepo) ListByLibraryID(libraryID string) ([]model.Series, error) {
 	return series, err
 }
 
-func (r *SeriesRepo) List(page, size int, libraryID string) ([]model.Series, int64, error) {
+func (r *SeriesRepo) List(page, size int, libraryID string, excludeLibraryIDs ...string) ([]model.Series, int64, error) {
 	var series []model.Series
 	var total int64
 
 	query := r.db.Model(&model.Series{}).Where("episode_count > 0")
 	if libraryID != "" {
 		query = query.Where("library_id = ?", libraryID)
+	} else if len(excludeLibraryIDs) > 0 {
+		query = query.Where("library_id NOT IN ?", excludeLibraryIDs)
 	}
 
 	query.Count(&total)
@@ -86,11 +88,13 @@ func (r *SeriesRepo) CountByLibrary(libraryID string) (int64, error) {
 	return count, err
 }
 
-func (r *SeriesRepo) ListAll(libraryID string) ([]model.Series, error) {
+func (r *SeriesRepo) ListAll(libraryID string, excludeLibraryIDs ...string) ([]model.Series, error) {
 	var series []model.Series
 	query := r.db.Where("episode_count > 0")
 	if libraryID != "" {
 		query = query.Where("library_id = ?", libraryID)
+	} else if len(excludeLibraryIDs) > 0 {
+		query = query.Where("library_id NOT IN ?", excludeLibraryIDs)
 	}
 	err := query.Order("created_at DESC").Find(&series).Error
 	return series, err
@@ -167,9 +171,13 @@ func (r *SeriesRepo) GetSeasonNumbers(seriesID string) ([]int, error) {
 	return seasons, err
 }
 
-func (r *SeriesRepo) RecentUpdated(limit int) ([]model.Series, error) {
+func (r *SeriesRepo) RecentUpdated(limit int, excludeLibraryIDs ...string) ([]model.Series, error) {
 	var series []model.Series
-	err := r.db.Where("episode_count > 0").Order("updated_at DESC").Limit(limit).Find(&series).Error
+	query := r.db.Where("episode_count > 0")
+	if len(excludeLibraryIDs) > 0 {
+		query = query.Where("library_id NOT IN ?", excludeLibraryIDs)
+	}
+	err := query.Order("updated_at DESC").Limit(limit).Find(&series).Error
 	return series, err
 }
 
@@ -181,7 +189,7 @@ func (r *SeriesRepo) RecentUpdatedByLibrary(libraryID string, limit int) ([]mode
 }
 
 // SearchSeries 搜索合集（支持标题、原始标题、类型标签搜索）
-func (r *SeriesRepo) SearchSeries(keyword string, page, size int) ([]model.Series, int64, error) {
+func (r *SeriesRepo) SearchSeries(keyword string, page, size int, excludeLibraryIDs ...string) ([]model.Series, int64, error) {
 	var series []model.Series
 	var total int64
 
@@ -189,6 +197,9 @@ func (r *SeriesRepo) SearchSeries(keyword string, page, size int) ([]model.Serie
 		"title LIKE ? OR orig_title LIKE ? OR genres LIKE ?",
 		"%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%",
 	)
+	if len(excludeLibraryIDs) > 0 {
+		query = query.Where("library_id NOT IN ?", excludeLibraryIDs)
+	}
 	query.Count(&total)
 	err := query.Order("created_at DESC").Offset((page - 1) * size).Limit(size).Find(&series).Error
 	return series, total, err

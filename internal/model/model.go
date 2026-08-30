@@ -141,6 +141,8 @@ type Library struct {
 	OrganizeOutputDir string `json:"organize_output_dir" gorm:"type:text;default:''"`
 	// 实时文件监控（媒体库级别设置）
 	EnableFileWatch bool `json:"enable_file_watch" gorm:"default:false"` // 启用实时文件监控
+	// 隐藏开关：为 true 时该媒体库在前端浏览/首页/搜索中隐藏，数据与配置完整保留
+	Hidden bool `json:"hidden" gorm:"default:false"`
 	// 时间戳
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`

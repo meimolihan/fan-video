@@ -39,6 +39,7 @@ type RecommendService struct {
 	historyRepo    *repository.WatchHistoryRepo
 	favRepo        *repository.FavoriteRepo
 	recommendCache *repository.RecommendCacheRepo
+	libRepo        *repository.LibraryRepo
 	logger         *zap.SugaredLogger
 }
 
@@ -60,6 +61,47 @@ func NewRecommendService(
 	}
 }
 
+// SetLibraryRepo 延迟注入 LibraryRepo（用于排除隐藏媒体库）
+func (s *RecommendService) SetLibraryRepo(repo *repository.LibraryRepo) {
+	s.libRepo = repo
+}
+
+// hiddenLibraryIDs 返回处于隐藏状态的媒体库 ID（首页/推荐排除用）。
+// 查询失败时按无隐藏库处理，避免隐藏状态本身干扰正常推荐。
+func (s *RecommendService) hiddenLibraryIDs() []string {
+	if s.libRepo == nil {
+		return nil
+	}
+	ids, err := s.libRepo.HiddenIDs()
+	if err != nil || len(ids) == 0 {
+		return nil
+	}
+	return ids
+}
+
+// excludeHiddenLibraries 过滤掉来自隐藏媒体库的推荐项。
+func (s *RecommendService) excludeHiddenLibraries(items []RecommendedMedia) []RecommendedMedia {
+	if len(items) == 0 || s.libRepo == nil {
+		return items
+	}
+	hidden := s.hiddenLibraryIDs()
+	if len(hidden) == 0 {
+		return items
+	}
+	hiddenSet := make(map[string]struct{}, len(hidden))
+	for _, id := range hidden {
+		hiddenSet[id] = struct{}{}
+	}
+	result := make([]RecommendedMedia, 0, len(items))
+	for _, item := range items {
+		if _, skip := hiddenSet[item.Media.LibraryID]; skip {
+			continue
+		}
+		result = append(result, item)
+	}
+	return result
+}
+
 // RecommendedMedia 推荐结果项
 type RecommendedMedia struct {
 	Media  model.Media `json:"media"`
@@ -70,6 +112,14 @@ type RecommendedMedia struct {
 // GetRecommendations 获取个性化推荐列表
 // 采用混合推荐策略：协同过滤 + 基于内容的推荐，并支持结果缓存
 func (s *RecommendService) GetRecommendations(userID string, limit int) ([]RecommendedMedia, error) {
+	results, err := s.getRecommendations(userID, limit)
+	if err == nil {
+		results = s.excludeHiddenLibraries(results)
+	}
+	return results, err
+}
+
+func (s *RecommendService) getRecommendations(userID string, limit int) ([]RecommendedMedia, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 20
 	}
@@ -651,6 +701,14 @@ func (s *RecommendService) getPopularRecommendations(limit int) ([]RecommendedMe
 
 // GetSimilarMedia 基于当前媒体的类型/标签获取相关推荐
 func (s *RecommendService) GetSimilarMedia(mediaID string, limit int) ([]RecommendedMedia, error) {
+	results, err := s.getSimilarMedia(mediaID, limit)
+	if err == nil {
+		results = s.excludeHiddenLibraries(results)
+	}
+	return results, err
+}
+
+func (s *RecommendService) getSimilarMedia(mediaID string, limit int) ([]RecommendedMedia, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 12
 	}

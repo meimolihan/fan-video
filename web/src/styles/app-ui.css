@@ -11911,3 +11911,27 @@ html body .nv-app-shell.nv-app-shell:has(.nv-home-page) .nv-page-header-action--
   }
 }
 
+/* ==========================================================================
+ * 方案 A · 桌面端内容宽度与阅读舒适度优化
+ * 仅作用于桌面端（min-width: 48rem），移动端（<48rem）完全不变。
+ *
+ * 背景：历史 .nv-page-container { max-width: none !important } 让内容页在超宽
+ * 屏上铺满整行，网格与正文会被拉到极长，严重影响阅读。此处将其收敛为一个
+ * 舒适的居中列宽。
+ *
+ * 目标范围（安全）
+ *   1) 默认 content 容器（browse / library / 我的列表 / stats / profile …）
+ *      —— 收敛到 --nv-content-roll（默认 96rem ≈ 1536px）并居中。
+ *   2) 首页：使用精确 vw 比例校准（hero / 轨道尺寸按视口宽度推算），一旦
+ *      给容器设 max-width 会让内部 vw 尺寸与（变小的）容器脱节，因此首页
+ *      明确排除，保持原样。
+ *   3) wide 容器（admin / files / 详情页等表格与密集页）保持满宽，不收敛。
+ * ========================================================================== */
+@media (min-width: 48rem) {
+  .nv-app-shell .nv-page-container:not([data-width="wide"]):not(.nv-page-container--detail):not(:has(> .nv-home-page)) {
+    max-width: min(var(--nv-content-roll, 96rem), 100%) !important;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+

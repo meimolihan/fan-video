@@ -74,13 +74,15 @@ func (r *MediaRepo) ListByFilePaths(filePaths []string) (map[string]*model.Media
 	return out, nil
 }
 
-func (r *MediaRepo) List(page, size int, libraryID string) ([]model.Media, int64, error) {
+func (r *MediaRepo) List(page, size int, libraryID string, excludeLibraryIDs ...string) ([]model.Media, int64, error) {
 	var media []model.Media
 	var total int64
 
 	query := r.db.Model(&model.Media{})
 	if libraryID != "" {
 		query = query.Where("library_id = ?", libraryID)
+	} else if len(excludeLibraryIDs) > 0 {
+		query = query.Where("library_id NOT IN ?", excludeLibraryIDs)
 	}
 
 	query.Count(&total)
@@ -88,14 +90,17 @@ func (r *MediaRepo) List(page, size int, libraryID string) ([]model.Media, int64
 	return media, total, err
 }
 
-func (r *MediaRepo) Recent(limit int) ([]model.Media, error) {
+func (r *MediaRepo) Recent(limit int, excludeLibraryIDs ...string) ([]model.Media, error) {
 	var media []model.Media
-	err := r.db.Model(&model.Media{}).
-		Order("created_at DESC").Limit(limit).Find(&media).Error
+	query := r.db.Model(&model.Media{})
+	if len(excludeLibraryIDs) > 0 {
+		query = query.Where("library_id NOT IN ?", excludeLibraryIDs)
+	}
+	err := query.Order("created_at DESC").Limit(limit).Find(&media).Error
 	return media, err
 }
 
-func (r *MediaRepo) Search(keyword string, page, size int) ([]model.Media, int64, error) {
+func (r *MediaRepo) Search(keyword string, page, size int, excludeLibraryIDs ...string) ([]model.Media, int64, error) {
 	var media []model.Media
 	var total int64
 
@@ -104,6 +109,9 @@ func (r *MediaRepo) Search(keyword string, page, size int) ([]model.Media, int64
 		"title LIKE ? OR orig_title LIKE ? OR genres LIKE ?",
 		"%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%",
 	)
+	if len(excludeLibraryIDs) > 0 {
+		query = query.Where("library_id NOT IN ?", excludeLibraryIDs)
+	}
 	query.Count(&total)
 	// 优先显示标题精确匹配的结果，然后按评分降序
 	err := query.Order(
@@ -128,11 +136,15 @@ type SearchAdvancedParams struct {
 }
 
 // SearchAdvanced 高级搜索 — 支持多条件组合筛选、排序
-func (r *MediaRepo) SearchAdvanced(params SearchAdvancedParams) ([]model.Media, int64, error) {
+func (r *MediaRepo) SearchAdvanced(params SearchAdvancedParams, excludeLibraryIDs ...string) ([]model.Media, int64, error) {
 	var media []model.Media
 	var total int64
 
 	query := r.db.Model(&model.Media{})
+
+	if len(excludeLibraryIDs) > 0 {
+		query = query.Where("library_id NOT IN ?", excludeLibraryIDs)
+	}
 
 	if params.Keyword != "" {
 		// 改进：多字段搜索（标题、原始标题、标语、类型标签）
@@ -304,41 +316,50 @@ func (r *MediaRepo) ListBySeriesAndSeason(seriesID string, seasonNum int) ([]mod
 	return media, err
 }
 
-func (r *MediaRepo) RecentNonEpisode(limit int) ([]model.Media, error) {
+func (r *MediaRepo) RecentNonEpisode(limit int, excludeLibraryIDs ...string) ([]model.Media, error) {
 	var media []model.Media
 	query := r.db.Where("(series_id = '' OR series_id IS NULL) AND library_id != '' AND (media_type IS NULL OR media_type = '' OR media_type != 'episode')")
+	if len(excludeLibraryIDs) > 0 {
+		query = query.Where("library_id NOT IN ?", excludeLibraryIDs)
+	}
 	err := query.Order("created_at DESC").Limit(limit).Find(&media).Error
 	return media, err
 }
 
-func (r *MediaRepo) RecentNonEpisodeAll(libraryID string) ([]model.Media, error) {
+func (r *MediaRepo) RecentNonEpisodeAll(libraryID string, excludeLibraryIDs ...string) ([]model.Media, error) {
 	var media []model.Media
 	query := r.db.Where("(series_id = '' OR series_id IS NULL) AND library_id != '' AND (media_type IS NULL OR media_type = '' OR media_type != 'episode')")
 	if libraryID != "" {
 		query = query.Where("library_id = ?", libraryID)
+	} else if len(excludeLibraryIDs) > 0 {
+		query = query.Where("library_id NOT IN ?", excludeLibraryIDs)
 	}
 	err := query.Order("created_at DESC").Find(&media).Error
 	return media, err
 }
 
 // RecentEpisodesAll 返回库内全部分集（含预加载的所属剧集，供海报/元数据回退）。
-func (r *MediaRepo) RecentEpisodesAll(libraryID string) ([]model.Media, error) {
+func (r *MediaRepo) RecentEpisodesAll(libraryID string, excludeLibraryIDs ...string) ([]model.Media, error) {
 	var media []model.Media
 	query := r.db.Preload("Series").Where("media_type = 'episode' AND library_id != ''")
 	if libraryID != "" {
 		query = query.Where("library_id = ?", libraryID)
+	} else if len(excludeLibraryIDs) > 0 {
+		query = query.Where("library_id NOT IN ?", excludeLibraryIDs)
 	}
 	err := query.Order("created_at DESC").Find(&media).Error
 	return media, err
 }
 
-func (r *MediaRepo) ListNonEpisode(page, size int, libraryID string) ([]model.Media, int64, error) {
+func (r *MediaRepo) ListNonEpisode(page, size int, libraryID string, excludeLibraryIDs ...string) ([]model.Media, int64, error) {
 	var media []model.Media
 	var total int64
 
 	query := r.db.Model(&model.Media{}).Where("(series_id = '' OR series_id IS NULL) AND library_id != ''")
 	if libraryID != "" {
 		query = query.Where("library_id = ?", libraryID)
+	} else if len(excludeLibraryIDs) > 0 {
+		query = query.Where("library_id NOT IN ?", excludeLibraryIDs)
 	}
 
 	query.Count(&total)

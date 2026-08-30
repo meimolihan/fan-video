@@ -89,6 +89,8 @@ type UpdateLibraryRequest struct {
 	OrganizeOutputDir *string `json:"organize_output_dir"`
 	// 媒体库级别设置
 	EnableFileWatch *bool `json:"enable_file_watch"`
+	// 隐藏开关：true 时该媒体库在浏览/首页/搜索中隐藏（数据完整保留）
+	Hidden *bool `json:"hidden"`
 }
 
 // List 获取所有媒体库（按用户权限过滤）
@@ -103,6 +105,15 @@ func (h *LibraryHandler) List(c *gin.Context) {
 		if uid, ok := c.Get("user_id"); ok {
 			libs = h.permSvc.FilterLibraries(uid.(string), libs)
 		}
+		// 隐藏媒体库对普通用户不可见（数据保留，管理员可在管理页面恢复显示）
+		filtered := libs[:0]
+		for _, lib := range libs {
+			if lib.Hidden {
+				continue
+			}
+			filtered = append(filtered, lib)
+		}
+		libs = filtered
 	}
 	c.JSON(http.StatusOK, gin.H{"data": libs})
 }
@@ -355,6 +366,9 @@ func (h *LibraryHandler) Update(c *gin.Context) {
 	}
 	if req.EnableFileWatch != nil {
 		lib.EnableFileWatch = *req.EnableFileWatch
+	}
+	if req.Hidden != nil {
+		lib.Hidden = *req.Hidden
 	}
 
 	if err := h.libService.Update(lib); err != nil {

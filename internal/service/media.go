@@ -53,9 +53,25 @@ func NewMediaService(
 	}
 }
 
+// hiddenLibraryIDs 返回处于隐藏状态的媒体库 ID（浏览/首页/搜索排除用）。
+// 查询失败时按无隐藏库处理，避免隐藏状态本身干扰正常浏览。
+func (s *MediaService) hiddenLibraryIDs() []string {
+	if s.libRepo == nil {
+		return nil
+	}
+	ids, err := s.libRepo.HiddenIDs()
+	if err != nil || len(ids) == 0 {
+		return nil
+	}
+	return ids
+}
+
 // ListMedia 获取媒体列表
 func (s *MediaService) ListMedia(page, size int, libraryID string) ([]model.Media, int64, error) {
-	return s.mediaRepo.List(page, size, libraryID)
+	if libraryID != "" {
+		return s.mediaRepo.List(page, size, libraryID)
+	}
+	return s.mediaRepo.List(page, size, "", s.hiddenLibraryIDs()...)
 }
 
 // GetDetail 获取媒体详情
@@ -79,7 +95,7 @@ func (s *MediaService) Recent(limit int) ([]model.Media, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 20
 	}
-	return s.mediaRepo.Recent(limit)
+	return s.mediaRepo.Recent(limit, s.hiddenLibraryIDs()...)
 }
 
 // RecentAggregated 最近添加（聚合模式：合集内剧集聚合为合集，独立媒体直接展示）
@@ -87,13 +103,14 @@ func (s *MediaService) RecentAggregated(limit int) ([]model.Media, []model.Serie
 	if limit <= 0 || limit > 50 {
 		limit = 20
 	}
+	exclude := s.hiddenLibraryIDs()
 	// 获取最近添加的独立媒体（不属于任何合集的）
-	independentMedia, err := s.mediaRepo.RecentNonEpisode(limit)
+	independentMedia, err := s.mediaRepo.RecentNonEpisode(limit, exclude...)
 	if err != nil {
 		return nil, nil, err
 	}
 	// 获取最近有更新的合集
-	recentSeries, err := s.seriesRepo.RecentUpdated(limit)
+	recentSeries, err := s.seriesRepo.RecentUpdated(limit, exclude...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -102,7 +119,10 @@ func (s *MediaService) RecentAggregated(limit int) ([]model.Media, []model.Serie
 
 // ListMediaAggregated 获取媒体列表（聚合模式：仅返回不属于合集的媒体）
 func (s *MediaService) ListMediaAggregated(page, size int, libraryID string) ([]model.Media, int64, error) {
-	return s.mediaRepo.ListNonEpisode(page, size, libraryID)
+	if libraryID != "" {
+		return s.mediaRepo.ListNonEpisode(page, size, libraryID)
+	}
+	return s.mediaRepo.ListNonEpisode(page, size, "", s.hiddenLibraryIDs()...)
 }
 
 // MixedItem 混合项 — 统一表示电影或合集
@@ -123,15 +143,29 @@ type MixedListResult struct {
 // ListMixed 获取电影与合集的混合列表（Emby风格：电影+合集混合展示，按时间排序）
 func (s *MediaService) ListMixed(page, size int, libraryID string) (*MixedListResult, error) {
 	// 1. 获取所有独立电影（非剧集）
-	movies, err := s.mediaRepo.RecentNonEpisodeAll(libraryID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 2. 获取所有合集
-	seriesList, err := s.seriesRepo.ListAll(libraryID)
-	if err != nil {
-		return nil, err
+	var movies []model.Media
+	var seriesList []model.Series
+	if libraryID != "" {
+		var err error
+		movies, err = s.mediaRepo.RecentNonEpisodeAll(libraryID)
+		if err != nil {
+			return nil, err
+		}
+		seriesList, err = s.seriesRepo.ListAll(libraryID)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		exclude := s.hiddenLibraryIDs()
+		var err error
+		movies, err = s.mediaRepo.RecentNonEpisodeAll("", exclude...)
+		if err != nil {
+			return nil, err
+		}
+		seriesList, err = s.seriesRepo.ListAll("", exclude...)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// 2.5 对同名 Series 去重：标准化标题相同的多个 Series 只展示元数据最丰富的那个
@@ -291,12 +325,12 @@ func (s *MediaService) RecentMixed(limit int) ([]MixedItem, error) {
 		limit = 20
 	}
 
-	movies, err := s.mediaRepo.RecentNonEpisode(limit)
+	movies, err := s.mediaRepo.RecentNonEpisode(limit, s.hiddenLibraryIDs()...)
 	if err != nil {
 		return nil, err
 	}
 
-	seriesList, err := s.seriesRepo.RecentUpdated(limit * 2) // 多取一些，去重后再截断
+	seriesList, err := s.seriesRepo.RecentUpdated(limit*2, s.hiddenLibraryIDs()...) // 多取一些，去重后再截断
 	if err != nil {
 		return nil, err
 	}
@@ -334,13 +368,13 @@ func (s *MediaService) CountNonEpisodeByLibrary(libraryID string) (int64, error)
 
 // Search 搜索媒体
 func (s *MediaService) Search(keyword string, page, size int) ([]model.Media, int64, error) {
-	return s.mediaRepo.Search(keyword, page, size)
+	return s.mediaRepo.Search(keyword, page, size, s.hiddenLibraryIDs()...)
 }
 
 // SearchAdvanced 高级搜索（支持多条件筛选和排序）
 // 对 episode 类型的结果按 SeriesID 聚合，同一剧集只展示一个合集级别的条目
 func (s *MediaService) SearchAdvanced(params repository.SearchAdvancedParams) ([]model.Media, int64, error) {
-	media, total, err := s.mediaRepo.SearchAdvanced(params)
+	media, total, err := s.mediaRepo.SearchAdvanced(params, s.hiddenLibraryIDs()...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -439,12 +473,13 @@ type SearchMixedResult struct {
 
 // SearchMixed 混合搜索（同时搜索媒体和合集）
 func (s *MediaService) SearchMixed(keyword string, page, size int) (*SearchMixedResult, error) {
-	media, mediaTotal, err := s.mediaRepo.Search(keyword, page, size)
+	exclude := s.hiddenLibraryIDs()
+	media, mediaTotal, err := s.mediaRepo.Search(keyword, page, size, exclude...)
 	if err != nil {
 		return nil, err
 	}
 
-	series, seriesTotal, err := s.seriesRepo.SearchSeries(keyword, page, size)
+	series, seriesTotal, err := s.seriesRepo.SearchSeries(keyword, page, size, exclude...)
 	if err != nil {
 		return nil, err
 	}

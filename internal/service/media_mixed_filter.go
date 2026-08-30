@@ -56,6 +56,15 @@ func (f MixedListFilter) normalized() MixedListFilter {
 	return f
 }
 
+// libraryExclusion 当未指定媒体库时，返回需排除的隐藏媒体库 ID；指定了媒体库时不进行排除
+//（便于管理员在隐藏后仍能通过 URL 直接访问该库）。
+func (s *MediaService) libraryExclusion(libraryID string) []string {
+	if libraryID != "" {
+		return nil
+	}
+	return s.hiddenLibraryIDs()
+}
+
 // ListMixedFiltered 返回服务端稳定分页的混合媒体列表。
 // 筛选和排序必须在分页前执行，否则客户端翻页时会出现重复、漏项或空页。
 func (s *MediaService) ListMixedFiltered(page, size int, rawFilter MixedListFilter) (*MixedListResult, error) {
@@ -67,11 +76,11 @@ func (s *MediaService) ListMixedFiltered(page, size int, rawFilter MixedListFilt
 		size = 20
 	}
 
-	movies, err := s.mediaRepo.RecentNonEpisodeAll(filter.LibraryID)
+	movies, err := s.mediaRepo.RecentNonEpisodeAll(filter.LibraryID, s.libraryExclusion(filter.LibraryID)...)
 	if err != nil {
 		return nil, err
 	}
-	seriesList, err := s.seriesRepo.ListAll(filter.LibraryID)
+	seriesList, err := s.seriesRepo.ListAll(filter.LibraryID, s.libraryExclusion(filter.LibraryID)...)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +97,7 @@ func (s *MediaService) ListMixedFiltered(page, size int, rawFilter MixedListFilt
 
 	var episodeItems []MixedItem
 	if filter.IncludeEpisodes {
-		episodes, err := s.mediaRepo.RecentEpisodesAll(filter.LibraryID)
+		episodes, err := s.mediaRepo.RecentEpisodesAll(filter.LibraryID, s.libraryExclusion(filter.LibraryID)...)
 		if err != nil {
 			return nil, err
 		}

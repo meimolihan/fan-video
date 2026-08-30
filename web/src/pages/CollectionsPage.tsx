@@ -67,13 +67,16 @@ export default function CollectionsPage() {
   const viewMode = (searchParams.get('view') as ViewMode) || 'grid'
   const sortValue = (searchParams.get('sort') as SortValue) || 'created_desc'
   const filterAuto = searchParams.get('auto') || ''
-  const filterLibrary = searchParams.get('library_id') || ''
+  const rawFilterLibrary = searchParams.get('library_id') || ''
   const [searchKeyword, setSearchKeyword] = useState('')
   const [searchResults, setSearchResults] = useState<MovieCollection[] | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [operating, setOperating] = useState(false)
   const [operationMsg, setOperationMsg] = useState('')
   const [libraries, setLibraries] = useState<Library[]>([])
+  // 隐藏的媒体库不出现在合集浏览页（数据仍保留在管理页面）
+  const visibleLibraries = useMemo(() => libraries.filter((library) => !library.hidden), [libraries])
+  const filterLibrary = visibleLibraries.some((library) => library.id === rawFilterLibrary) ? rawFilterLibrary : ''
   const pageSizeOptions = [12, 24, 36, 48]
 
   useEffect(() => {
@@ -264,7 +267,7 @@ export default function CollectionsPage() {
             <Tag><LibraryIcon size={10} aria-hidden="true" />{total} 个合集</Tag>
           </FilterRow>
 
-          {libraries.length > 1 && (
+          {visibleLibraries.length > 1 && (
             <FilterRow icon={<LibraryIcon size={13} aria-hidden="true" />} label="媒体库:">
               <Select
                 value={filterLibrary}
@@ -273,7 +276,7 @@ export default function CollectionsPage() {
                 className="!w-auto min-w-40"
               >
                 <option value="">全部媒体库</option>
-                {libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}
+                {visibleLibraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}
               </Select>
             </FilterRow>
           )}

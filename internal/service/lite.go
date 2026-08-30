@@ -86,6 +86,7 @@ func NewLiteServices(repos *repository.Repositories, cfg *config.Config, logger 
 		repos.RecommendCache,
 		logger,
 	)
+	recommendService.SetLibraryRepo(repos.Library)
 
 	fileManager := NewFileManagerService(
 		repos.Media,
@@ -101,6 +102,7 @@ func NewLiteServices(repos *repository.Repositories, cfg *config.Config, logger 
 	importExportService := NewMediaImportExportService(repos.DB(), logger)
 	statsService := NewStatsService(repos.PlaybackStats, repos.Media, logger)
 	collectionService := NewCollectionService(repos.MovieCollection, repos.Media, logger)
+	collectionService.SetLibraryRepo(repos.Library)
 
 	streamService := NewStreamService(repos.Media, repos.Series, mediaExecution, cfg, logger)
 	streamService.SetSettingRepo(repos.SystemSetting)
@@ -138,6 +140,7 @@ func NewLiteServices(repos *repository.Repositories, cfg *config.Config, logger 
 
 	svcs.Series.SetMediaPersonRepo(repos.MediaPerson)
 	svcs.Series.SetStreamService(streamService)
+	svcs.Series.SetLibraryRepo(repos.Library)
 	svcs.Library.SetSeriesService(svcs.Series)
 	svcs.Library.SetCollectionService(collectionService)
 

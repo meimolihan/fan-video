@@ -19,7 +19,8 @@ type SeriesService struct {
 	seriesRepo      *repository.SeriesRepo
 	mediaRepo       *repository.MediaRepo
 	mediaPersonRepo *repository.MediaPersonRepo
-	stream          *StreamService // 用于封面回退：无海报时借用分集海报（可选注入）
+	libRepo         *repository.LibraryRepo          // 用于排除隐藏媒体库（延迟注入）
+	stream          *StreamService                   // 用于封面回退：无海报时借用分集海报（可选注入）
 	logger          *zap.SugaredLogger
 }
 
@@ -29,6 +30,23 @@ func NewSeriesService(seriesRepo *repository.SeriesRepo, mediaRepo *repository.M
 		mediaRepo:  mediaRepo,
 		logger:     logger,
 	}
+}
+
+// SetLibraryRepo 延迟注入 LibraryRepo（用于排除隐藏媒体库）
+func (s *SeriesService) SetLibraryRepo(repo *repository.LibraryRepo) {
+	s.libRepo = repo
+}
+
+// hiddenLibraryIDs 返回处于隐藏状态的媒体库 ID，查询失败时按无隐藏库处理
+func (s *SeriesService) hiddenLibraryIDs() []string {
+	if s.libRepo == nil {
+		return nil
+	}
+	ids, err := s.libRepo.HiddenIDs()
+	if err != nil || len(ids) == 0 {
+		return nil
+	}
+	return ids
 }
 
 // SetMediaPersonRepo 延迟注入 MediaPersonRepo（避免循环依赖）
@@ -43,7 +61,10 @@ func (s *SeriesService) SetStreamService(stream *StreamService) {
 
 // ListSeries 获取剧集合集列表（分页）
 func (s *SeriesService) ListSeries(page, size int, libraryID string) ([]model.Series, int64, error) {
-	return s.seriesRepo.List(page, size, libraryID)
+	if libraryID != "" {
+		return s.seriesRepo.List(page, size, libraryID)
+	}
+	return s.seriesRepo.List(page, size, "", s.hiddenLibraryIDs()...)
 }
 
 // GetSeriesDetail 获取剧集合集详情（含所有剧集）

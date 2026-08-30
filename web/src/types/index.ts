@@ -102,6 +102,8 @@ export interface Library {
    */
   organize_output_dir: string
   enable_file_watch: boolean
+  /** 隐藏开关：为 true 时该媒体库在浏览/首页/搜索中隐藏（数据完整保留） */
+  hidden: boolean
 }
 
 /** AI 自动整理模式枚举 */
@@ -165,6 +167,8 @@ export interface CreateLibraryRequest {
   /** 硬链接输出目录（为空=不创建硬链接） */
   organize_output_dir?: string
   enable_file_watch?: boolean
+  /** 隐藏开关（仅更新接口使用） */
+  hidden?: boolean
 }
 
 // ==================== 媒体 ====================

@@ -148,7 +148,10 @@ export default function BrowsePage() {
   const page = parseInt(searchParams.get('page') || '1', 10) || 1
   const size = parseInt(searchParams.get('size') || '30', 10) || 30
   const searchQuery = searchParams.get('q') || ''
-  const selectedLibrary = searchParams.get('lib') || ''
+  const rawSelectedLibrary = searchParams.get('lib') || ''
+  // 隐藏的媒体库不出现在浏览页：URL 直达隐藏库时按「全部」处理（数据仍保留在管理页面）
+  const visibleLibraries = useMemo(() => libraries.filter((library) => !library.hidden), [libraries])
+  const selectedLibrary = visibleLibraries.some((library) => library.id === rawSelectedLibrary) ? rawSelectedLibrary : ''
   const mediaType = (searchParams.get('type') || '') as '' | 'movie' | 'series'
   const selectedGenres = useMemo(() => {
     const genres = searchParams.get('genres')
@@ -440,7 +443,7 @@ export default function BrowsePage() {
       </div>
 
       <div className="nv-browse-toolbar flex flex-wrap items-center gap-1.5">
-        {libraries.length > 1 && (
+        {visibleLibraries.length > 1 && (
           <Select
             value={selectedLibrary}
             onChange={(event) => updateUrl({ lib: event.target.value || null })}
@@ -448,7 +451,7 @@ export default function BrowsePage() {
             className="!w-auto min-w-28"
           >
             <option value="">全部媒体库</option>
-            {libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}
+            {visibleLibraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}
           </Select>
         )}
 

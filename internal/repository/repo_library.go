@@ -27,6 +27,14 @@ func (r *LibraryRepo) List() ([]model.Library, error) {
 	return libs, err
 }
 
+// HiddenIDs 返回所有处于隐藏状态的媒体库 ID
+// 供浏览/首页/搜索等用户侧内容查询排除隐藏媒体库
+func (r *LibraryRepo) HiddenIDs() ([]string, error) {
+	var ids []string
+	err := r.db.Model(&model.Library{}).Where("hidden = ?", true).Pluck("id", &ids).Error
+	return ids, err
+}
+
 func (r *LibraryRepo) Update(lib *model.Library) error {
 	return r.db.Save(lib).Error
 }
