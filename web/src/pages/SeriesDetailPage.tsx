@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { durations } from '@/lib/motion'
-import { adminApi, seriesApi, serverApi, streamApi, userApi } from '@/api'
+import { adminApi, homeApi, seriesApi, serverApi, streamApi, userApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/components/Toast'
 import EditMetadataModal from '@/components/EditMetadataModal'
@@ -17,7 +17,7 @@ import { formatErrMsg } from '@/utils/error'
 import { invalidateMediaListCaches } from '@/utils/invalidateMediaCaches'
 import { bumpPosterVersion } from '@/stores/mediaRefresh'
 import type { Media, MediaPerson, SeasonInfo, Series, WatchHistory } from '@/types'
-import { ChevronDown, ChevronLeft, ChevronUp, FileText, Pencil, RefreshCw } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronUp, FileText, Pencil, RefreshCw, Sparkles } from 'lucide-react'
 
 const HISTORY_PAGE_SIZE = 50
 const HISTORY_FETCH_CONCURRENCY = 6
@@ -156,6 +156,8 @@ export default function SeriesDetailPage() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showPosterPicker, setShowPosterPicker] = useState(false)
+  const [featuredBusy, setFeaturedBusy] = useState(false)
+  const [isFeatured, setIsFeatured] = useState(false)
   const [editForm, setEditForm] = useState<{
     title: string
     orig_title: string
@@ -275,6 +277,18 @@ export default function SeriesDetailPage() {
     return () => { cancelled = true }
   }, [favoriteEpisodeId])
 
+  useEffect(() => {
+    if (!isAdmin || !id) return
+    let cancelled = false
+    homeApi.listFeatured()
+      .then((res) => {
+        if (cancelled) return
+        setIsFeatured((res.data.data || []).some((entry) => entry.item_type === 'series' && entry.item_id === id))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [isAdmin, id])
+
   const handleFavorite = async () => {
     if (!favoriteEpisode) return
     try {
@@ -369,6 +383,26 @@ export default function SeriesDetailPage() {
       .catch(() => {})
   }
 
+  const handleAddFeatured = async () => {
+    if (!id) return
+    setFeaturedBusy(true)
+    try {
+      await homeApi.addFeatured('series', id)
+      setIsFeatured(true)
+      invalidateMediaListCaches()
+      toast.success('已加入首页轮播精选')
+    } catch (err) {
+      // 409 已存在：同步为已添加状态而不是报错
+      try {
+        const { data } = await homeApi.listFeatured()
+        setIsFeatured((data.data || []).some((entry) => entry.item_type === 'series' && entry.item_id === id))
+      } catch { /* 忽略同步失败 */ }
+      toast.error(formatErrMsg(err, '加入首页轮播失败'))
+    } finally {
+      setFeaturedBusy(false)
+    }
+  }
+
   const handlePosterChange = async (mediaId: string) => {
     if (!id) return
     try {
@@ -439,6 +473,10 @@ export default function SeriesDetailPage() {
             <Button type="button" variant="ghost" size="sm" onClick={handleRefreshMetadata} disabled={scraping}>
               <RefreshCw size={14} className={scraping ? 'animate-spin' : undefined} aria-hidden="true" />
               {scraping ? '重新刮削中' : '重新刮削'}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={handleAddFeatured} disabled={featuredBusy || isFeatured}>
+              <Sparkles size={14} aria-hidden="true" />
+              {isFeatured ? '已在首页轮播' : (featuredBusy ? '添加中…' : '加入首页轮播')}
             </Button>
           </div>
         )}

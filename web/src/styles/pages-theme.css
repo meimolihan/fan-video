@@ -5491,16 +5491,6 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .nv-detail-highlight-slide {
-    transition: none;
-    transform: none;
-  }
-  .nv-detail-highlight-slide.is-active {
-    animation: none;
-  }
-}
-
 
 /* ---- 来源: series-detail-cinema.css ---- */
 /* Nowen Video · Series detail OS

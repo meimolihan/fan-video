@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { mediaApi, seriesApi, streamApi } from '@/api'
 import { useToast } from '@/components/Toast'
 import type { Media, MixedItem, Series } from '@/types'
@@ -327,7 +327,7 @@ export default function LibraryPage() {
         pagedMixed.length === 0 ? (
           <EmptyState icon={<Film size={24} />} title={hasLocalFilter ? '没有找到匹配的内容' : '此媒体库暂无内容'} description={hasLocalFilter ? '尝试调整筛选条件或使用其他关键词。' : '扫描媒体文件后，内容会显示在这里。'} action={hasLocalFilter ? <Button variant="secondary" size="sm" onClick={clearAllFilters}>清除所有筛选</Button> : undefined} />
         ) : viewMode === 'grid' ? (
-          <SharedMediaGrid>{pagedMixed.map((item) => item.type === 'series' && item.series ? <MediaCard key={`s-${item.series.id}`} series={item.series} /> : item.media ? <MediaCard key={`m-${item.media.id}`} media={item.media} quickActions /> : null)}</SharedMediaGrid>
+          <SharedMediaGrid>{pagedMixed.map((item) => item.type === 'series' && item.series ? <MediaCard key={`s-${item.series.id}`} series={item.series} /> : item.media ? <MediaCard key={`m-${item.media.id}`} media={item.media} /> : null)}</SharedMediaGrid>
         ) : viewMode === 'list' ? (
           <div className="divide-y divide-[var(--nv-border-subtle)] border-y border-[var(--nv-border-subtle)]">{pagedMixed.map((item) => <LibraryListItem key={item.type === 'series' ? `s-${item.series?.id}` : `m-${item.media?.id}`} item={item} />)}</div>
         ) : (
@@ -384,6 +384,7 @@ function formatDuration(seconds: number) {
 
 function LibraryListItem({ item, series: seriesProp }: { item?: MixedItem; series?: Series }) {
   const [tagsExpanded, setTagsExpanded] = useState(false)
+  const navigate = useNavigate()
   const isSeries = Boolean(seriesProp) || item?.type === 'series'
   const series = seriesProp || (item?.type === 'series' ? item.series : undefined)
   const media = isSeries ? undefined : item?.media
@@ -396,7 +397,9 @@ function LibraryListItem({ item, series: seriesProp }: { item?: MixedItem; serie
   const duration = media?.duration || 0
   const genreList = genres ? genres.split(',').map((genre) => genre.trim()).filter(Boolean) : []
   const visibleTags = tagsExpanded ? genreList : genreList.slice(0, 3)
-  const linkTo = series ? `/series/${series.id}` : media?.series_id ? `/series/${media.series_id}` : `/media/${media?.id}`
+  // 分集/电影等具体视频：点击进详情 → /media/:id（不再跳转所属剧集）
+  const linkTo = series ? `/series/${series.id}` : `/media/${media?.id}`
+  const isEpisode = !isSeries && !!media?.series_id
   // 分集与电影一律请求自身海报端点（同名图 > 子目录同名图 > 首帧），不共享剧集海报
   const posterUrl = series ? streamApi.getSeriesPosterUrl(series.id) : streamApi.getPosterUrl(media?.id || '')
   const hasPoster = series ? !!series.poster_path : !!media?.poster_path || !!media?.series_id
@@ -417,17 +420,31 @@ function LibraryListItem({ item, series: seriesProp }: { item?: MixedItem; serie
         {overview && <p className="mt-1 line-clamp-1 text-[10px] text-[var(--nv-text-tertiary)]">{overview}</p>}
       </div>
       {rating > 0 && <Tag tone="rating" className="shrink-0"><Star size={10} fill="currentColor" />{rating.toFixed(1)}</Tag>}
+      {isEpisode && media && (
+        <button
+          type="button"
+          onClick={(event) => { event.preventDefault(); event.stopPropagation(); navigate(`/play/${media.id}`) }}
+          aria-label={`播放 ${title}`}
+          title="立即播放"
+          className="mr-2 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--nv-action-primary)] text-[var(--nv-text-on-brand)] transition-transform duration-150 hover:scale-110"
+        >
+          <Play size={13} fill="currentColor" aria-hidden="true" />
+        </button>
+      )}
     </Link>
   )
 }
 
 function LibraryPosterItem({ item, series: seriesProp }: { item?: MixedItem; series?: Series }) {
+  const navigate = useNavigate()
   const isSeries = Boolean(seriesProp) || item?.type === 'series'
   const series = seriesProp || (item?.type === 'series' ? item.series : undefined)
   const media: Media | undefined = isSeries ? undefined : item?.media
   const title = series?.title || media?.title || ''
   const rating = series?.rating || media?.rating || 0
-  const linkTo = series ? `/series/${series.id}` : media?.series_id ? `/series/${media.series_id}` : `/media/${media?.id}`
+  // 分集/电影等具体视频：点击进详情 → /media/:id（不再跳转所属剧集）；分集中部播放按钮直接播放
+  const linkTo = series ? `/series/${series.id}` : `/media/${media?.id}`
+  const isEpisode = !isSeries && !!media?.series_id
   const posterUrl = series ? streamApi.getSeriesPosterUrl(series.id) : streamApi.getPosterUrl(media?.id || '')
   const hasPoster = series ? !!series.poster_path : !!media?.poster_path || !!media?.series_id
 
@@ -442,7 +459,19 @@ function LibraryPosterItem({ item, series: seriesProp }: { item?: MixedItem; ser
         fallback={isSeries ? <Tv size={22} aria-hidden="true" /> : <Film size={22} aria-hidden="true" />}
       >
         <div className="absolute inset-0 z-20 grid place-items-center bg-[var(--nv-bg-overlay)] opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-          <span className="grid h-[34px] w-[34px] place-items-center rounded-full bg-[var(--nv-action-primary)] text-[var(--nv-text-on-brand)]"><Play size={13} fill="currentColor" /></span>
+          {isEpisode && media ? (
+            <button
+              type="button"
+              onClick={(event) => { event.preventDefault(); event.stopPropagation(); navigate(`/play/${media.id}`) }}
+              aria-label={`播放 ${title}`}
+              title="立即播放"
+              className="grid h-[34px] w-[34px] place-items-center rounded-full bg-[var(--nv-action-primary)] text-[var(--nv-text-on-brand)] transition-transform duration-150 hover:scale-110"
+            >
+              <Play size={13} fill="currentColor" aria-hidden="true" />
+            </button>
+          ) : (
+            <span className="grid h-[34px] w-[34px] place-items-center rounded-full bg-[var(--nv-action-primary)] text-[var(--nv-text-on-brand)]"><Play size={13} fill="currentColor" /></span>
+          )}
         </div>
         {rating > 0 && <Tag tone="quality" className="absolute left-1.5 top-1.5 z-30"><Star size={9} fill="currentColor" />{rating.toFixed(1)}</Tag>}
         {isSeries && <Tag tone="quality" className="absolute bottom-1.5 right-1.5 z-30">剧集</Tag>}

@@ -16,8 +16,9 @@ import (
 const homeFeaturedMinItems = 2
 
 // HomeFeaturedHandler 首页手动精选轮播。
-// 管理端维护精选条目（电影/剧集），首页接口在条目数达标时
-// 按添加顺序输出拼装结果，优先级高于推荐算法。
+// 管理端维护精选条目（电影 / 单集视频 / 剧集），首页接口在条目数达标时
+// 按添加顺序输出拼装结果，优先级高于推荐算法。单集视频以 movie
+// 类型条目存储，播放时直接定位到该文件本身。
 type HomeFeaturedHandler struct {
 	featuredRepo *repository.HomeFeaturedRepo
 	mediaRepo    *repository.MediaRepo
@@ -47,6 +48,7 @@ type HomeFeaturedEntry struct {
 	ID        string    `json:"id"`
 	ItemType  string    `json:"item_type"`
 	ItemID    string    `json:"item_id"`
+	Kind      string    `json:"kind,omitempty"` // movie | episode | series，便于前端展示精确类型
 	Title     string    `json:"title"`
 	Year      int       `json:"year,omitempty"`
 	Valid     bool      `json:"valid"` // 引用的媒体/剧集是否仍存在
@@ -62,15 +64,17 @@ func (h *HomeFeaturedHandler) toEntry(row model.HomeFeatured) HomeFeaturedEntry 
 	}
 	switch row.ItemType {
 	case "movie":
-		if media, err := h.mediaRepo.FindByID(row.ItemID); err == nil && media != nil && media.MediaType != "episode" {
+		if media, err := h.mediaRepo.FindByID(row.ItemID); err == nil && media != nil {
 			entry.Title = media.Title
 			entry.Year = media.Year
+			entry.Kind = media.MediaType // "movie"（电影）或 "episode"（单集视频）
 			entry.Valid = true
 		}
 	case "series":
 		if series, err := h.seriesRepo.FindByIDOnly(row.ItemID); err == nil && series != nil {
 			entry.Title = series.Title
 			entry.Year = series.Year
+			entry.Kind = "series"
 			entry.Valid = true
 		}
 	}
@@ -98,7 +102,7 @@ func (h *HomeFeaturedHandler) AdminList(c *gin.Context) {
 	})
 }
 
-// Add 管理端：新增一条精选（movie/series 二选一）。
+// Add 管理端：新增一条精选（movie=电影或单集视频，series=剧集）。
 func (h *HomeFeaturedHandler) Add(c *gin.Context) {
 	var req struct {
 		ItemType string `json:"item_type" binding:"required"`
@@ -117,11 +121,7 @@ func (h *HomeFeaturedHandler) Add(c *gin.Context) {
 	case "movie":
 		media, err := h.mediaRepo.FindByID(req.ItemID)
 		if err != nil || media == nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "电影不存在或已被删除"})
-			return
-		}
-		if media.MediaType == "episode" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "分集不能直接加入精选，请添加其所属剧集"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "视频不存在或已被删除"})
 			return
 		}
 	case "series":
@@ -220,7 +220,7 @@ func (h *HomeFeaturedHandler) ListForHome(c *gin.Context) {
 		switch row.ItemType {
 		case "movie":
 			media, err := h.mediaRepo.FindByID(row.ItemID)
-			if err != nil || media == nil || media.MediaType == "episode" {
+			if err != nil || media == nil {
 				continue
 			}
 			if _, skip := hidden[media.LibraryID]; skip {

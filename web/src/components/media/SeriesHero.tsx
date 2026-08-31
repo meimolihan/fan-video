@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { Heart, Image, MoreHorizontal, Play, Share2, Star, Trash2, Tv } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Heart, Image, MoreHorizontal, Play, Share2, Star, Trash2 } from 'lucide-react'
 import type { Media, Series } from '@/types'
 import { streamApi } from '@/api'
 import { Button, Tag, buttonClassName } from '@/components/design-system'
@@ -44,7 +44,6 @@ export default function SeriesHero({
   const [imageLoaded, setImageLoaded] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuContainerRef = useRef<HTMLDivElement>(null)
-  const prefersReducedMotion = useReducedMotion()
   const genres = (series.genres || '').split(',').map((item) => item.trim()).filter(Boolean)
 
   const episodePosters = useMemo(() => {
@@ -87,11 +86,11 @@ export default function SeriesHero({
     const id = `${series.id}-${activeIndex}`
     const prev = posterSrcRef.current
     posterSrcRef.current = { id, src }
-    if (prev && prev.id !== id && posterUrls.length > 1 && !prefersReducedMotion && prev.src) {
+    if (prev && prev.id !== id && posterUrls.length > 1 && prev.src) {
       fxSeqRef.current += 1
       setFx({ src: prev.src, seq: fxSeqRef.current })
     }
-  }, [activeIndex, posterUrls, series.id, prefersReducedMotion])
+  }, [activeIndex, posterUrls, series.id])
 
   // Warm the browser cache up front so a switch never waits on the network.
   useEffect(() => {
@@ -184,13 +183,13 @@ export default function SeriesHero({
             <motion.div
               key={`series-poster-${series.id}-${activeIndex}-${posterVersion}`}
               className="absolute inset-0 overflow-hidden rounded-[inherit]"
-              initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0.04, scale: 1.045, filter: 'blur(14px)' }}
-              animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1, filter: 'blur(0px)' }}
-              exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 1.015 }}
+              initial={{ opacity: 0.04, scale: 1.045, filter: 'blur(14px)' }}
+              animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, scale: 1.015 }}
               transition={{
-                duration: prefersReducedMotion ? 0.1 : 0.95,
+                duration: 0.95,
                 ease: 'easeOut',
-                delay: prefersReducedMotion ? 0 : 0.12,
+                delay: 0.12,
               }}
             >
               <img
@@ -204,7 +203,7 @@ export default function SeriesHero({
             </motion.div>
           </AnimatePresence>
           <div className="nv-series-poster-slideshow-scrim" />
-          {fx && !prefersReducedMotion && (
+          {fx && (
             <HeroParticleTransition
               key={fx.seq}
               className="pointer-events-none absolute inset-0 z-20"
@@ -243,7 +242,7 @@ export default function SeriesHero({
             alt={series.title}
             ratio="poster"
             loading="eager"
-            fallback={<Tv size={32} aria-hidden="true" />}
+            fallback={<Play size={32} aria-hidden="true" />}
             className="nv-detail-poster nv-series-poster shadow-[var(--nv-shadow-card)]"
           />
         </div>

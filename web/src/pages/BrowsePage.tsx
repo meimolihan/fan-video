@@ -571,7 +571,6 @@ export default function BrowsePage() {
                 <MediaCard
                   media={item.media}
                   eyebrow={item.type === 'episode' ? item.media.series?.title : undefined}
-                  quickActions
                 />
               )
             }
@@ -619,6 +618,7 @@ function BrowseSkeleton({ viewMode }: { viewMode: ViewMode }) {
 
 function BrowseListItem({ item }: { item: MixedItem }) {
   const [tagsExpanded, setTagsExpanded] = useState(false)
+  const navigate = useNavigate()
   const posterVersion = usePosterVersion()
   const isSeries = item.type === 'series'
   const media = isSeries ? undefined : item.media
@@ -632,7 +632,9 @@ function BrowseListItem({ item }: { item: MixedItem }) {
   const duration = media?.duration || 0
   const genreList = genres ? genres.split(',').map((genre: string) => genre.trim()).filter(Boolean) : []
   const visibleTags = tagsExpanded ? genreList : genreList.slice(0, 3)
-  const linkTo = series ? `/series/${series.id}` : media?.series_id ? `/series/${media.series_id}` : `/media/${media?.id}`
+  // 分集/电影等具体视频：点击进详情 → /media/:id（不再跳转所属剧集）
+  const linkTo = series ? `/series/${series.id}` : `/media/${media?.id}`
+  const isEpisode = !isSeries && !!media?.series_id
   const posterUrl = getItemPosterUrl(item, posterVersion)
   const hasPoster = hasItemPoster(item)
   const durationLabel = duration ? `${Math.floor(duration / 3600) ? `${Math.floor(duration / 3600)}h ` : ''}${Math.floor((duration % 3600) / 60)}m` : ''
@@ -660,6 +662,17 @@ function BrowseListItem({ item }: { item: MixedItem }) {
         {overview && <p className="mt-1 line-clamp-1 text-[10px] text-[var(--nv-text-tertiary)]">{overview}</p>}
       </div>
       {rating > 0 && <SemanticTag tone="rating" className="shrink-0"><Star size={10} fill="currentColor" />{rating.toFixed(1)}</SemanticTag>}
+      {isEpisode && media && (
+        <button
+          type="button"
+          onClick={(event) => { event.preventDefault(); event.stopPropagation(); navigate(`/play/${media.id}`) }}
+          aria-label={`播放 ${title}`}
+          title="立即播放"
+          className="mr-2 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--nv-action-primary)] text-[var(--nv-text-on-brand)] transition-transform duration-150 hover:scale-110"
+        >
+          <Play size={13} fill="currentColor" aria-hidden="true" />
+        </button>
+      )}
     </Link>
   )
 }
@@ -672,10 +685,11 @@ function PosterWallItem({ item }: { item: MixedItem }) {
   const series = isSeries ? item.series : undefined
   const title = series?.title || media?.title || ''
   const rating = series?.rating || media?.rating || 0
-  const linkTo = series ? `/series/${series.id}` : media?.series_id ? `/series/${media.series_id}` : `/media/${media?.id}`
+  // 分集/电影等具体视频：点击进详情 → /media/:id（不再跳转所属剧集）；
+  // 分集中部播放按钮直接播放。
+  const linkTo = series ? `/series/${series.id}` : `/media/${media?.id}`
   const posterUrl = getItemPosterUrl(item, posterVersion)
   const hasPoster = hasItemPoster(item)
-  // 分集：中间播放按钮直接播放；点击其余位置由整卡 Link 进入所在剧集
   const isEpisode = !isSeries && !!media?.series_id
 
   return (

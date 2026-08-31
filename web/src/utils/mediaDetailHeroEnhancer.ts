@@ -69,11 +69,6 @@ function clearSlides(target: HeroSession) {
   target.hero.classList.remove('nv-detail-hero-has-highlight-slides')
 }
 
-function reducedMotionPreferred() {
-  return typeof window.matchMedia === 'function'
-    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-}
-
 // Recreates the homepage hero's particle shatter for the highlight slideshow:
 // the outgoing frame shatters into light points while the next one assembles.
 // Same engine as HeroParticleTransition, driven imperatively since this carousel
@@ -128,9 +123,8 @@ function renderSlides(target: HeroSession, urls: string[]) {
   target.layer = layer
   target.hero.classList.add('nv-detail-hero-has-highlight-slides')
 
-  // Reduced-motion only removes the crossfade/zoom transition in CSS. It must
-  // not disable the slideshow itself; users who request less motion still get
-  // discrete frame changes at the normal interval.
+  // Slideshow switches always play the particle shatter + crossfade so the
+  // carousel keeps its signature transition; no reduced-motion gating here.
   if (slides.length < 2) return
 
   let activeIndex = 0
@@ -143,7 +137,7 @@ function renderSlides(target: HeroSession, urls: string[]) {
     activeIndex = nextIndex
 
     const outgoingImage = outgoing?.querySelector<HTMLImageElement>('img')
-    if (outgoingImage && !reducedMotionPreferred()) {
+    if (outgoingImage) {
       fireParticles(target, outgoingImage.src || null)
     }
   }, SLIDE_INTERVAL_MS)

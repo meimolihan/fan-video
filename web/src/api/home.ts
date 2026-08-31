@@ -5,6 +5,8 @@ export interface HomeFeaturedEntry {
   id: string
   item_type: 'movie' | 'series'
   item_id: string
+  /** movie | episode | series，用于展示精确类型 */
+  kind?: 'movie' | 'episode' | 'series'
   title?: string
   year?: number
   valid: boolean

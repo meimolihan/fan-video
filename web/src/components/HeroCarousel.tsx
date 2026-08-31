@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo, type SyntheticEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronLeft, ChevronRight, Film, Heart, Play, RotateCcw } from 'lucide-react'
 import { streamApi } from '@/api'
 import { useTranslation } from '@/i18n'
@@ -189,7 +189,6 @@ export default function HeroCarousel({
 }: HeroCarouselProps) {
   const { t } = useTranslation()
   const posterVersion = usePosterVersion()
-  const prefersReducedMotion = useReducedMotion()
   const containerRef = useRef<HTMLElement>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -231,11 +230,11 @@ export default function HeroCarousel({
     const prev = lastArtworkRef.current
     const cur = { id: media.media.id, src: getHeroArtwork(media.media, posterVersion).primary }
     lastArtworkRef.current = cur
-    if (prev && prev.id !== cur.id && items.length > 1 && !prefersReducedMotion) {
+    if (prev && prev.id !== cur.id && items.length > 1) {
       fxSeqRef.current += 1
       setFx({ src: prev.src, direction: directionRef.current, seq: fxSeqRef.current })
     }
-  }, [current, items, posterVersion, prefersReducedMotion])
+  }, [current, items, posterVersion])
 
   const goPrev = useCallback(() => {
     if (!items.length) return
@@ -327,7 +326,8 @@ export default function HeroCarousel({
 
   const artwork = getHeroArtwork(item.media, posterVersion)
   const poster = getHeroPoster(item.media, posterVersion)
-  const playLink = item.media.media_type === 'episode' && item.media.series_id
+  // 剧集代理行（id === series_id）才进剧集页；真实分集/电影直接播放该视频文件
+  const playLink = isSeriesProxy(item.media)
     ? `/series/${item.media.series_id}`
     : `/play/${item.media.id}`
   const watchState = watchStateByMediaId[item.media.id]
@@ -351,13 +351,13 @@ export default function HeroCarousel({
         <motion.div
           key={`hero-${item.media.id}`}
           className="absolute inset-0 overflow-hidden rounded-[inherit]"
-          initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0.04, scale: 1.045, filter: 'blur(14px)' }}
-          animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1, filter: 'blur(0px)' }}
-          exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 1.015 }}
+          initial={{ opacity: 0.04, scale: 1.045, filter: 'blur(14px)' }}
+          animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+          exit={{ opacity: 0, scale: 1.015 }}
           transition={{
-            duration: prefersReducedMotion ? 0.1 : 0.95,
+            duration: 0.95,
             ease: 'easeOut',
-            delay: prefersReducedMotion ? 0 : 0.12,
+            delay: 0.12,
           }}
         >
           {artwork.primary && (
@@ -378,7 +378,7 @@ export default function HeroCarousel({
       <div className="pointer-events-none absolute inset-0" style={{ background: 'var(--nv-hero-scrim)' }} />
       <div className="pointer-events-none absolute inset-0" style={{ background: 'var(--nv-hero-bottom-scrim)' }} />
 
-      {fx && !prefersReducedMotion && (
+      {fx && (
         <HeroParticleTransition
           key={fx.seq}
           className="pointer-events-none absolute inset-0 z-[5]"
@@ -402,10 +402,10 @@ export default function HeroCarousel({
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={`hero-content-${item.media.id}`}
-              initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
-              transition={{ duration: prefersReducedMotion ? 0.1 : 0.2 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.2 }}
             >
               <MediaHeroContent
                 media={item.media}

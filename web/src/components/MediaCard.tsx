@@ -16,8 +16,6 @@ interface MediaCardProps {
   className?: string
   variant?: MediaCardVariant
   showBadges?: boolean
-  /** 分集卡在海报下方显示「播放 + 查看剧集」双按钮（影视库网格用） */
-  quickActions?: boolean
 }
 
 export default function MediaCard({
@@ -27,25 +25,25 @@ export default function MediaCard({
   className,
   variant = 'poster',
   showBadges = true,
-  quickActions = false,
 }: MediaCardProps) {
   const navigate = useNavigate()
   const posterVersion = usePosterVersion()
 
   const isSeries = !!series || !!media?.series_id
-  const isEpisode = !series && !!media?.series_id
+  // 剧集代理行（id === series_id）仍按剧集语义显示；分集/电影等具体视频卡
+  // 一律用「播放」语义（Play 图标），不再因带 series_id 而被当成剧集。
+  const isSeriesProxy = !!media && !!media.series_id && media.series_id === media.id
+  const isSeriesCard = isSeries && (!!series || isSeriesProxy)
   const seriesData = series || media?.series
   const isLandscape = variant === 'landscape' || variant === 'compact'
+  // 分集/电影等具体视频：点击进详情 → /media/:id，播放按钮 → /play/:id，
+  // 不再跳转所属剧集；只有剧集卡才指向 /series/:id。
   const detailTo = series
     ? `/series/${series.id}`
-    : media!.series_id
-      ? `/series/${media!.series_id}`
-      : `/media/${media!.id}`
+    : `/media/${media!.id}`
   const playTo = series
     ? `/series/${series.id}`
-    : media!.series_id
-      ? `/series/${media!.series_id}`
-      : `/play/${media!.id}`
+    : `/play/${media!.id}`
   const title = series ? series.title : media!.title
   const year = series ? series.year : media!.year
   const rating = series ? series.rating : media!.rating
@@ -70,9 +68,6 @@ export default function MediaCard({
 
   const artworkRatio: MediaArtworkRatio = isLandscape ? 'landscape' : 'poster'
 
-  // 分集卡快捷操作：海报下方并排「直接播放 + 进入所在剧集」
-  const showEpisodeQuickActions = quickActions && isEpisode && !!media
-
   const formatDuration = (seconds: number) => {
     if (!seconds) return ''
     const h = Math.floor(seconds / 3600)
@@ -90,7 +85,7 @@ export default function MediaCard({
         imageClassName="nv-media-card-image"
         fallback={(
           <div className="flex flex-col items-center justify-center gap-2 text-[var(--nv-text-tertiary)]">
-            {isSeries ? <Tv size={24} aria-hidden="true" /> : <Film size={24} aria-hidden="true" />}
+            {isSeriesCard ? <Tv size={24} aria-hidden="true" /> : <Film size={24} aria-hidden="true" />}
             <span className="text-[10px]">暂无海报</span>
           </div>
         )}
@@ -107,11 +102,11 @@ export default function MediaCard({
             size="sm"
             iconOnly
             className="nv-media-card-play pointer-events-auto"
-            onClick={() => navigate(showEpisodeQuickActions && media ? `/play/${media.id}` : playTo)}
-            aria-label={showEpisodeQuickActions || !isSeries ? `播放 ${title}` : `查看系列 ${title}`}
-            title={showEpisodeQuickActions || !isSeries ? '立即播放' : '查看系列'}
+            onClick={() => navigate(playTo)}
+            aria-label={!isSeriesCard ? `播放 ${title}` : `查看系列 ${title}`}
+            title={!isSeriesCard ? '立即播放' : '查看系列'}
           >
-            {showEpisodeQuickActions || !isSeries
+            {!isSeriesCard
               ? <Play size={16} fill="currentColor" aria-hidden="true" />
               : <Tv size={16} aria-hidden="true" />}
           </Button>
@@ -127,7 +122,7 @@ export default function MediaCard({
           </Tag>
         )}
 
-        {showBadges && !isSeries && media!.resolution && (
+        {showBadges && !isSeriesCard && media!.resolution && (
           <Tag tone="quality" className="nv-media-card-badge absolute right-2 top-2 z-30">
             {media!.resolution}
           </Tag>
@@ -155,7 +150,7 @@ export default function MediaCard({
               <span className="shrink-0">{formatDuration(media!.duration)}</span>
             </>
           )}
-          {isSeries && seriesData?.episode_count ? (
+          {isSeriesCard && seriesData?.episode_count ? (
             <>
               {(year > 0 || rating > 0) && <span aria-hidden="true">·</span>}
               <span className="shrink-0"><span className="text-[var(--nv-status-warning)] font-bold">{seriesData.episode_count}</span> 项</span>

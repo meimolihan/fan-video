@@ -55,9 +55,9 @@ export default function HomeFeaturedPanel() {
   const [results, setResults] = useState<{
     movies: Media[]
     series: Series[]
-    /** 分集命中所归属的剧集：seriesId -> 任一命中分集（用于提示与去重） */
-    episodeSeries: Array<{ seriesId: string; sample: Media }>
-  }>({ movies: [], series: [], episodeSeries: [] })
+    /** 分集命中作为独立视频条目展示，可直接添加（movie 类型） */
+    episodes: Media[]
+  }>({ movies: [], series: [], episodes: [] })
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -84,7 +84,7 @@ export default function HomeFeaturedPanel() {
 
   const runSearch = useCallback(async (query: string) => {
     if (!query.trim()) {
-      setResults({ movies: [], series: [], episodeSeries: [] })
+      setResults({ movies: [], series: [], episodes: [] })
       return
     }
     setSearching(true)
@@ -93,24 +93,14 @@ export default function HomeFeaturedPanel() {
       const allMedia = data.media || []
       const seriesResults = data.series || []
 
-      // 分集不能直接加入精选（轮播以剧集为单位），归并到所属剧集供一键添加
-      const directSeriesIds = new Set(seriesResults.map((series) => series.id))
-      const episodeSeriesMap = new Map<string, Media>()
-      for (const media of allMedia) {
-        if (media.media_type === 'episode' && media.series_id
-          && !directSeriesIds.has(media.series_id) && !episodeSeriesMap.has(media.series_id)) {
-          episodeSeriesMap.set(media.series_id, media)
-        }
-      }
-
+      // 分集作为独立视频条目展示，添加时直接引用该文件本身（movie 类型）
       setResults({
         movies: allMedia.filter((media) => media.media_type !== 'episode'),
         series: seriesResults,
-        episodeSeries: Array.from(episodeSeriesMap.entries())
-          .map(([seriesId, sample]) => ({ seriesId, sample })),
+        episodes: allMedia.filter((media) => media.media_type === 'episode'),
       })
     } catch {
-      setResults({ movies: [], series: [], episodeSeries: [] })
+      setResults({ movies: [], series: [], episodes: [] })
     } finally {
       setSearching(false)
     }
@@ -185,13 +175,13 @@ export default function HomeFeaturedPanel() {
             type="search"
             value={keyword}
             onChange={(event) => handleKeywordChange(event.target.value)}
-            placeholder="搜索电影或剧集名称，点击结果添加到轮播…"
+            placeholder="搜索电影、剧集或单集视频名称，点击结果添加到轮播…"
             aria-label="搜索媒体以添加精选"
             className="w-full rounded-[var(--nv-radius-control)] border border-[var(--nv-border)] bg-[var(--nv-bg-input)] py-2 pl-9 pr-3 text-sm text-[var(--nv-text-primary)] placeholder:text-[var(--nv-text-tertiary)] focus:border-[var(--nv-border-focus)] focus:outline-none"
           />
         </div>
 
-        {(results.movies.length > 0 || results.series.length > 0 || results.episodeSeries.length > 0) && (
+        {(results.movies.length > 0 || results.series.length > 0 || results.episodes.length > 0) && (
           <ul className="mt-2 max-h-64 space-y-1.5 overflow-y-auto rounded-[var(--nv-radius-control)] border border-[var(--nv-border)] p-2">
             {results.movies.map((media) => {
               const key = `movie:${media.id}`
@@ -231,22 +221,22 @@ export default function HomeFeaturedPanel() {
                 </li>
               )
             })}
-            {results.episodeSeries.map(({ seriesId, sample }) => {
-              const key = `series:${seriesId}`
+            {results.episodes.map((media) => {
+              const key = `movie:${media.id}`
               return (
-                <li key={`ep-${key}`} className="flex items-center gap-3 rounded-[var(--nv-radius-control)] px-2 py-1.5 hover:bg-[var(--nv-bg-hover)]">
-                  <span className="shrink-0 rounded bg-[var(--nv-bg-hover)] px-1.5 py-0.5 text-xs text-[var(--nv-text-tertiary)]">剧集</span>
+                <li key={key} className="flex items-center gap-3 rounded-[var(--nv-radius-control)] px-2 py-1.5 hover:bg-[var(--nv-bg-hover)]">
+                  <span className="shrink-0 rounded bg-[var(--nv-bg-hover)] px-1.5 py-0.5 text-xs text-[var(--nv-text-tertiary)]">单集</span>
                   <span className="min-w-0 flex-1 truncate text-sm text-[var(--nv-text-primary)]">
-                    <span title={sample.title}>{sample.title}</span>
-                    <span className="ml-1 text-xs text-[var(--nv-text-tertiary)]">（分集命中，将添加其所属剧集）</span>
+                    <span title={media.title}>{media.title}</span>
+                    {media.series?.title && <span className="ml-1 text-xs text-[var(--nv-text-tertiary)]">（{media.series.title}）</span>}
                   </span>
                   <Button
                     size="sm"
                     variant="secondary"
                     disabled={addedIds.has(key)}
-                    onClick={() => handleAdd('series', seriesId)}
+                    onClick={() => handleAdd('movie', media.id)}
                   >
-                    {addedIds.has(key) ? '已添加' : (<><Plus size={13} aria-hidden="true" /> 添加剧集</>)}
+                    {addedIds.has(key) ? '已添加' : (<><Plus size={13} aria-hidden="true" /> 添加视频</>)}
                   </Button>
                 </li>
               )
@@ -279,7 +269,7 @@ export default function HomeFeaturedPanel() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-[var(--nv-text-primary)]" title={entry.title}>{entry.title}</p>
                 <p className="mt-0.5 truncate text-xs text-[var(--nv-text-tertiary)]">
-                  {entry.item_type === 'movie' ? '电影' : '剧集'}
+                  {entry.item_type === 'series' ? '剧集' : entry.kind === 'episode' ? '单集' : '电影'}
                   {entry.year ? ` · ${entry.year}` : ''}
                   {!entry.valid && ' · 引用已失效，展示时自动跳过'}
                 </p>

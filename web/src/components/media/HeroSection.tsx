@@ -449,6 +449,7 @@ export default function HeroSection({
             alt={media.title}
             ratio="poster"
             loading="eager"
+            fallback={<Play size={24} aria-hidden="true" />}
             className="nv-detail-poster w-full shadow-[var(--nv-shadow-card)] transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--nv-border-hover)] hover:shadow-[var(--nv-shadow-card-hover)]"
           />
         </div>
