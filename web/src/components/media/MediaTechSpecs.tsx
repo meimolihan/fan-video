@@ -538,7 +538,7 @@ function OverviewPanel({
         <PanelSurface icon={<FolderOpen size={15} />} title="所属媒体库">
           <InfoGrid>
             <CopyableInfo label="名称" value={library.name} />
-            <CopyableInfo label="类型" value={{ movie: '电影', tvshow: '电视剧', mixed: '混合', other: '其他' }[library.type] || library.type} />
+            <CopyableInfo label="类型" value={{ movie: '视频', tvshow: '电视剧', mixed: '混合', other: '其他' }[library.type] || library.type} />
             {library.path && <CopyableInfo label="路径" value={library.path} mono />}
           </InfoGrid>
         </PanelSurface>

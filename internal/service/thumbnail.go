@@ -29,8 +29,40 @@ func GetThumbPath(posterPath string) string {
 	return filepath.Join(thumbBaseDir, name+"."+thumbnailFormat)
 }
 
+// posterImageExts 常见海报图片扩展名（含大写变体）。用于在 DB 记录的
+// poster_path 扩展名与实际磁盘文件不一致时（如记录为 .jpeg 但文件为 .webp），
+// 兜底定位真实存在的海报文件，保证缩略图照常生成。
+var posterImageExts = []string{".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif", ".heic"}
+
+// resolvePosterFile 返回实际存在的海报源文件路径。
+// 若 posterPath 本身存在则直接返回；否则尝试同目录下、同名不同扩展名的文件来修正
+// 扩展名漂移。找不到任何候选时，返回原路径（交由调用方报错）。
+func resolvePosterFile(posterPath string) string {
+	if posterPath == "" {
+		return posterPath
+	}
+	if _, err := os.Stat(posterPath); err == nil {
+		return posterPath
+	}
+	dir := filepath.Dir(posterPath)
+	base := strings.TrimSuffix(filepath.Base(posterPath), filepath.Ext(posterPath))
+	for _, ext := range posterImageExts {
+		// 先试小写扩展名，再试大写变体（磁盘上文件可能为 .JPG/.PNG 等）。
+		for _, candidateExt := range []string{ext, strings.ToUpper(ext)} {
+			candidate := filepath.Join(dir, base+candidateExt)
+			if _, err := os.Stat(candidate); err == nil {
+				return candidate
+			}
+		}
+	}
+	return posterPath
+}
+
 // EnsureThumbnail 确保指定海报有对应的缩略图。如果已存在则直接返回，否则使用 FFmpeg 生成。
 func EnsureThumbnail(posterPath string) (string, error) {
+	// 记录的真实路径可能与磁盘文件扩展名不一致（如 .jpeg vs .webp），先定位真实源文件，
+	// 这样缩略图路径、审计、海报展示都基于真实文件保持一致。
+	posterPath = resolvePosterFile(posterPath)
 	thumbPath := GetThumbPath(posterPath)
 
 	// 检查是否已存在

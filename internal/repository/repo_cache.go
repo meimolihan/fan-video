@@ -70,43 +70,6 @@ func (r *AICacheRepo) ClearAll() (int64, error) {
 	return result.RowsAffected, result.Error
 }
 
-// ==================== GenreMappingRepo ====================
-
-// GenreMappingRepo 类型标签映射仓储
-type GenreMappingRepo struct {
-	db *gorm.DB
-}
-
-// FindStandardName 查找标准化名称
-func (r *GenreMappingRepo) FindStandardName(sourceGenre, sourceType string) (string, bool) {
-	var mapping model.GenreMapping
-	err := r.db.Where("source_genre = ? AND source_type = ?", sourceGenre, sourceType).First(&mapping).Error
-	if err != nil {
-		return "", false
-	}
-	return mapping.StandardName, true
-}
-
-// Upsert 创建或更新映射
-func (r *GenreMappingRepo) Upsert(sourceGenre, sourceType, standardName string) error {
-	mapping := model.GenreMapping{
-		SourceGenre:  sourceGenre,
-		SourceType:   sourceType,
-		StandardName: standardName,
-	}
-	return r.db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "source_genre"}, {Name: "source_type"}},
-		DoUpdates: clause.AssignmentColumns([]string{"standard_name"}),
-	}).Create(&mapping).Error
-}
-
-// ListAll 获取所有映射
-func (r *GenreMappingRepo) ListAll() ([]model.GenreMapping, error) {
-	var mappings []model.GenreMapping
-	err := r.db.Order("standard_name ASC").Find(&mappings).Error
-	return mappings, err
-}
-
 // ==================== RecommendCacheRepo ====================
 
 // RecommendCacheRepo 推荐结果缓存仓储

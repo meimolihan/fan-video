@@ -135,6 +135,53 @@ func TestIsSameDirOrDatedGroupSkipsMultiGroupWrappers(t *testing.T) {
 	})
 }
 
+func TestIsSameDirOrDatedGroupSingleVideoNotGrouped(t *testing.T) {
+	scanner := newTestScanner(t)
+
+	t.Run("单个日期命名视频不归组为剧集", func(t *testing.T) {
+		dir := t.TempDir()
+		touchVideo(t, filepath.Join(dir, "2025-01-01.mp4"))
+
+		if scanner.isSameDirOrDatedGroup(dir) {
+			t.Fatal("目录下只有一个日期视频不应归组为剧集，应作为独立视频处理")
+		}
+	})
+
+	t.Run("单个普通视频目录不归组为剧集", func(t *testing.T) {
+		dir := t.TempDir()
+		touchVideo(t, filepath.Join(dir, "正片.mkv"))
+
+		if scanner.isSameDirOrDatedGroup(dir) {
+			t.Fatal("目录下只有一个视频不应归组为剧集，应作为独立视频处理")
+		}
+	})
+
+	t.Run("多个日期视频仍归组为剧集", func(t *testing.T) {
+		dir := t.TempDir()
+		touchVideo(t, filepath.Join(dir, "2024-01-15.mp4"))
+		touchVideo(t, filepath.Join(dir, "2024-02-20.mp4"))
+
+		if !scanner.isSameDirOrDatedGroup(dir) {
+			t.Fatal("目录下多个日期视频应归组为剧集")
+		}
+	})
+
+	t.Run("单个视频+封面图片目录仍不归组", func(t *testing.T) {
+		dir := t.TempDir()
+		touchVideo(t, filepath.Join(dir, "062723.mp4"))
+		if err := os.MkdirAll(filepath.Join(dir, "_封面"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "_封面", "poster.jpg"), []byte("img"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		if scanner.isSameDirOrDatedGroup(dir) {
+			t.Fatal("单个视频+封面图片目录不应归组为剧集")
+		}
+	})
+}
+
 func TestIsTVShowFolderStaysStrictForRoots(t *testing.T) {
 	scanner := newTestScanner(t)
 

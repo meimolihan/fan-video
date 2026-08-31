@@ -175,7 +175,7 @@ export default function HomeFeaturedPanel() {
             type="search"
             value={keyword}
             onChange={(event) => handleKeywordChange(event.target.value)}
-            placeholder="搜索电影、剧集或单集视频名称，点击结果添加到轮播…"
+            placeholder="搜索视频、剧集或单集名称，点击结果添加到轮播…"
             aria-label="搜索媒体以添加精选"
             className="w-full rounded-[var(--nv-radius-control)] border border-[var(--nv-border)] bg-[var(--nv-bg-input)] py-2 pl-9 pr-3 text-sm text-[var(--nv-text-primary)] placeholder:text-[var(--nv-text-tertiary)] focus:border-[var(--nv-border-focus)] focus:outline-none"
           />
@@ -187,7 +187,7 @@ export default function HomeFeaturedPanel() {
               const key = `movie:${media.id}`
               return (
                 <li key={key} className="flex items-center gap-3 rounded-[var(--nv-radius-control)] px-2 py-1.5 hover:bg-[var(--nv-bg-hover)]">
-                  <span className="shrink-0 rounded bg-[var(--nv-bg-hover)] px-1.5 py-0.5 text-xs text-[var(--nv-text-tertiary)]">电影</span>
+                  <span className="shrink-0 rounded bg-[var(--nv-bg-hover)] px-1.5 py-0.5 text-xs text-[var(--nv-text-tertiary)]">视频</span>
                   <span className="min-w-0 flex-1 truncate text-sm text-[var(--nv-text-primary)]" title={media.title}>
                     {media.title}{media.year ? ` (${media.year})` : ''}
                   </span>
@@ -269,7 +269,7 @@ export default function HomeFeaturedPanel() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-[var(--nv-text-primary)]" title={entry.title}>{entry.title}</p>
                 <p className="mt-0.5 truncate text-xs text-[var(--nv-text-tertiary)]">
-                  {entry.item_type === 'series' ? '剧集' : entry.kind === 'episode' ? '单集' : '电影'}
+                  {entry.item_type === 'series' ? '剧集' : entry.kind === 'episode' ? '单集' : '视频'}
                   {entry.year ? ` · ${entry.year}` : ''}
                   {!entry.valid && ' · 引用已失效，展示时自动跳过'}
                 </p>

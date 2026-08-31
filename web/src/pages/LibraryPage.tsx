@@ -15,7 +15,6 @@ import {
   Play,
   SlidersHorizontal,
   Star,
-  Tag as TagIcon,
   Tv,
   X,
 } from 'lucide-react'
@@ -94,10 +93,6 @@ export default function LibraryPage() {
   const viewMode = parseViewMode(searchParams.get('view'))
   const searchQuery = searchParams.get('q') || ''
   const sortValue = searchParams.get('sort') || 'created_desc'
-  const selectedGenres = useMemo(() => {
-    const genres = searchParams.get('genres') || searchParams.get('genre') || ''
-    return genres.split(',').map((value) => value.trim()).filter(Boolean)
-  }, [searchParams])
   const selectedCountry = searchParams.get('country') || ''
   const yearRange = useMemo<{ min: number; max: number }>(() => ({
     min: parseInt(searchParams.get('year_min') || '0', 10) || 0,
@@ -118,7 +113,6 @@ export default function LibraryPage() {
       if (value === null) next.delete(key)
       else next.set(key, value)
     }
-    if ('genres' in changes) next.delete('genre')
     if (!('page' in changes)) next.delete('page')
     setSearchParams(next, { replace: true })
   }, [searchParams, setSearchParams])
@@ -129,13 +123,8 @@ export default function LibraryPage() {
   const setViewMode = useCallback((nextMode: LibraryViewMode) => updateUrl({ view: nextMode === 'grid' ? null : nextMode }), [updateUrl])
 
   const clearAllFilters = useCallback(() => {
-    updateUrl({ q: null, genres: null, genre: null, country: null, year_min: null, year_max: null, rating: null })
+    updateUrl({ q: null, country: null, year_min: null, year_max: null, rating: null })
   }, [updateUrl])
-
-  const toggleGenre = useCallback((genre: string) => {
-    const next = selectedGenres.includes(genre) ? selectedGenres.filter((value) => value !== genre) : [...selectedGenres, genre]
-    updateUrl({ genres: next.length > 0 ? next.join(',') : null })
-  }, [selectedGenres, updateUrl])
 
   useEffect(() => {
     if (!id) return
@@ -165,22 +154,19 @@ export default function LibraryPage() {
     return () => { cancelled = true }
   }, [id, page, size, toast])
 
-  const { allGenres, allCountries } = useMemo(() => {
-    const genres = new Set<string>()
+  const allCountries = useMemo(() => {
     const countries = new Set<string>()
-    const collect = (genreText?: string, countryText?: string) => {
-      if (genreText) genreText.split(',').forEach((genre) => { const value = genre.trim(); if (value) genres.add(value) })
+    const collect = (countryText?: string) => {
       if (countryText) countryText.split(',').forEach((country) => { const value = country.trim(); if (value) countries.add(value) })
     }
-    mixedItems.forEach((item) => item.type === 'series' && item.series ? collect(item.series.genres, item.series.country) : item.media && collect(item.media.genres, item.media.country))
-    seriesList.forEach((series) => collect(series.genres, series.country))
-    return { allGenres: Array.from(genres).sort(), allCountries: Array.from(countries).sort() }
+    mixedItems.forEach((item) => item.type === 'series' && item.series ? collect(item.series.country) : item.media && collect(item.media.country))
+    seriesList.forEach((series) => collect(series.country))
+    return Array.from(countries).sort()
   }, [mixedItems, seriesList])
 
   const getItemTitle = (item: MixedItem) => item.type === 'series' ? (item.series?.title || '') : (item.media?.title || '')
   const getItemOrigTitle = (item: MixedItem) => item.type === 'series' ? (item.series?.orig_title || '') : (item.media?.orig_title || '')
   const getItemOverview = (item: MixedItem) => item.type === 'series' ? (item.series?.overview || '') : (item.media?.overview || '')
-  const getItemGenres = (item: MixedItem) => item.type === 'series' ? (item.series?.genres || '') : (item.media?.genres || '')
   const getItemCountry = (item: MixedItem) => item.type === 'series' ? (item.series?.country || '') : (item.media?.country || '')
   const getItemYear = (item: MixedItem) => item.type === 'series' ? (item.series?.year || 0) : (item.media?.year || 0)
   const getItemRating = (item: MixedItem) => item.type === 'series' ? (item.series?.rating || 0) : (item.media?.rating || 0)
@@ -192,7 +178,6 @@ export default function LibraryPage() {
       const query = searchQuery.trim().toLowerCase()
       items = items.filter((item) => getItemTitle(item).toLowerCase().includes(query) || getItemOrigTitle(item).toLowerCase().includes(query) || getItemOverview(item).toLowerCase().includes(query))
     }
-    if (selectedGenres.length > 0) items = items.filter((item) => selectedGenres.every((genre) => getItemGenres(item).includes(genre)))
     if (selectedCountry) items = items.filter((item) => getItemCountry(item).includes(selectedCountry))
     if (yearRange.min > 0 || yearRange.max > 0) items = items.filter((item) => {
       const year = getItemYear(item)
@@ -212,7 +197,7 @@ export default function LibraryPage() {
       return direction === 'desc' ? -comparison : comparison
     })
     return items
-  }, [mixedItems, searchQuery, selectedGenres, selectedCountry, yearRange, minRating, sortValue])
+  }, [mixedItems, searchQuery, selectedCountry, yearRange, minRating, sortValue])
 
   const deduplicatedSeries = useMemo(() => {
     const normalize = (title: string) => title
@@ -250,7 +235,6 @@ export default function LibraryPage() {
       const query = searchQuery.trim().toLowerCase()
       items = items.filter((series) => series.title.toLowerCase().includes(query) || series.orig_title?.toLowerCase().includes(query) || series.overview?.toLowerCase().includes(query))
     }
-    if (selectedGenres.length > 0) items = items.filter((series) => selectedGenres.every((genre) => (series.genres || '').includes(genre)))
     if (selectedCountry) items = items.filter((series) => (series.country || '').includes(selectedCountry))
     if (yearRange.min > 0 || yearRange.max > 0) items = items.filter((series) => {
       const year = series.year || 0
@@ -270,11 +254,11 @@ export default function LibraryPage() {
       return direction === 'desc' ? -comparison : comparison
     })
     return items
-  }, [deduplicatedSeries, searchQuery, selectedGenres, selectedCountry, yearRange, minRating, sortValue])
+  }, [deduplicatedSeries, searchQuery, selectedCountry, yearRange, minRating, sortValue])
 
   const pagedMixed = useMemo(() => serverPaginated ? filteredMixed : filteredMixed.slice((page - 1) * size, page * size), [serverPaginated, filteredMixed, page, size])
   const pagedSeries = useMemo(() => filteredSeries.slice((page - 1) * size, page * size), [filteredSeries, page, size])
-  const activeFilterCount = [selectedGenres.length > 0, selectedCountry !== '', yearRange.min > 0 || yearRange.max > 0, minRating > 0].filter(Boolean).length
+  const activeFilterCount = [selectedCountry !== '', yearRange.min > 0 || yearRange.max > 0, minRating > 0].filter(Boolean).length
   const hasLocalFilter = Boolean(searchQuery) || activeFilterCount > 0
   const allTotal = serverPaginated && !hasLocalFilter ? total : filteredMixed.length
   const resultCount = viewTab === 'all' ? allTotal : filteredSeries.length
@@ -310,7 +294,6 @@ export default function LibraryPage() {
 
       {showFilters && (
         <Surface variant="glass" className="space-y-2.5 p-3 sm:p-4">
-          {allGenres.length > 0 && <FilterGroup icon={<TagIcon size={12} />} label="类型" count={selectedGenres.length}>{allGenres.map((genre) => <FilterChip key={genre} selected={selectedGenres.includes(genre)} onClick={() => toggleGenre(genre)}>{genre}</FilterChip>)}</FilterGroup>}
           {allCountries.length > 0 && <FilterGroup icon={<Globe size={12} />} label="地区"><FilterChip selected={!selectedCountry} onClick={() => updateUrl({ country: null })}>全部</FilterChip>{allCountries.map((country) => <FilterChip key={country} selected={selectedCountry === country} onClick={() => updateUrl({ country: selectedCountry === country ? null : country })}>{country}</FilterChip>)}</FilterGroup>}
           <FilterGroup icon={<Calendar size={12} />} label="年份">{YEAR_RANGES.map((range) => <FilterChip key={range.label} selected={yearRange.min === range.min && yearRange.max === range.max} onClick={() => updateUrl({ year_min: range.min > 0 ? String(range.min) : null, year_max: range.max > 0 ? String(range.max) : null })}>{range.label}</FilterChip>)}</FilterGroup>
           <FilterGroup icon={<Star size={12} />} label="最低评分">{RATING_OPTIONS.map((option) => <FilterChip key={option.value} selected={minRating === option.value} onClick={() => updateUrl({ rating: option.value > 0 ? String(option.value) : null })}>{option.label}</FilterChip>)}</FilterGroup>
@@ -318,7 +301,6 @@ export default function LibraryPage() {
         </Surface>
       )}
 
-      {selectedGenres.length > 0 && <div className="flex flex-wrap items-center gap-1.5">{selectedGenres.map((genre) => <Tag key={genre} tone="brand">{genre}<button type="button" onClick={() => toggleGenre(genre)} className="ml-0.5 rounded p-0.5 hover:bg-[var(--nv-fill-hover)]" aria-label={`移除 ${genre} 标签`}><X size={10} /></button></Tag>)}</div>}
       {hasLocalFilter && <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--nv-text-tertiary)]" aria-live="polite"><span>找到 <strong className="font-semibold text-[var(--nv-text-secondary)]">{resultCount}</strong> 个结果</span><Button type="button" variant="ghost" size="sm" onClick={clearAllFilters}>清除</Button></div>}
 
       {loading ? (
@@ -383,7 +365,6 @@ function formatDuration(seconds: number) {
 }
 
 function LibraryListItem({ item, series: seriesProp }: { item?: MixedItem; series?: Series }) {
-  const [tagsExpanded, setTagsExpanded] = useState(false)
   const navigate = useNavigate()
   const isSeries = Boolean(seriesProp) || item?.type === 'series'
   const series = seriesProp || (item?.type === 'series' ? item.series : undefined)
@@ -391,12 +372,9 @@ function LibraryListItem({ item, series: seriesProp }: { item?: MixedItem; serie
   const title = series?.title || media?.title || ''
   const year = series?.year || media?.year || 0
   const rating = series?.rating || media?.rating || 0
-  const genres = series?.genres || media?.genres || ''
   const country = series?.country || media?.country || ''
   const overview = series?.overview || media?.overview || ''
   const duration = media?.duration || 0
-  const genreList = genres ? genres.split(',').map((genre) => genre.trim()).filter(Boolean) : []
-  const visibleTags = tagsExpanded ? genreList : genreList.slice(0, 3)
   // 分集/电影等具体视频：点击进详情 → /media/:id（不再跳转所属剧集）
   const linkTo = series ? `/series/${series.id}` : `/media/${media?.id}`
   const isEpisode = !isSeries && !!media?.series_id
@@ -416,7 +394,6 @@ function LibraryListItem({ item, series: seriesProp }: { item?: MixedItem; serie
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2"><h3 className="truncate text-xs font-medium text-[var(--nv-text-primary)]">{title}</h3>{isSeries && <Tag>剧集</Tag>}</div>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] text-[var(--nv-text-tertiary)]">{year > 0 && <span>{year}</span>}{country && <span>{country}</span>}{duration > 0 && <span>{formatDuration(duration)}</span>}</div>
-        {genreList.length > 0 && <div className="mt-1.5 flex flex-wrap items-center gap-1">{visibleTags.map((genre) => <Tag key={genre}>{genre}</Tag>)}{genreList.length > 3 && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setTagsExpanded((value) => !value) }} className="text-[10px] text-[var(--nv-text-tertiary)] hover:text-[var(--nv-text-primary)]">{tagsExpanded ? '收起' : `+${genreList.length - 3}`}</button>}</div>}
         {overview && <p className="mt-1 line-clamp-1 text-[10px] text-[var(--nv-text-tertiary)]">{overview}</p>}
       </div>
       {rating > 0 && <Tag tone="rating" className="shrink-0"><Star size={10} fill="currentColor" />{rating.toFixed(1)}</Tag>}

@@ -51,9 +51,6 @@ export function MediaHeroContent({
     media.orig_title && media.orig_title !== media.title ? media.orig_title : undefined
   )
   const durationLabel = formatHeroDuration(media)
-  const genres = media.genres
-    ? media.genres.split(',').slice(0, 3).map((genre) => genre.trim()).filter(Boolean)
-    : []
 
   return (
     <HeroContent
@@ -76,11 +73,8 @@ export function MediaHeroContent({
           {inlineBadges ? (
             <>
               {media.resolution && <Tag tone="quality">{media.resolution}</Tag>}
-              {genres.map((genre) => <Tag key={genre}>{genre}</Tag>)}
               {extraBadges}
             </>
-          ) : genres.length > 0 ? (
-            <span className="text-[var(--nv-text-tertiary)]">{genres.join(' · ')}</span>
           ) : null}
           {extraMeta}
         </>

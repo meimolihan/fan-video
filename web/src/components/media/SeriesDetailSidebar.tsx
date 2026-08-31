@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { CheckCircle2, Clapperboard, Database, Play, Tv2 } from 'lucide-react'
 import type { Media, Series, WatchHistory } from '@/types'
-import { Tag, buttonClassName } from '@/components/design-system'
+import { buttonClassName } from '@/components/design-system'
 
 type SeriesDetailSidebarProps = {
   series: Series
@@ -29,7 +29,6 @@ export default function SeriesDetailSidebar({ series, episodes, historyMap, play
     return !!history && history.position > 0 && !isCompleted(history)
   }).length
   const progress = episodes.length > 0 ? Math.round((watchedCount / episodes.length) * 100) : 0
-  const genres = (series.genres || '').split(',').map((item) => item.trim()).filter(Boolean)
   const hasSources = series.tmdb_id > 0 || Boolean(series.douban_id) || series.bangumi_id > 0
 
   return (
@@ -68,11 +67,6 @@ export default function SeriesDetailSidebar({ series, episodes, historyMap, play
           {series.language && <div><dt>语言</dt><dd>{series.language}</dd></div>}
           {series.studio && <div><dt>制作</dt><dd title={series.studio}>{series.studio}</dd></div>}
         </dl>
-        {genres.length > 0 && (
-          <div className="nv-series-sidebar-tags">
-            {genres.slice(0, 6).map((genre) => <Tag key={genre}>{genre}</Tag>)}
-          </div>
-        )}
       </section>
 
       <section className="nv-series-sidebar-card">

@@ -13,7 +13,6 @@ import (
 type MixedListFilter struct {
 	LibraryID   string
 	ContentType string
-	Genre       string
 	Query       string
 	YearFrom    int
 	YearTo      int
@@ -32,7 +31,6 @@ func (f MixedListFilter) normalized() MixedListFilter {
 	default:
 		f.ContentType = "all"
 	}
-	f.Genre = strings.TrimSpace(f.Genre)
 	f.Query = strings.TrimSpace(f.Query)
 	f.Sort = strings.ToLower(strings.TrimSpace(f.Sort))
 	switch f.Sort {
@@ -176,9 +174,6 @@ func mixedItemMatches(item MixedItem, filter MixedListFilter) bool {
 	if filter.YearTo > 0 && year > filter.YearTo {
 		return false
 	}
-	if filter.Genre != "" && !containsFold(mixedItemGenres(item), filter.Genre) {
-		return false
-	}
 	if filter.Query != "" {
 		searchable := mixedItemTitle(item) + " " + mixedItemOriginalTitle(item)
 		// 分集额外匹配所属剧名，便于按剧名搜到具体某一集。
@@ -259,22 +254,6 @@ func mixedItemOriginalTitle(item MixedItem) string {
 	}
 	if item.Series != nil {
 		return item.Series.OrigTitle
-	}
-	return ""
-}
-
-func mixedItemGenres(item MixedItem) string {
-	if item.Media != nil {
-		if item.Media.Genres != "" || item.Type != "episode" {
-			return item.Media.Genres
-		}
-		if item.Media.Series != nil {
-			return item.Media.Series.Genres
-		}
-		return ""
-	}
-	if item.Series != nil {
-		return item.Series.Genres
 	}
 	return ""
 }

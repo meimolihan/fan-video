@@ -1933,11 +1933,26 @@ func (s *ScannerService) hasMultiVideoBearingSubdirs(folderPath string) bool {
 // isSameDirOrDatedGroup 同目录归组的统一入口：多个无命名视频、或日期命名的
 // 个人视频，在【非】多视频组包装层的前提下归组为一部剧集。
 // 根级归组与逐目录归类共用本判定，保证两层行为一致。
+//
+// 产品决策：目录下只有一个视频文件时不归组为剧集（即使文件名形如日期，
+// 也应作为独立的单视频处理），只有至少 2 个视频才同目录归组。
 func (s *ScannerService) isSameDirOrDatedGroup(folderPath string) bool {
 	if s.hasMultiVideoBearingSubdirs(folderPath) {
 		return false
 	}
+	// 同目录至少要有 2 个可归组视频才归组为剧集；仅有 1 个视频
+	// （包括日期命名的单视频）作为独立视频处理，不进剧集。
+	if s.grouppableVideoCount(folderPath) < 2 {
+		return false
+	}
 	return s.isSameDirVideoGroup(folderPath) || s.hasDatedVideo(folderPath)
+}
+
+// grouppableVideoCount 统计目录内可归组的视频数量（直属文件 + 一层非特典子目录），
+// 与 collectSeriesEvidence 口径一致，用于判断同目录是否达到「多个视频」的下限。
+func (s *ScannerService) grouppableVideoCount(folderPath string) int {
+	videoFiles, _ := s.collectSeriesEvidence(folderPath)
+	return len(videoFiles)
 }
 
 // isNestedSingleVideoCollection 判断目录的各内容子目录是否各自只含一个视频。

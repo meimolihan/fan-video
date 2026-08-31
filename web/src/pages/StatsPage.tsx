@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BarChart3, Clock, Film, Heart, Trash2 } from 'lucide-react'
+import { BarChart3, Clock, Film, Trash2 } from 'lucide-react'
 import { statsApi, streamApi } from '@/api'
 import { useTranslation } from '@/i18n'
 import { useToast } from '@/components/Toast'
@@ -33,7 +33,6 @@ export default function StatsPage() {
   const hasData = !!stats && (
     stats.total_minutes > 0
     || (stats.daily_stats?.length ?? 0) > 0
-    || (stats.top_genres?.length ?? 0) > 0
     || (stats.most_watched?.length ?? 0) > 0
   )
 
@@ -106,12 +105,6 @@ export default function StatsPage() {
       subValue: t('stats.growing'),
     },
     {
-      icon: Heart,
-      label: t('stats.favoriteGenre'),
-      value: stats.top_genres?.[0]?.genres?.split(',')[0] || t('stats.noGenre'),
-      subValue: stats.top_genres?.[0] ? t('stats.minutes', { minutes: Number(stats.top_genres[0].total_minutes).toFixed(0) }) : '',
-    },
-    {
       icon: BarChart3,
       label: t('stats.dailyAvg'),
       value: stats.daily_stats?.length
@@ -136,7 +129,7 @@ export default function StatsPage() {
           ) : undefined}
         />
 
-        <section aria-label={t('stats.title')} className="grid border-y border-[var(--nv-border-subtle)] sm:grid-cols-2 xl:grid-cols-4">
+        <section aria-label={t('stats.title')} className="grid border-y border-[var(--nv-border-subtle)] sm:grid-cols-2 xl:grid-cols-3">
           {statItems.map(({ icon: Icon, label, value, subValue }, index) => (
             <div
               key={label}
@@ -166,28 +159,6 @@ export default function StatsPage() {
                       style={{ height: `${Math.max(height, 4)}px` }}
                     />
                     <span className="text-[10px] text-[var(--nv-text-tertiary)]">{day.date.slice(5)}</span>
-                  </div>
-                )
-              })}
-            </div>
-          </Section>
-        )}
-
-        {stats.top_genres && stats.top_genres.length > 0 && (
-          <Section title={t('stats.topGenres')}>
-            <div className="divide-y divide-[var(--nv-border-subtle)] border-y border-[var(--nv-border-subtle)]">
-              {stats.top_genres.map((genre, index) => {
-                const maxMinutes = Number(stats.top_genres?.[0]?.total_minutes) || 1
-                const minutes = Number(genre.total_minutes) || 0
-                const percentage = Math.min(100, (minutes / maxMinutes) * 100)
-                const name = String(genre.genres || '').split(',')[0]
-                return (
-                  <div key={`${name}-${index}`} className="grid grid-cols-[minmax(5rem,8rem)_1fr_auto] items-center gap-3 px-1 py-3">
-                    <span className="truncate text-sm font-medium text-[var(--nv-text-primary)]">{name}</span>
-                    <div className="h-1 overflow-hidden rounded-full bg-[var(--nv-fill-hover)]">
-                      <div className="h-full rounded-full bg-[var(--nv-text-secondary)] opacity-70" style={{ width: `${percentage}%` }} />
-                    </div>
-                    <span className="min-w-16 text-right text-xs text-[var(--nv-text-tertiary)]">{minutes.toFixed(0)}min</span>
                   </div>
                 )
               })}

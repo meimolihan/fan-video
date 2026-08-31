@@ -51,7 +51,6 @@ func TestApplyMixedListFilterBeforePagination(t *testing.T) {
 
 	filtered := applyMixedListFilter(items, MixedListFilter{
 		ContentType: "movie",
-		Genre:       "科幻",
 		Query:       "interstellar",
 		YearFrom:    2020,
 		Sort:        "rating",
@@ -103,13 +102,12 @@ func TestEpisodeItemsInheritSeriesMetadataForFiltering(t *testing.T) {
 	}, MixedListFilter{Query: "城市故事"})
 	require.Len(t, byQuery, 1)
 
-	// 年份/类型筛选回退到所属剧集元数据
+	// 年份筛选回退到所属剧集元数据
 	byYear := applyMixedListFilter([]MixedItem{
 		{Type: "episode", Media: &epOld},
 	}, MixedListFilter{YearFrom: 2018, YearTo: 2018})
 	require.Len(t, byYear, 1)
 	require.Equal(t, 2018, mixedItemYear(MixedItem{Type: "episode", Media: &epOld}))
-	require.Equal(t, "剧情", mixedItemGenres(MixedItem{Type: "episode", Media: &epNew}))
 
 	// 按新增时间排序，新分集在前
 	sorted := applyMixedListFilter([]MixedItem{

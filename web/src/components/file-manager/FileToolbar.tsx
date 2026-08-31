@@ -76,7 +76,7 @@ export default function FileToolbar(props: FileToolbarProps) {
             {libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}
           </Select>
           <Select value={filterMediaType} onChange={(event) => onFilterMediaTypeChange(event.target.value)} className="!w-auto min-w-28 flex-1 sm:flex-none" aria-label="媒体类型筛选">
-            <option value="">全部类型</option><option value="movie">电影</option><option value="episode">剧集</option>
+            <option value="">全部类型</option><option value="movie">视频</option><option value="episode">剧集</option>
           </Select>
           <Select value={filterScraped} onChange={(event) => onFilterScrapedChange(event.target.value)} className="!w-auto min-w-28 flex-1 sm:flex-none" aria-label="状态筛选">
             <option value="">全部状态</option><option value="true">有元数据</option><option value="false">无元数据</option>

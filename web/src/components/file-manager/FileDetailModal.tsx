@@ -69,7 +69,7 @@ export default function FileDetailModal({ media, onClose, onEdit, onRefreshArtwo
 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
-              <Tag>{media.media_type === 'movie' ? '电影' : '剧集'}</Tag>
+              <Tag>{media.media_type === 'movie' ? '视频' : '剧集'}</Tag>
               {media.resolution && <Tag tone="quality">{media.resolution}</Tag>}
               {rating > 0 && <Tag tone="rating"><Star size={10} fill="currentColor" aria-hidden="true" /> {rating.toFixed(1)}</Tag>}
             </div>
@@ -86,7 +86,6 @@ export default function FileDetailModal({ media, onClose, onEdit, onRefreshArtwo
             <dl className="mt-4 grid border-y border-[var(--nv-border-subtle)] sm:grid-cols-2 sm:divide-x sm:divide-[var(--nv-border-subtle)]">
               <div className="divide-y divide-[var(--nv-border-subtle)] sm:pr-4">
                 <DetailItem label="年份">{media.year || '-'}</DetailItem>
-                <DetailItem label="类型">{media.genres || '-'}</DetailItem>
                 <DetailItem label="语言">{media.language || '-'}</DetailItem>
               </div>
               <div className="divide-y divide-[var(--nv-border-subtle)] sm:pl-4">

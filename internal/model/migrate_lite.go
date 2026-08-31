@@ -28,7 +28,6 @@ func AutoMigrateLite(db *gorm.DB) error {
 		&ContentRating{},
 		&UserPermission{},
 		&PlaybackStats{},
-		&GenreMapping{},
 		&RecommendCache{},
 		&MovieCollection{},
 		&SystemLog{},

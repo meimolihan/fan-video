@@ -83,7 +83,6 @@ export default function MediaDetailPage() {
     year: number
     overview: string
     rating: number
-    genres: string
     country: string
     language: string
     tagline: string
@@ -94,7 +93,6 @@ export default function MediaDetailPage() {
     year: 0,
     overview: '',
     rating: 0,
-    genres: '',
     country: '',
     language: '',
     tagline: '',
@@ -256,7 +254,6 @@ export default function MediaDetailPage() {
       year: media.year || 0,
       overview: media.overview || '',
       rating: media.rating || 0,
-      genres: media.genres || '',
       country: media.country || '',
       language: media.language || '',
       tagline: media.tagline || '',

@@ -21,7 +21,6 @@ import {
   Star,
   Calendar,
   Globe,
-  Tag as TagIcon,
   Layers,
   SlidersHorizontal,
   Play,
@@ -79,8 +78,6 @@ interface BrowseData {
 const getItemTitle = (item: MixedItem) => item.type === 'series' ? (item.series?.title || '') : (item.media?.title || '')
 const getItemOrigTitle = (item: MixedItem) => item.type === 'series' ? (item.series?.orig_title || '') : (item.media?.orig_title || '')
 const getItemOverview = (item: MixedItem) => item.type === 'series' ? (item.series?.overview || '') : (item.media?.overview || '')
-// 分集自身缺元数据时回退到所属剧集（后端 Preload 提供）
-const getItemGenres = (item: MixedItem) => item.type === 'series' ? (item.series?.genres || '') : (item.media?.genres || item.media?.series?.genres || '')
 const getItemCountry = (item: MixedItem) => item.type === 'series' ? (item.series?.country || '') : (item.media?.country || item.media?.series?.country || '')
 const getItemYear = (item: MixedItem) => item.type === 'series' ? (item.series?.year || 0) : (item.media?.year || item.media?.series?.year || 0)
 const getItemRating = (item: MixedItem) => item.type === 'series' ? (item.series?.rating || 0) : (item.media?.rating || item.media?.series?.rating || 0)
@@ -153,10 +150,6 @@ export default function BrowsePage() {
   const visibleLibraries = useMemo(() => libraries.filter((library) => !library.hidden), [libraries])
   const selectedLibrary = visibleLibraries.some((library) => library.id === rawSelectedLibrary) ? rawSelectedLibrary : ''
   const mediaType = (searchParams.get('type') || '') as '' | 'movie' | 'series'
-  const selectedGenres = useMemo(() => {
-    const genres = searchParams.get('genres')
-    return genres ? genres.split(',').filter(Boolean) : []
-  }, [searchParams])
   const selectedCountry = searchParams.get('country') || ''
   const yearRange = useMemo<{ min: number; max: number }>(() => ({
     min: parseInt(searchParams.get('year_min') || '0', 10) || 0,
@@ -204,7 +197,6 @@ export default function BrowsePage() {
 
   const probeReady = probeData?.libraryKey === libraryKey
   const serverPaginated = !!probeReady && (probeData?.total || 0) > MAX_CLIENT_ITEMS
-  const serverGenre = selectedGenres[0] || ''
   const serverSort = useMemo(() => parseServerSort(sortValue), [sortValue])
 
   const browseKey = useMemo(() => {
@@ -217,11 +209,10 @@ export default function BrowsePage() {
       `size=${size}`,
       `type=${mediaType || 'all'}`,
       `q=${encodeURIComponent(searchQuery.trim())}`,
-      `genre=${encodeURIComponent(serverGenre)}`,
       `year=${yearRange.min}-${yearRange.max}`,
       `sort=${serverSort.sort}-${serverSort.order}`,
     ].join(':')
-  }, [probeReady, serverPaginated, libraryKey, page, size, mediaType, searchQuery, serverGenre, yearRange.min, yearRange.max, serverSort])
+  }, [probeReady, serverPaginated, libraryKey, page, size, mediaType, searchQuery, yearRange.min, yearRange.max, serverSort])
 
   const { data: rawBrowseData, loading: browseLoading, error: browseError, refetch } = usePageCache<BrowseData>(
     browseKey,
@@ -249,7 +240,6 @@ export default function BrowsePage() {
         library_id: libraryId,
         type: mediaType || undefined,
         q: searchQuery.trim() || undefined,
-        genre: serverGenre || undefined,
         year_from: yearRange.min || undefined,
         year_to: yearRange.max || undefined,
         sort: serverSort.sort,
@@ -285,11 +275,10 @@ export default function BrowsePage() {
     const changes: Record<string, string | null> = {}
     if (selectedCountry) changes.country = null
     if (minRating > 0) changes.rating = null
-    if (selectedGenres.length > 1) changes.genres = selectedGenres[0] || null
     if (Object.keys(changes).length === 0) return
     toastRef.current.info('大型影视库使用服务端分页，已移除当前接口无法准确执行的组合筛选条件')
     updateUrl(changes)
-  }, [serverPaginated, selectedCountry, minRating, selectedGenres, updateUrl])
+  }, [serverPaginated, selectedCountry, minRating, updateUrl])
 
   useEffect(() => {
     if (searchInput === searchQuery) return
@@ -324,19 +313,17 @@ export default function BrowsePage() {
     }
   }, [on, off, refetch, refetchProbe])
 
-  const { allGenres, allCountries } = useMemo(() => {
-    const genres = new Set<string>()
+  const allCountries = useMemo(() => {
     const countries = new Set<string>()
-    const collect = (genreText?: string, countryText?: string) => {
-      if (genreText) genreText.split(',').forEach((value) => { const genre = value.trim(); if (genre) genres.add(genre) })
+    const collect = (countryText?: string) => {
       if (countryText) countryText.split(',').forEach((value) => { const country = value.trim(); if (country) countries.add(country) })
     }
     mixedItems.forEach((item) => {
-      if (item.type === 'series' && item.series) collect(item.series.genres, item.series.country)
-      else if (item.media) collect(item.media.genres, item.media.country)
+      if (item.type === 'series' && item.series) collect(item.series.country)
+      else if (item.media) collect(item.media.country)
     })
-    seriesList.forEach((series) => collect(series.genres, series.country))
-    return { allGenres: Array.from(genres).sort(), allCountries: Array.from(countries).sort() }
+    seriesList.forEach((series) => collect(series.country))
+    return Array.from(countries).sort()
   }, [mixedItems, seriesList])
 
   const filteredItems = useMemo(() => {
@@ -357,7 +344,6 @@ export default function BrowsePage() {
         getItemOverview(item).toLowerCase().includes(query),
       )
     }
-    if (selectedGenres.length > 0) items = items.filter((item) => selectedGenres.every((genre) => getItemGenres(item).includes(genre)))
     if (selectedCountry) items = items.filter((item) => getItemCountry(item).includes(selectedCountry))
     if (yearRange.min > 0 || yearRange.max > 0) {
       items = items.filter((item) => {
@@ -380,7 +366,7 @@ export default function BrowsePage() {
       return direction === 'desc' ? -comparison : comparison
     })
     return items
-  }, [serverPaginated, mixedItems, seriesList, mediaType, searchQuery, selectedGenres, selectedCountry, yearRange, minRating, sortValue])
+  }, [serverPaginated, mixedItems, seriesList, mediaType, searchQuery, selectedCountry, yearRange, minRating, sortValue])
 
   const totalPages = serverPaginated ? Math.ceil(totalCount / size) : Math.ceil(filteredItems.length / size)
   const pagedItems = useMemo(() => {
@@ -388,7 +374,7 @@ export default function BrowsePage() {
     return filteredItems.slice((page - 1) * size, page * size)
   }, [serverPaginated, filteredItems, page, size])
 
-  const activeFilterCount = [selectedGenres.length > 0, selectedCountry !== '', yearRange.min > 0 || yearRange.max > 0, minRating > 0].filter(Boolean).length
+  const activeFilterCount = [selectedCountry !== '', yearRange.min > 0 || yearRange.max > 0, minRating > 0].filter(Boolean).length
 
   const clearAllFilters = () => {
     setSearchInput('')
@@ -397,15 +383,6 @@ export default function BrowsePage() {
     if (size !== 30) next.set('size', String(size))
     if (viewMode !== 'grid') next.set('view', viewMode)
     setSearchParams(next, { replace: true })
-  }
-
-  const toggleGenre = (genre: string) => {
-    if (serverPaginated) {
-      updateUrl({ genres: selectedGenres.includes(genre) ? null : genre })
-      return
-    }
-    const next = selectedGenres.includes(genre) ? selectedGenres.filter((value) => value !== genre) : [...selectedGenres, genre]
-    updateUrl({ genres: next.length > 0 ? next.join(',') : null })
   }
 
   const stats = useMemo(() => {
@@ -424,7 +401,7 @@ export default function BrowsePage() {
       <div className="nv-browse-type-tabs flex flex-wrap items-center gap-1 border-b border-[var(--nv-border-subtle)] pb-3" aria-label="媒体类型">
         {[
           { key: '' as const, label: '全部', icon: Layers, value: stats.total },
-          { key: 'movie' as const, label: '电影', icon: Film, value: stats.movieCount },
+          { key: 'movie' as const, label: '视频', icon: Film, value: stats.movieCount },
           { key: 'series' as const, label: '剧集', icon: Tv, value: stats.seriesCount },
         ].map(({ key, label, icon: Icon, value }) => {
           const selected = mediaType === key
@@ -444,7 +421,6 @@ export default function BrowsePage() {
             </button>
           )
         })}
-        {!serverPaginated && <SemanticTag className="ml-1"><TagIcon size={10} aria-hidden="true" />{allGenres.length} 类型</SemanticTag>}
       </div>
 
       <div className="nv-browse-toolbar flex flex-wrap items-center gap-1.5">
@@ -494,11 +470,6 @@ export default function BrowsePage() {
             </div>
           ) : (
             <>
-              {allGenres.length > 0 && (
-                <FilterGroup icon={<TagIcon size={12} />} label="类型" count={selectedGenres.length}>
-                  {allGenres.map((genre) => <FilterChip key={genre} selected={selectedGenres.includes(genre)} onClick={() => toggleGenre(genre)}>{genre}</FilterChip>)}
-                </FilterGroup>
-              )}
               {allCountries.length > 0 && (
                 <FilterGroup icon={<Globe size={12} />} label="地区">
                   <FilterChip selected={!selectedCountry} onClick={() => updateUrl({ country: null })}>全部</FilterChip>
@@ -523,17 +494,6 @@ export default function BrowsePage() {
             </div>
           )}
         </Surface>
-      )}
-
-      {selectedGenres.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5" aria-label="已选类型标签">
-          {selectedGenres.map((genre) => (
-            <SemanticTag key={genre} tone="brand">
-              {genre}
-              <button type="button" onClick={() => toggleGenre(genre)} aria-label={`移除 ${genre} 标签`} className="ml-0.5 inline-flex rounded p-0.5 hover:bg-[var(--nv-fill-hover)]"><X size={10} /></button>
-            </SemanticTag>
-          ))}
-        </div>
       )}
 
       {hasSearchOrFilters && !serverPaginated && (
@@ -622,7 +582,6 @@ function BrowseSkeleton({ viewMode }: { viewMode: ViewMode }) {
 }
 
 function BrowseListItem({ item }: { item: MixedItem }) {
-  const [tagsExpanded, setTagsExpanded] = useState(false)
   const navigate = useNavigate()
   const posterVersion = usePosterVersion()
   const isSeries = item.type === 'series'
@@ -631,12 +590,9 @@ function BrowseListItem({ item }: { item: MixedItem }) {
   const title = series?.title || media?.title || ''
   const year = series?.year || media?.year || 0
   const rating = series?.rating || media?.rating || 0
-  const genres = series?.genres || media?.genres || ''
   const country = series?.country || media?.country || ''
   const overview = series?.overview || media?.overview || ''
   const duration = media?.duration || 0
-  const genreList = genres ? genres.split(',').map((genre: string) => genre.trim()).filter(Boolean) : []
-  const visibleTags = tagsExpanded ? genreList : genreList.slice(0, 3)
   // 分集/电影等具体视频：点击进详情 → /media/:id（不再跳转所属剧集）
   const linkTo = series ? `/series/${series.id}` : `/media/${media?.id}`
   const isEpisode = !isSeries && !!media?.series_id
@@ -658,12 +614,6 @@ function BrowseListItem({ item }: { item: MixedItem }) {
         <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] text-[var(--nv-text-tertiary)]">
           {year > 0 && <span>{year}</span>}{country && <span>{country}</span>}{durationLabel && <span>{durationLabel}</span>}
         </div>
-        {genreList.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-1">
-            {visibleTags.map((genre) => <SemanticTag key={genre}>{genre}</SemanticTag>)}
-            {genreList.length > 3 && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setTagsExpanded((value) => !value) }} className="text-[10px] text-[var(--nv-text-tertiary)] hover:text-[var(--nv-text-primary)]">{tagsExpanded ? '收起' : `+${genreList.length - 3}`}</button>}
-          </div>
-        )}
         {overview && <p className="mt-1 line-clamp-1 text-[10px] text-[var(--nv-text-tertiary)]">{overview}</p>}
       </div>
       {rating > 0 && <SemanticTag tone="rating" className="shrink-0"><Star size={10} fill="currentColor" />{rating.toFixed(1)}</SemanticTag>}

@@ -38,7 +38,7 @@ func TestScanMixedLibraryPersonalVideoFolders(t *testing.T) {
 	xiaohong := filepath.Join(root, "小红")
 	touchVideo(t, filepath.Join(xiaohong, "VID_20240501_223045.mp4"))
 	touchVideo(t, filepath.Join(xiaohong, "VID_20240618_101112.mp4"))
-	// 单个日期视频的人名目录也应归组为剧集（而非散落成电影）
+	// 单个日期视频的人名目录不再归组为剧集，作为独立电影入库
 	xiaogang := filepath.Join(root, "小刚")
 	touchVideo(t, filepath.Join(xiaogang, "2025-01-01.mp4"))
 
@@ -62,8 +62,8 @@ func TestScanMixedLibraryPersonalVideoFolders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if total != 3 || len(list) != 3 {
-		t.Fatalf("应列出 3 部剧集（小明/小红/小刚），实际 total=%d: %+v", total, list)
+	if total != 2 || len(list) != 2 {
+		t.Fatalf("应列出 2 部剧集（小明/小红，单视频的小刚不归组），实际 total=%d: %+v", total, list)
 	}
 
 	byTitle := map[string]model.Series{}
@@ -72,19 +72,20 @@ func TestScanMixedLibraryPersonalVideoFolders(t *testing.T) {
 	}
 	ming, okMing := byTitle["小明"]
 	hong, okHong := byTitle["小红"]
-	gang, okGang := byTitle["小刚"]
-	if !okMing || !okHong || !okGang {
+	if !okMing || !okHong {
 		t.Fatalf("剧集标题应为人名目录名，实际: %+v", list)
 	}
-	if gang.EpisodeCount != 1 {
-		t.Fatalf("小刚（单日期视频目录）应有 1 集，实际 %d", gang.EpisodeCount)
+	// 单日期视频目录「小刚」不再归组为剧集，而是作为独立电影入库
+	_, okGang := byTitle["小刚"]
+	if okGang {
+		t.Fatalf("单日期视频目录「小刚」不应归组为剧集，实际被列出: %+v", list)
 	}
-	var gangEps []model.Media
-	if err := db.Where("series_id = ?", gang.ID).Find(&gangEps).Error; err != nil {
-		t.Fatal(err)
+	var gangMovie model.Media
+	if err := db.Where("series_id IS NULL OR series_id = ''").Where("file_path LIKE ?", "%小刚%").First(&gangMovie).Error; err != nil {
+		t.Fatalf("单日期视频目录「小刚」应作为独立电影入库: %v", err)
 	}
-	if len(gangEps) == 1 && (gangEps[0].SeasonNum != 1 || gangEps[0].EpisodeNum != 1 || gangEps[0].EpisodeTitle != "2025-01-01") {
-		t.Fatalf("小刚分集应为 S01E01 标题=2025-01-01，实际 %+v", gangEps[0])
+	if gangMovie.MediaType != "movie" {
+		t.Fatalf("单日期视频目录「小刚」应为 movie 类型: %+v", gangMovie)
 	}
 	if ming.EpisodeCount != 4 {
 		t.Fatalf("小明应有 4 集，实际 %d", ming.EpisodeCount)

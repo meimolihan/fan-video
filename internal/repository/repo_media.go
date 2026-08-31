@@ -125,7 +125,6 @@ func (r *MediaRepo) Search(keyword string, page, size int, excludeLibraryIDs ...
 type SearchAdvancedParams struct {
 	Keyword   string
 	MediaType string
-	Genre     string
 	YearMin   int
 	YearMax   int
 	MinRating float64
@@ -155,16 +154,6 @@ func (r *MediaRepo) SearchAdvanced(params SearchAdvancedParams, excludeLibraryID
 	}
 	if params.MediaType != "" {
 		query = query.Where("media_type = ?", params.MediaType)
-	}
-	if params.Genre != "" {
-		// 改进：支持多类型筛选（逗号分隔）
-		genres := strings.Split(params.Genre, ",")
-		for _, g := range genres {
-			g = strings.TrimSpace(g)
-			if g != "" {
-				query = query.Where("genres LIKE ?", "%"+g+"%")
-			}
-		}
 	}
 	if params.YearMin > 0 {
 		query = query.Where("year >= ?", params.YearMin)

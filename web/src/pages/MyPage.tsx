@@ -8,8 +8,8 @@ import { useThemeStore } from '@/stores/theme'
 import { PersonalWorkspaceHeader } from '@/ui'
 
 const entries = [
-  { to: '/favorites', title: '我的收藏', description: '收藏的电影和剧集', icon: Heart },
-  { to: '/watch-later', title: '稍后再看', description: '先收起来的电影和剧集', icon: Bookmark },
+  { to: '/favorites', title: '我的收藏', description: '收藏的视频和剧集', icon: Heart },
+  { to: '/watch-later', title: '稍后再看', description: '先收起来的视频和剧集', icon: Bookmark },
   { to: '/history', title: '观看记录', description: '继续观看与历史进度', icon: Clock },
   { to: '/playlists', title: '播放列表', description: '整理个人片单', icon: ListVideo },
   { to: '/stats', title: '观影统计', description: '观看时间与内容偏好', icon: BarChart3 },

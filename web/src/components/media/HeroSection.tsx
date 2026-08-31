@@ -471,11 +471,6 @@ export default function HeroSection({
               {media.year > 0 && <span>{media.year}</span>}
               {media.duration > 0 && <span>{formatDuration(media.duration)}</span>}
               {media.country && <span>{media.country}</span>}
-              {media.genres && media.genres.split(',').slice(0, 3).map((genre) => (
-                <Link key={genre} to={`/search?q=${encodeURIComponent(genre.trim())}`} className="transition-colors hover:text-[var(--nv-action-muted-hover)]">
-                  {genre.trim()}
-                </Link>
-              ))}
             </>
           )}
           badges={(

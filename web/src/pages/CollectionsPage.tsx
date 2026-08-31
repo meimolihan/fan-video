@@ -31,8 +31,8 @@ const SORT_OPTIONS = [
   { value: 'updated_asc', label: '最早更新' },
   { value: 'name_asc', label: '名称 A-Z' },
   { value: 'name_desc', label: '名称 Z-A' },
-  { value: 'count_desc', label: '电影最多' },
-  { value: 'count_asc', label: '电影最少' },
+  { value: 'count_desc', label: '视频最多' },
+  { value: 'count_asc', label: '视频最少' },
 ] as const
 
 type SortValue = typeof SORT_OPTIONS[number]['value']
@@ -188,7 +188,7 @@ export default function CollectionsPage() {
   }, [updateParams])
 
   const emptyTitle = searchResults !== null ? '未找到匹配的合集' : hasActiveFilter ? '没有符合条件的合集' : '暂无影视合集'
-  const emptyDescription = searchResults !== null ? '请尝试其他关键词。' : hasActiveFilter ? '尝试调整筛选条件。' : '扫描媒体库后，系统会自动匹配电影系列合集。'
+  const emptyDescription = searchResults !== null ? '请尝试其他关键词。' : hasActiveFilter ? '尝试调整筛选条件。' : '扫描媒体库后，系统会自动匹配视频系列合集。'
   const resultSummary = loading
     ? '正在加载合集…'
     : searchResults !== null
@@ -245,10 +245,10 @@ export default function CollectionsPage() {
             <Button type="button" variant="ghost" size="sm" onClick={() => runMaintenance('rematch')} loading={operating} title="清除所有自动匹配的合集并重新匹配，手动创建的合集不受影响">
               <RefreshCw size={13} aria-hidden="true" />重新匹配
             </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => runMaintenance('merge')} disabled={operating} title="合并所有同名重复合集，保留最早创建的合集并迁移电影">
+            <Button type="button" variant="ghost" size="sm" onClick={() => runMaintenance('merge')} disabled={operating} title="合并所有同名重复合集，保留最早创建的合集并迁移视频">
               <Merge size={13} aria-hidden="true" />合并重复
             </Button>
-            <Button type="button" variant="danger" size="sm" onClick={() => runMaintenance('cleanup')} disabled={operating} title="删除所有没有关联电影的空壳合集">
+            <Button type="button" variant="danger" size="sm" onClick={() => runMaintenance('cleanup')} disabled={operating} title="删除所有没有关联视频的空壳合集">
               <Trash2 size={13} aria-hidden="true" />清理空壳
             </Button>
           </div>

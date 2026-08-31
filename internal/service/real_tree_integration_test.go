@@ -137,17 +137,14 @@ func TestScanRealTreeIntegration(t *testing.T) {
 	// [嵌套单视频] Nina/Nina-XX/Nina-XX.mp4 应归组为一部剧集
 	check("Nina", 3)
 
-	// [MMDDYY 日期] Alone 人名目录（单个日期视频）应归组为人名剧集
-	check("りおん", 1)
-	var rionEp model.Media
-	if err := db.Where("series_id IN (SELECT id FROM series WHERE title = ?)", "りおん").First(&rionEp).Error; err == nil {
-		// [个人影视库] 分集标题应为真实文件名（去扩展名），而非「第1集」或日期
-		if rionEp.EpisodeTitle != "040624" {
-			t.Errorf("りおん 分集标题应为真实文件名 040624，实际 %q", rionEp.EpisodeTitle)
-		}
-		if rionEp.Title != "040624" {
-			t.Errorf("りおん 分集名称应为真实文件名 040624，实际 %q", rionEp.Title)
-		}
+	// [MMDDYY 日期] Alone 人名目录含单个日期视频：不再归组为人名剧集
+	// 而是作为独立电影入库（单视频目录不匹配剧集，产品决策）。
+	if _, ok := gotTitles["りおん"]; ok {
+		t.Errorf("单日期视频目录「りおん」不应归组为剧集")
+	}
+	var rionMovie model.Media
+	if err := db.Where("library_id = ? AND (series_id = '' OR series_id IS NULL) AND file_path LIKE ?", library.ID, "%りおん%040624.mp4").First(&rionMovie).Error; err != nil {
+		t.Errorf("单日期视频目录「りおん」应作为独立电影入库: %v", err)
 	}
 
 	// 大写扩展名 .MP4 必须被扫描到（GLOB 区分大小写）
@@ -178,7 +175,6 @@ func TestScanRealTreeIntegration(t *testing.T) {
 	// 剧集海报：封面子目录（xxx_封面/xxx.JPG）应被 FindLocalImagesDeep 命中
 	expectSeriesPoster("M痴女", "M痴女_封面"+string(filepath.Separator))
 	expectSeriesPoster("图鉴-HD", "图鉴-HD_封面"+string(filepath.Separator))
-	expectSeriesPoster("りおん", "りおん_封面"+string(filepath.Separator))
 	// 分集海报：封面子目录中的同名图片
 	var mchiEp model.Media
 	db.Where("series_id = ? AND file_path LIKE ?", findSeries("M痴女").ID, "%011921.mp4").First(&mchiEp)

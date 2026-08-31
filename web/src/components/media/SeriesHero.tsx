@@ -44,7 +44,6 @@ export default function SeriesHero({
   const [imageLoaded, setImageLoaded] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuContainerRef = useRef<HTMLDivElement>(null)
-  const genres = (series.genres || '').split(',').map((item) => item.trim()).filter(Boolean)
 
   const episodePosters = useMemo(() => {
     const seen = new Set<string>()
@@ -259,11 +258,6 @@ export default function SeriesHero({
           )}
           title={series.title}
           subtitle={series.orig_title && series.orig_title !== series.title ? series.orig_title : undefined}
-          meta={genres.slice(0, 4).map((genre) => (
-            <Link key={genre} to={`/search?q=${encodeURIComponent(genre)}`} className="hover:text-[var(--nv-text-primary)]">
-              {genre}
-            </Link>
-          ))}
           overview={series.overview || undefined}
           actions={actions}
         />

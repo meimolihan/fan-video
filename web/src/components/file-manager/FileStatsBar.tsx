@@ -45,7 +45,7 @@ function toneClassName(tone: TagTone = 'neutral') {
 export default function FileStatsBar({ stats }: FileStatsBarProps) {
   const items: StatItem[] = [
     { label: '总文件', value: stats.total_files, icon: FileVideo, tone: 'brand' },
-    { label: '电影', value: stats.movie_count, icon: Film },
+    { label: '视频', value: stats.movie_count, icon: Film },
     { label: '剧集', value: stats.episode_count, icon: Tv },
     { label: '有元数据', value: stats.scraped_count, icon: Check, tone: 'success' },
     { label: '无元数据', value: stats.unscraped_count, icon: AlertCircle, tone: 'warning' },

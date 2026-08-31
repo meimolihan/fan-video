@@ -722,21 +722,6 @@ type AICacheEntry struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// GenreMapping 类型标签统一映射表（标准化不同数据源的标签）
-type GenreMapping struct {
-	ID           string `json:"id" gorm:"primaryKey;type:text"`
-	SourceGenre  string `json:"source_genre" gorm:"uniqueIndex:idx_source_genre;type:text;not null"` // 原始标签（如 "Sci-Fi"）
-	SourceType   string `json:"source_type" gorm:"uniqueIndex:idx_source_genre;type:text;not null"`  // 来源（tmdb/douban/bangumi/ai）
-	StandardName string `json:"standard_name" gorm:"index;type:text;not null"`                       // 标准化名称（如 "科幻"）
-}
-
-func (g *GenreMapping) BeforeCreate(tx *gorm.DB) error {
-	if g.ID == "" {
-		g.ID = uuid.New().String()
-	}
-	return nil
-}
-
 // RecommendCache 推荐结果缓存（避免每次重建评分矩阵）
 type RecommendCache struct {
 	UserID    string    `json:"user_id" gorm:"primaryKey;type:text"`
@@ -889,7 +874,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&CoverCandidate{},
 		// 首页手动精选轮播
 		&HomeFeatured{},
-		&GenreMapping{},
 		&RecommendCache{},
 		// 视频预处理
 		&PreprocessTask{},

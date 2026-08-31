@@ -35,7 +35,7 @@ import ThumbnailManagementPanel from '@/components/admin/ThumbnailManagementPane
 import { invalidateMediaListCaches } from '@/utils/invalidateMediaCaches'
 
 const TYPE_CONFIG: Record<string, { label: string; icon: typeof Film }> = {
-  movie: { label: '电影', icon: Film },
+  movie: { label: '视频', icon: Film },
   tvshow: { label: '电视节目', icon: Tv },
   mixed: { label: '混合影片', icon: Layers },
   other: { label: '其他视频', icon: Video },

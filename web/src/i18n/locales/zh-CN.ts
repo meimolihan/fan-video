@@ -64,14 +64,13 @@ const zhCN: Record<string, string> = {
   'home.trending': '热门内容',
 
   // ==================== 媒体 ====================
-  'media.movie': '电影',
+  'media.movie': '视频',
   'media.tvshow': '电视剧',
   'media.episode': '剧集',
   'media.mixed': '混合',
   'media.other': '其他',
   'media.year': '年份',
   'media.rating': '评分',
-  'media.genres': '类型',
   'media.overview': '简介',
   'media.cast': '演员',
   'media.director': '导演',
@@ -124,7 +123,7 @@ const zhCN: Record<string, string> = {
   'subtitle.source': '字幕来源',
 
   // ==================== 搜索 ====================
-  'search.placeholder': '搜索电影、电视剧...',
+  'search.placeholder': '搜索视频、电视剧...',
   'search.advanced': '高级搜索',
   'search.results': '搜索结果',
   'search.noResults': '未找到相关内容',
@@ -173,7 +172,6 @@ const zhCN: Record<string, string> = {
   'batch.delete': '批量删除',
   'batch.scrape': '批量刮削',
   'batch.selected': '已选择 {count} 项',
-  'batch.updateGenres': '修改类型',
   'batch.updateTags': '修改标签',
   'batch.updateRating': '修改评分',
   'batch.confirmEdit': '确认批量修改',
@@ -289,11 +287,11 @@ const zhCN: Record<string, string> = {
 
   // ==================== 搜索（补充） ====================
   'search.searchFailed': '搜索失败，请稍后重试',
-  'search.searchPlaceholder': '搜索电影、剧集...',
+  'search.searchPlaceholder': '搜索视频、剧集...',
   'search.filterAndSort': '筛选与排序',
   'search.type': '类型',
   'search.typeAll': '全部',
-  'search.typeMovie': '电影',
+  'search.typeMovie': '视频',
   'search.typeEpisode': '剧集',
   'search.year': '年份',
   'search.yearAll': '全部',
@@ -422,13 +420,10 @@ const zhCN: Record<string, string> = {
   'stats.watchedCount': '观看影片数',
   'stats.countUnit': '{count} 部',
   'stats.growing': '持续增长中',
-  'stats.favoriteGenre': '最爱类型',
-  'stats.noGenre': '暂无',
   'stats.dailyAvg': '日均观看',
   'stats.dailyAvgMinutes': '{minutes} 分钟',
   'stats.last30Days': '最近30天',
   'stats.dailyTrend': '每日观看趋势',
-  'stats.topGenres': '最爱类型',
   'stats.mostWatched': '看得最多',
   'stats.clearAll': '清空报告',
   'stats.clearConfirmTitle': '清空观影报告',
@@ -494,7 +489,7 @@ const zhCN: Record<string, string> = {
   'admin.configFeatures': '配置后可使用以下功能：',
   'admin.feature1': '扫描媒体库时自动获取海报、简介、评分等信息',
   'admin.feature2': '在媒体详情页手动刮削指定视频的元数据',
-  'admin.feature3': '自动匹配电影/剧集的中文类型标签',
+  'admin.feature3': '自动匹配视频/剧集的中文类型标签',
   'admin.recentActivity': '最近活动',
   'admin.noActivity': '暂无活动记录',
   'admin.quickNavSystemStatus': '系统状态',
@@ -520,8 +515,8 @@ const zhCN: Record<string, string> = {
   'mediaDetail.addToPlaylistFailed': '添加到播放列表失败',
   'mediaDetail.manualMatch': '手动匹配影片',
   'mediaDetail.matchSource': '数据源',
-  'mediaDetail.tmdbDesc': '搜索 TMDb 数据库，适合欧美电影/电视剧。',
-  'mediaDetail.doubanDesc': '搜索豆瓣数据库，适合国产剧集和电影。',
+  'mediaDetail.tmdbDesc': '搜索 TMDb 数据库，适合欧美视频/电视剧。',
+  'mediaDetail.doubanDesc': '搜索豆瓣数据库，适合国产剧集和视频。',
   'mediaDetail.bangumiDesc': '搜索 Bangumi (bgm.tv) 数据库，适合日本动画/日剧。',
   'mediaDetail.thetvdbDesc': '搜索 TheTVDB 数据库，适合各类电视剧集。',
   'mediaDetail.doubanLabel': '豆瓣',
@@ -621,7 +616,6 @@ const zhCN: Record<string, string> = {
   'mediaInfo.runtime': '片长：',
   'mediaInfo.runtimeMinutes': '{minutes} 分钟',
   'mediaInfo.tags': '标签：',
-  'mediaInfo.genres': '分类：',
   'mediaInfo.rating': '评分：',
 
   // ==================== 演职人员 ====================
@@ -637,7 +631,7 @@ const zhCN: Record<string, string> = {
   'castGrid.viewOnTMDb': '在 TMDb 查看详情',
   'castGrid.worksCount': '共 {count} 部作品',
   'castGrid.noWorks': '暂无收录该演员的作品',
-  'castGrid.movies': '电影',
+  'castGrid.movies': '视频',
   'castGrid.tvShows': '剧集',
 
   // ==================== 演员详情页 ====================
@@ -645,11 +639,11 @@ const zhCN: Record<string, string> = {
   'personDetail.goBack': '返回',
   'personDetail.personTag': '人物',
   'personDetail.worksCount': '共 {count} 部作品',
-  'personDetail.movieCount': '{count} 部电影',
+  'personDetail.movieCount': '{count} 部视频',
   'personDetail.seriesCount': '{count} 部剧集',
   'personDetail.viewOnTMDb': '在 TMDb 查看详情',
   'personDetail.noWorks': '暂无收录该演员的作品',
-  'personDetail.movies': '电影作品',
+  'personDetail.movies': '视频作品',
   'personDetail.tvShows': '剧集作品',
 
   // ==================== 访问日志 ====================
@@ -689,7 +683,7 @@ const zhCN: Record<string, string> = {
   'pulse.title': 'Pulse 数据中心',
   'pulse.tabDashboard': '全景仪表盘',
   'pulse.tabAnalytics': '媒体分析',
-  'pulse.totalMovies': '电影总数',
+  'pulse.totalMovies': '视频总数',
   'pulse.totalSeries': '剧集合集',
   'pulse.episodes': '集',
   'pulse.totalUsers': '用户总数',
@@ -712,7 +706,6 @@ const zhCN: Record<string, string> = {
   'pulse.storage': '存储',
   'pulse.resolutionDist': '画质分布',
   'pulse.codecDist': '编码格式分布',
-  'pulse.genreDist': '类型分布',
   'pulse.growthTrend': '媒体库增长趋势',
 }
 

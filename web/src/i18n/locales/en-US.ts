@@ -71,7 +71,6 @@ const enUS: Record<string, string> = {
   'media.other': 'Other',
   'media.year': 'Year',
   'media.rating': 'Rating',
-  'media.genres': 'Genres',
   'media.overview': 'Overview',
   'media.cast': 'Cast',
   'media.director': 'Director',
@@ -173,7 +172,6 @@ const enUS: Record<string, string> = {
   'batch.delete': 'Batch Delete',
   'batch.scrape': 'Batch Scrape',
   'batch.selected': '{count} selected',
-  'batch.updateGenres': 'Update Genres',
   'batch.updateTags': 'Update Tags',
   'batch.updateRating': 'Update Rating',
   'batch.confirmEdit': 'Confirm Batch Edit',
@@ -371,13 +369,10 @@ const enUS: Record<string, string> = {
   'stats.watchedCount': 'Movies Watched',
   'stats.countUnit': '{count} movies',
   'stats.growing': 'Growing',
-  'stats.favoriteGenre': 'Favorite Genre',
-  'stats.noGenre': 'None',
   'stats.dailyAvg': 'Daily Average',
   'stats.dailyAvgMinutes': '{minutes} min',
   'stats.last30Days': 'Last 30 days',
   'stats.dailyTrend': 'Daily Watch Trend',
-  'stats.topGenres': 'Top Genres',
   'stats.mostWatched': 'Most Watched',
   'stats.clearAll': 'Clear Report',
   'stats.clearConfirmTitle': 'Clear Viewing Report',
@@ -639,7 +634,6 @@ const enUS: Record<string, string> = {
   'mediaInfo.runtime': 'Runtime: ',
   'mediaInfo.runtimeMinutes': '{minutes} min',
   'mediaInfo.tags': 'Tags: ',
-  'mediaInfo.genres': 'Genres: ',
   'mediaInfo.rating': 'Rating: ',
 
   // ==================== Cast & Crew ====================
@@ -721,7 +715,6 @@ const enUS: Record<string, string> = {
   'pulse.storage': 'Storage',
   'pulse.resolutionDist': 'Resolution Distribution',
   'pulse.codecDist': 'Codec Distribution',
-  'pulse.genreDist': 'Genre Distribution',
   'pulse.growthTrend': 'Library Growth Trend',
 }
 

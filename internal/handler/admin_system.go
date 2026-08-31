@@ -596,7 +596,6 @@ func (h *AdminHandler) ClearAllData(c *gin.Context) {
 		// 元数据相关
 		{name: "演员关联", model: &model.MediaPerson{}},
 		{name: "演员信息", model: &model.Person{}},
-		{name: "类型映射", model: &model.GenreMapping{}},
 		{name: "内容分级", model: &model.ContentRating{}},
 
 		// 缓存相关

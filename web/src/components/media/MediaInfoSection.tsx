@@ -80,7 +80,6 @@ export default function MediaInfoSection({ media, playInfo: _playInfo, persons }
   })()
 
   const tagList = (media.tags || '').split(',').map((value) => value.trim()).filter(Boolean)
-  const genreList = (media.genres || '').split(',').map((value) => value.trim()).filter(Boolean)
 
   const hasMetaTable = !!(
     extractedNum || media.maker || media.publisher || media.label || media.studio || media.release_date ||
@@ -89,7 +88,7 @@ export default function MediaInfoSection({ media, playInfo: _playInfo, persons }
   )
 
   const hasIntro = !!(media.tagline || media.outline || media.overview || media.original_plot)
-  const hasClassifications = genreList.length > 0 || (tagList.length > 0 && tagList.join(',') !== genreList.join(','))
+  const hasClassifications = tagList.length > 0
 
   return (
     <div className="nv-media-info divide-y divide-[var(--nv-border-subtle)] border-y border-[var(--nv-border-subtle)]">
@@ -165,18 +164,7 @@ export default function MediaInfoSection({ media, playInfo: _playInfo, persons }
 
       {hasClassifications && (
         <section className="nv-media-info-classifications grid gap-5 py-5 sm:grid-cols-2 sm:py-6">
-          {genreList.length > 0 && (
-            <div>
-              <SectionLabel>{t('mediaInfo.genres').replace(/[:：]\s*$/, '')}</SectionLabel>
-              <div className="flex flex-wrap gap-1.5">
-                {genreList.map((genre) => (
-                  <MetadataLink key={`g-${genre}`} to={`/search?q=${encodeURIComponent(genre)}`}>{genre}</MetadataLink>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {tagList.length > 0 && tagList.join(',') !== genreList.join(',') && (
+          {tagList.length > 0 && (
             <div>
               <SectionLabel>{t('mediaInfo.tags').replace(/[:：]\s*$/, '')}</SectionLabel>
               <div className="flex flex-wrap gap-1.5">

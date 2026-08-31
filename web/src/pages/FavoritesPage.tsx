@@ -72,7 +72,7 @@ export default function FavoritesPage() {
       <PersonalWorkspaceHeader
         icon={<Heart size={20} />}
         title={t('favorites.title')}
-        description="把喜欢的电影与剧集留在一个更容易再次找到的位置。"
+        description="把喜欢的视频与剧集留在一个更容易再次找到的位置。"
         statValue={total}
         statLabel="个收藏"
         statAriaLabel={`共 ${total} 个收藏`}

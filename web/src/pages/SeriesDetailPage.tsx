@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { durations } from '@/lib/motion'
 import { adminApi, homeApi, seriesApi, serverApi, streamApi, userApi } from '@/api'
@@ -12,7 +12,7 @@ import SeriesEpisodeBrowser from '@/components/media/SeriesEpisodeBrowser'
 import SeriesDetailSidebar from '@/components/media/SeriesDetailSidebar'
 import SeriesPosterPickerModal from '@/components/media/SeriesPosterPickerModal'
 import ConfirmDialog from '@/components/design-system/ConfirmDialog'
-import { Button, EmptyState, Tag } from '@/components/design-system'
+import { Button, EmptyState } from '@/components/design-system'
 import { formatErrMsg } from '@/utils/error'
 import { invalidateMediaListCaches } from '@/utils/invalidateMediaCaches'
 import { bumpPosterVersion } from '@/stores/mediaRefresh'
@@ -164,7 +164,6 @@ export default function SeriesDetailPage() {
     year: number
     overview: string
     rating: number
-    genres: string
     country: string
     language: string
     studio: string
@@ -174,7 +173,6 @@ export default function SeriesDetailPage() {
     year: 0,
     overview: '',
     rating: 0,
-    genres: '',
     country: '',
     language: '',
     studio: '',
@@ -345,7 +343,6 @@ export default function SeriesDetailPage() {
       year: series.year || 0,
       overview: series.overview || '',
       rating: series.rating || 0,
-      genres: series.genres || '',
       country: series.country || '',
       language: series.language || '',
       studio: series.studio || '',
@@ -444,7 +441,6 @@ export default function SeriesDetailPage() {
   }
 
   const isLongOverview = (series.overview?.length || 0) > 240
-  const genres = (series.genres || '').split(',').map((item) => item.trim()).filter(Boolean)
 
   return (
     <div className="nv-media-detail-page nv-series-detail-page relative -mx-4 -mt-6 sm:-mx-6 lg:-mx-8">
@@ -532,17 +528,6 @@ export default function SeriesDetailPage() {
                   </div>
                 ) : (
                   <EmptyState className="nv-detail-tab-empty-state" icon={<FileText size={23} aria-hidden="true" />} title="暂无简介" description="当前剧集暂未提供剧情简介或相关文字信息。" />
-                )}
-
-                {genres.length > 0 && (
-                  <div className="nv-series-overview-genres">
-                    <span>类型</span>
-                    <div>
-                      {genres.map((genre) => (
-                        <Link key={genre} to={`/search?q=${encodeURIComponent(genre)}`} className="no-underline"><Tag>{genre}</Tag></Link>
-                      ))}
-                    </div>
-                  </div>
                 )}
               </section>
             )}

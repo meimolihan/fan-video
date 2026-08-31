@@ -42,7 +42,6 @@ export const mediaApi = {
     size?: number
     library_id?: string
     type?: 'movie' | 'series'
-    genre?: string
     q?: string
     year_from?: number
     year_to?: number

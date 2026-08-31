@@ -46,7 +46,6 @@ type SearchSort = typeof SORT_OPTIONS[number]['value']
 type EffectiveSearch = {
   query: string
   type?: 'movie' | 'series'
-  genre?: string
   yearMin?: number
   yearMax?: number
   minRating: number
@@ -81,21 +80,12 @@ function normalizeText(value?: string) {
   return (value || '').trim().toLocaleLowerCase()
 }
 
-function includesFold(value: string | undefined, query: string | undefined) {
-  if (!query) return true
-  return normalizeText(value).includes(normalizeText(query))
-}
-
 function getMixedTitle(item: MixedItem) {
   return item.type === 'series' ? item.series?.title || '' : item.media?.title || ''
 }
 
 function getMixedOrigTitle(item: MixedItem) {
   return item.type === 'series' ? item.series?.orig_title || '' : item.media?.orig_title || ''
-}
-
-function getMixedGenres(item: MixedItem) {
-  return item.type === 'series' ? item.series?.genres || '' : item.media?.genres || ''
 }
 
 function getMixedYear(item: MixedItem) {
@@ -114,7 +104,6 @@ function relevanceScore(item: MixedItem, query: string) {
   const needle = normalizeText(query)
   const title = normalizeText(getMixedTitle(item))
   const origTitle = normalizeText(getMixedOrigTitle(item))
-  const genres = normalizeText(getMixedGenres(item))
 
   if (title === needle) return 100
   if (origTitle === needle) return 95
@@ -122,7 +111,6 @@ function relevanceScore(item: MixedItem, query: string) {
   if (origTitle.startsWith(needle)) return 80
   if (title.includes(needle)) return 70
   if (origTitle.includes(needle)) return 65
-  if (genres.includes(needle)) return 40
   return 0
 }
 
@@ -187,7 +175,6 @@ function applySearchCriteria(universe: SearchUniverse, criteria: EffectiveSearch
   ]
 
   if (criteria.type) items = items.filter((item) => item.type === criteria.type)
-  if (criteria.genre) items = items.filter((item) => includesFold(getMixedGenres(item), criteria.genre))
   if (criteria.yearMin) items = items.filter((item) => getMixedYear(item) >= criteria.yearMin!)
   if (criteria.yearMax) items = items.filter((item) => getMixedYear(item) <= criteria.yearMax!)
   if (criteria.minRating > 0) items = items.filter((item) => getMixedRating(item) >= criteria.minRating)
@@ -313,7 +300,6 @@ export default function SearchPage() {
     return {
       query,
       type: filterType || undefined,
-      genre: undefined,
       yearMin: yearRange.min || undefined,
       yearMax: yearRange.max || undefined,
       minRating: minRating || 0,

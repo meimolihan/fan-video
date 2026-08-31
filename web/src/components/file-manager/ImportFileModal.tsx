@@ -108,7 +108,7 @@ export default function ImportFileModal({ libraries, onClose, onSuccess }: Impor
                   className="w-full"
                   disabled={importing}
                 >
-                  <option value="movie">电影</option>
+                  <option value="movie">视频</option>
                   <option value="episode">剧集</option>
                 </Select>
               </label>

@@ -376,7 +376,7 @@ export default function FileListView({
                       <td className="hidden px-3 py-3 md:table-cell">
                         <Tag>
                           {file.media_type === 'movie' ? <Film size={12} /> : <Tv size={12} />}
-                          {file.media_type === 'movie' ? '电影' : '剧集'}
+                          {file.media_type === 'movie' ? '视频' : '剧集'}
                         </Tag>
                       </td>
                       <td className="hidden px-3 py-3 text-[var(--nv-text-secondary)] lg:table-cell">{file.year || '-'}</td>
@@ -490,7 +490,7 @@ export default function FileListView({
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-[var(--nv-text-tertiary)]">
                     <span>{file.year || '-'}</span>
                     {file.rating > 0 && <span className="text-[var(--nv-status-rating)]">★ {file.rating.toFixed(1)}</span>}
-                    <span>{file.media_type === 'movie' ? '电影' : '剧集'}</span>
+                    <span>{file.media_type === 'movie' ? '视频' : '剧集'}</span>
                   </div>
                 </div>
               </article>

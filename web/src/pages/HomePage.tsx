@@ -14,16 +14,11 @@ import { EmptyState, Section, Tag } from '@/components/design-system'
 import { MediaArtwork, MediaRail } from '@/ui'
 import { ChevronRight, Clock, Play, Sparkles } from 'lucide-react'
 
-const HOME_GENRES = ['动画', '喜剧', '冒险', '家庭'] as const
-
-type HomeGenre = typeof HOME_GENRES[number]
-
 interface HomeData {
   recentItems: MixedItem[]
   continueList: WatchHistory[]
   recommendations: RecommendedMedia[]
   featuredItems: MixedItem[]
-  genreItems: Partial<Record<HomeGenre, MixedItem[]>>
   allFailed: boolean
 }
 
@@ -56,16 +51,6 @@ function RailAction({ to, label = '查看全部' }: { to: string; label?: string
   )
 }
 
-function itemMatchesGenre(item: MixedItem, genre: string) {
-  const media = item.type === 'movie' ? item.media : item.series
-  if (!media?.genres) return false
-  return media.genres
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .some((value) => value === genre || value.includes(genre))
-}
-
 export default function HomePage() {
   const { on, off } = useWebSocket()
   const toast = useToast()
@@ -81,34 +66,17 @@ export default function HomePage() {
         mediaApi.continueWatching(10),
         recommendApi.getRecommendations(12),
         homeApi.getFeaturedCarousel(),
-        ...HOME_GENRES.map((genre) => mediaApi.listMixed({
-          page: 1,
-          size: 16,
-          genre,
-          sort: 'added',
-          order: 'desc',
-        })),
       ] as const
 
       const results = await Promise.allSettled(requests)
-      const [recentResult, continueResult, recommendResult, featuredResult, ...genreResults] = results
+      const [recentResult, continueResult, recommendResult, featuredResult] = results
       const recentItems = recentResult.status === 'fulfilled' ? (recentResult.value.data.data || []) : []
-      const genreItems: Partial<Record<HomeGenre, MixedItem[]>> = {}
-
-      HOME_GENRES.forEach((genre, index) => {
-        const result = genreResults[index]
-        const serverItems = result?.status === 'fulfilled' ? (result.value.data.data || []) : []
-        genreItems[genre] = serverItems.length > 0
-          ? serverItems
-          : recentItems.filter((item) => itemMatchesGenre(item, genre))
-      })
 
       return {
         recentItems,
         continueList: continueResult.status === 'fulfilled' ? (continueResult.value.data.data || []) : [],
         recommendations: recommendResult.status === 'fulfilled' ? (recommendResult.value.data.data || []) : [],
         featuredItems: featuredResult.status === 'fulfilled' ? (featuredResult.value.data.data || []) : [],
-        genreItems,
         allFailed: [recentResult, continueResult, recommendResult].every((result) => result.status === 'rejected'),
       }
     },
@@ -119,7 +87,6 @@ export default function HomePage() {
   const continueList = data?.continueList ?? []
   const recommendations = data?.recommendations ?? []
   const featuredItems = data?.featuredItems ?? []
-  const genreItems = data?.genreItems ?? {}
   const watchStateByMediaId = useMemo(() => Object.fromEntries(
     continueList.map((item) => [item.media_id, { position: item.position, duration: item.duration }]),
   ), [continueList])
@@ -209,7 +176,6 @@ export default function HomePage() {
       {!loading && recentItems.length > 0 && (
         <HomeShelfGrid
           items={recentItems}
-          genreItems={genreItems}
           recentTitle={t('home.recentlyAdded')}
         />
       )}
@@ -310,11 +276,9 @@ function HomeRailSkeleton({ title, landscape = false }: { title: string; landsca
 
 function HomeShelfGrid({
   items,
-  genreItems,
   recentTitle,
 }: {
   items: MixedItem[]
-  genreItems: Partial<Record<HomeGenre, MixedItem[]>>
   recentTitle: string
 }) {
   const shelves: HomeShelf[] = [
@@ -324,12 +288,6 @@ function HomeShelfGrid({
       to: '/browse?sort=created_desc',
       items,
     },
-    ...HOME_GENRES.map((genre) => ({
-      key: `genre-${genre}`,
-      title: genre,
-      to: `/browse?genres=${encodeURIComponent(genre)}`,
-      items: genreItems[genre] || [],
-    })).filter((shelf) => shelf.items.length > 0),
   ]
 
   return (

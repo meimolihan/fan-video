@@ -26,9 +26,9 @@ import {
 } from './design-system'
 
 const LIBRARY_TYPES = [
-  { value: 'movie' as const, label: '电影', desc: '各种类型电影', icon: Film },
+  { value: 'movie' as const, label: '视频', desc: '各种类型视频', icon: Film },
   { value: 'tvshow' as const, label: '电视节目', desc: '电视剧、综艺等', icon: Tv },
-  { value: 'mixed' as const, label: '混合影片', desc: '电影和电视节目', icon: Layers },
+  { value: 'mixed' as const, label: '混合影片', desc: '视频和电视节目', icon: Layers },
   { value: 'other' as const, label: '其他视频', desc: '个人视频、课程等', icon: Video },
 ]
 

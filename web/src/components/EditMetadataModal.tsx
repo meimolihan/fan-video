@@ -219,15 +219,12 @@ export default function EditMetadataModal({
             <Field label="原始标题"><Input value={editForm.orig_title || ''} onChange={(event) => setField('orig_title', event.target.value)} /></Field>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="年份">
               <Input type="number" value={editForm.year || ''} onChange={(event) => setField('year', parseInt(event.target.value) || 0)} />
             </Field>
             <Field label="评分">
               <Input type="number" step="0.1" min="0" max="10" value={editForm.rating || ''} onChange={(event) => setField('rating', parseFloat(event.target.value) || 0)} />
-            </Field>
-            <Field label="类型">
-              <Input value={editForm.genres || ''} onChange={(event) => setField('genres', event.target.value)} placeholder="动作,科幻" />
             </Field>
           </div>
 

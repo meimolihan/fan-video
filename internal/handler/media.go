@@ -143,7 +143,6 @@ func (h *MediaHandler) ListMixed(c *gin.Context) {
 	result, err := h.mediaService.ListMixedFiltered(page, size, service.MixedListFilter{
 		LibraryID:       c.Query("library_id"),
 		ContentType:     c.Query("type"),
-		Genre:           c.Query("genre"),
 		Query:           c.Query("q"),
 		YearFrom:        yearFrom,
 		YearTo:          yearTo,
@@ -227,7 +226,6 @@ func (h *MediaHandler) SearchAdvanced(c *gin.Context) {
 	params := repository.SearchAdvancedParams{
 		Keyword:   c.Query("q"),
 		MediaType: c.Query("type"),
-		Genre:     c.Query("genre"),
 		YearMin:   yearMin,
 		YearMax:   yearMax,
 		MinRating: minRating,

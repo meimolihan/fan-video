@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Calendar, Clock, Film, Grid3X3, LayoutList, Play, Star } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { streamApi } from '@/api'
@@ -75,8 +75,8 @@ export default function CollectionMovieBrowser({ media }: CollectionMovieBrowser
     <section className="space-y-5">
       <div className="flex flex-col gap-3 border-b border-[var(--nv-border-subtle)] pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="font-display text-lg font-semibold tracking-tight text-[var(--nv-text-primary)]">系列电影</h2>
-          <p className="mt-1 text-xs text-[var(--nv-text-tertiary)]"><span className="text-[var(--nv-status-warning)] font-bold">{sortedMedia.length}</span> 部电影</p>
+          <h2 className="font-display text-lg font-semibold tracking-tight text-[var(--nv-text-primary)]">系列视频</h2>
+          <p className="mt-1 text-xs text-[var(--nv-text-tertiary)]"><span className="text-[var(--nv-status-warning)] font-bold">{sortedMedia.length}</span> 部视频</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -117,46 +117,8 @@ export default function CollectionMovieBrowser({ media }: CollectionMovieBrowser
   )
 }
 
-function ExpandableGenreTags({ genres }: { genres: string[] }) {
-  const [expanded, setExpanded] = useState(false)
-  if (genres.length === 0) return null
-
-  const primary = genres.slice(0, 3)
-  const remaining = genres.slice(3)
-
-  return (
-    <div className={`nv-collection-item-tags mt-1.5 flex flex-wrap items-center gap-1${expanded ? ' is-expanded' : ''}`}>
-      {primary.map((genre) => (
-        <Link key={genre} to={`/search?q=${encodeURIComponent(genre)}`} title={genre}>
-          <Tag>{genre}</Tag>
-        </Link>
-      ))}
-      {remaining.length > 0 && (
-        <button
-          type="button"
-          className="nv-collection-tag-toggle"
-          aria-expanded={expanded}
-          aria-label={expanded ? '收起全部标签' : `展开其余 ${remaining.length} 个标签`}
-          title={expanded ? '收起标签' : `展开全部 ${genres.length} 个标签`}
-          onClick={() => setExpanded((value) => !value)}
-        >
-          <Tag tone={expanded ? 'brand' : undefined}>
-            {expanded ? '收起' : `+${remaining.length}`}
-          </Tag>
-        </button>
-      )}
-      {expanded && remaining.map((genre) => (
-        <Link key={genre} to={`/search?q=${encodeURIComponent(genre)}`} title={genre}>
-          <Tag>{genre}</Tag>
-        </Link>
-      ))}
-    </div>
-  )
-}
-
 function MovieGridCard({ item, index }: { item: CollectionMediaItem; index: number }) {
   const navigate = useNavigate()
-  const genres = (item.genres || '').split(',').map((genre) => genre.trim()).filter(Boolean)
 
   return (
     <article className="nv-media-card group relative">
@@ -206,7 +168,6 @@ function MovieGridCard({ item, index }: { item: CollectionMediaItem; index: numb
             </>
           )}
         </div>
-        <ExpandableGenreTags genres={genres} />
       </div>
     </article>
   )
@@ -214,7 +175,6 @@ function MovieGridCard({ item, index }: { item: CollectionMediaItem; index: numb
 
 function MovieListCard({ item, index }: { item: CollectionMediaItem; index: number }) {
   const navigate = useNavigate()
-  const genres = (item.genres || '').split(',').map((genre) => genre.trim()).filter(Boolean)
 
   return (
     <article className="nv-browse-list-item group transition-colors hover:bg-[var(--nv-fill-hover)]">
@@ -238,7 +198,6 @@ function MovieListCard({ item, index }: { item: CollectionMediaItem; index: numb
             {item.year > 0 && <span>{item.year}</span>}
             {item.runtime > 0 && <span>{formatDuration(item.runtime)}</span>}
           </div>
-          <ExpandableGenreTags genres={genres} />
         </div>
 
         {item.rating > 0 && <Tag tone="rating" className="shrink-0"><Star size={10} fill="currentColor" aria-hidden="true" />{item.rating.toFixed(1)}</Tag>}

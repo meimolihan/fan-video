@@ -32,7 +32,6 @@ type Repositories struct {
 	AIAnalysisTask *AIAnalysisTaskRepo
 	// V3: 封面候选
 	CoverCandidate *CoverCandidateRepo
-	GenreMapping   *GenreMappingRepo
 	RecommendCache *RecommendCacheRepo
 	// V6: P1~P3 新增功能
 	Preprocess         *PreprocessRepo
@@ -86,7 +85,6 @@ func NewRepositories(db *gorm.DB) *Repositories {
 		VideoHighlight: &VideoHighlightRepo{db: db},
 		AIAnalysisTask: &AIAnalysisTaskRepo{db: db},
 		CoverCandidate: &CoverCandidateRepo{db: db},
-		GenreMapping:   &GenreMappingRepo{db: db},
 		RecommendCache: &RecommendCacheRepo{db: db},
 		// V6: P1~P3 新增功能
 		Preprocess:         &PreprocessRepo{db: db},

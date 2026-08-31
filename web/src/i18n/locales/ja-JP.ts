@@ -71,7 +71,6 @@ const jaJP: Record<string, string> = {
   'media.other': 'その他',
   'media.year': '年',
   'media.rating': '評価',
-  'media.genres': 'ジャンル',
   'media.overview': 'あらすじ',
   'media.cast': 'キャスト',
   'media.director': '監督',
@@ -173,7 +172,6 @@ const jaJP: Record<string, string> = {
   'batch.delete': '一括削除',
   'batch.scrape': '一括スクレイプ',
   'batch.selected': '{count}件選択中',
-  'batch.updateGenres': 'ジャンルを変更',
   'batch.updateTags': 'タグを変更',
   'batch.updateRating': '評価を変更',
   'batch.confirmEdit': '一括編集を確認',
@@ -371,13 +369,10 @@ const jaJP: Record<string, string> = {
   'stats.watchedCount': '視聴作品数',
   'stats.countUnit': '{count}作品',
   'stats.growing': '増加中',
-  'stats.favoriteGenre': 'お気に入りジャンル',
-  'stats.noGenre': 'なし',
   'stats.dailyAvg': '日平均',
   'stats.dailyAvgMinutes': '{minutes}分',
   'stats.last30Days': '過去30日間',
   'stats.dailyTrend': '日別視聴トレンド',
-  'stats.topGenres': '人気ジャンル',
   'stats.mostWatched': '最も視聴した作品',
   'stats.clearAll': 'レポートをクリア',
   'stats.clearConfirmTitle': '視聴レポートをクリア',
@@ -631,7 +626,6 @@ const jaJP: Record<string, string> = {
   'mediaInfo.runtime': '収録時間：',
   'mediaInfo.runtimeMinutes': '{minutes} 分',
   'mediaInfo.tags': 'タグ：',
-  'mediaInfo.genres': 'ジャンル：',
   'mediaInfo.rating': '評価：',
 
   // ==================== キャスト・スタッフ ====================
@@ -713,7 +707,6 @@ const jaJP: Record<string, string> = {
   'pulse.storage': 'ストレージ',
   'pulse.resolutionDist': '解像度分布',
   'pulse.codecDist': 'コーデック分布',
-  'pulse.genreDist': 'ジャンル分布',
   'pulse.growthTrend': 'ライブラリ成長トレンド',
 }
 

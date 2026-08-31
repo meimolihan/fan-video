@@ -27,7 +27,6 @@ const TEXT_FIELDS = [
   { key: 'orig_title', label: '原始标题', type: 'text' },
   { key: 'year', label: '年份', type: 'number' },
   { key: 'rating', label: '评分', type: 'number' },
-  { key: 'genres', label: '类型', type: 'text', placeholder: '动作,科幻,冒险' },
   { key: 'country', label: '国家/地区', type: 'text' },
   { key: 'language', label: '语言', type: 'text' },
 ] as const
@@ -40,7 +39,6 @@ export default function EditFileModal({ media, onClose, onSuccess }: EditFileMod
     orig_title: media.orig_title,
     year: media.year,
     overview: media.overview,
-    genres: media.genres,
     rating: media.rating,
     media_type: media.media_type,
     country: media.country,
@@ -94,14 +92,13 @@ export default function EditFileModal({ media, onClose, onSuccess }: EditFileMod
             {TEXT_FIELDS.map((field) => (
               <label
                 key={field.key}
-                className={field.key === 'genres' ? 'block space-y-1.5 sm:col-span-2' : 'block space-y-1.5'}
+                className="block space-y-1.5"
               >
                 <span className="text-sm font-medium text-[var(--nv-text-secondary)]">{field.label}</span>
                 <Input
                   type={field.type}
                   value={editForm[field.key] ? String(editForm[field.key]) : ''}
                   onChange={(event) => handleFieldChange(field.key, event.target.value, field.type)}
-                  placeholder={'placeholder' in field ? field.placeholder : undefined}
                   disabled={saving}
                   step={field.key === 'rating' ? '0.1' : undefined}
                 />
@@ -116,7 +113,7 @@ export default function EditFileModal({ media, onClose, onSuccess }: EditFileMod
                 className="w-full"
                 disabled={saving}
               >
-                <option value="movie">电影</option>
+                <option value="movie">视频</option>
                 <option value="episode">剧集</option>
               </Select>
             </label>

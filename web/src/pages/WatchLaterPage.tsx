@@ -71,7 +71,7 @@ export default function WatchLaterPage() {
       <PersonalWorkspaceHeader
         icon={<Bookmark size={20} />}
         title={t('watchLater.title')}
-        description="把想看的电影与剧集先收起来，稍后再看。"
+        description="把想看的视频与剧集先收起来，稍后再看。"
         statValue={total}
         statLabel="个条目"
         statAriaLabel={`共 ${total} 个条目`}
