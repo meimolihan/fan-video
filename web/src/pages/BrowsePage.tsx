@@ -188,7 +188,7 @@ export default function BrowsePage() {
   useEffect(() => { setSearchInput(searchQuery) }, [searchQuery])
 
   const libraryKey = selectedLibrary || 'all'
-  const { data: probeData, loading: probeLoading, refetch: refetchProbe } = usePageCache<BrowseProbe>(
+  const { data: probeData, loading: probeLoading, error: probeError, refetch: refetchProbe } = usePageCache<BrowseProbe>(
     `browse:probe:lib=${libraryKey}`,
     async () => {
       const probe = await mediaApi.listMixed({ page: 1, size: 1, library_id: selectedLibrary || undefined, include_episodes: true })
@@ -223,7 +223,7 @@ export default function BrowsePage() {
     ].join(':')
   }, [probeReady, serverPaginated, libraryKey, page, size, mediaType, searchQuery, serverGenre, yearRange.min, yearRange.max, serverSort])
 
-  const { data: rawBrowseData, loading: browseLoading, refetch } = usePageCache<BrowseData>(
+  const { data: rawBrowseData, loading: browseLoading, error: browseError, refetch } = usePageCache<BrowseData>(
     browseKey,
     async () => {
       if (!browseKey || !probeData) throw new Error('Browse probe is not ready')
@@ -273,6 +273,10 @@ export default function BrowsePage() {
   const seriesList = browseData?.seriesList ?? []
   const totalCount = browseData?.totalCount ?? 0
 
+  // 仅当「当前影视库/筛选」的真实请求失败时提示，避免切换影视库时
+  // 探针先于列表的瞬间被误判为加载失败（此时请求其实全部成功）。
+  const realError = probeError ?? browseError
+
   const toastRef = useRef(toast)
   useEffect(() => { toastRef.current = toast }, [toast])
 
@@ -296,8 +300,9 @@ export default function BrowsePage() {
   const hasDataRef = useRef(false)
   useEffect(() => { if (browseData) hasDataRef.current = true }, [browseData])
   useEffect(() => {
-    if (!loading && !browseData && hasDataRef.current) toastRef.current.error('加载影视库内容失败')
-  }, [loading, browseData])
+    if (!realError || loading || browseData || !hasDataRef.current) return
+    toastRef.current.error('加载影视库内容失败')
+  }, [realError, loading, browseData])
 
   useEffect(() => {
     const debouncedRefresh = () => {
