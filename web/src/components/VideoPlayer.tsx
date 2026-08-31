@@ -166,6 +166,7 @@ export default function VideoPlayer({
     startVolume: number
     direction: 'none' | 'horizontal' | 'vertical'
     side: 'left' | 'right'
+    targetTime?: number
   } | null>(null)
   const gestureOverlayTimer = useRef<number>(0)
 
@@ -676,6 +677,9 @@ export default function VideoPlayer({
     video.currentTime = Math.max(0, Math.min(targetTime, maxTime))
   }, [mode, remuxSeek, displayDuration])
 
+  const commitProgressSeekRef = useRef(commitProgressSeek)
+  commitProgressSeekRef.current = commitProgressSeek
+
   const syncProgressTouch = (event: React.TouchEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect()
     const ratio = Math.max(0, Math.min(1, (event.touches[0].clientX - rect.left) / rect.width))
@@ -919,6 +923,7 @@ export default function VideoPlayer({
       const seekDelta = (deltaX / rect.width) * effectiveDuration * 0.3
       const newTime = Math.max(0, Math.min(effectiveDuration, gesture.startTime + seekDelta))
       const diff = newTime - gesture.startTime
+      gesture.targetTime = newTime
       setGestureOverlay({
         type: 'seek',
         value: `${diff >= 0 ? '+' : '-'}${formatTime(Math.abs(diff))} / ${formatTime(newTime)}`,
@@ -942,12 +947,8 @@ export default function VideoPlayer({
   const handleTouchEnd = useCallback(() => {
     const gesture = gestureRef.current
     if (!gesture) return
-    if (gesture.direction === 'horizontal') {
-      const video = videoRef.current
-      const rect = containerRef.current?.getBoundingClientRect()
-      if (video && rect) {
-        // Preserve existing behavior: gesture overlay previews the seek delta.
-      }
+    if (gesture.direction === 'horizontal' && gesture.targetTime !== undefined) {
+      commitProgressSeekRef.current(gesture.targetTime)
     }
     gestureRef.current = null
     clearTimeout(gestureOverlayTimer.current)
