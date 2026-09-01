@@ -41,9 +41,12 @@ export default function PosterImage({ src, thumbSrc, onError, ...rest }: PosterI
     return () => observer.disconnect()
   }, [])
 
-  // 视口进入后用后台 <img> 预加载高清原图
+  // 视口进入后用后台 <img> 预加载高清原图。
+  // 只有存在独立缩略图（thumbSrc）时才需要「先显示小图、后台预载大图」；
+  // 否则 currentSrc 本身就是原图（thumbSrc || src），前台 <img> 已经在加载它，
+  // 再 new Image() 预载同一个 URL 会重复请求——加剧后端限流（429）并浪费带宽。
   useEffect(() => {
-    if (!isInViewport || hdReady) return
+    if (!isInViewport || hdReady || !thumbSrc) return
 
     const hdImg = new Image()
     hdPreloadRef.current = hdImg
@@ -54,7 +57,7 @@ export default function PosterImage({ src, thumbSrc, onError, ...rest }: PosterI
       hdImg.onload = null
       hdPreloadRef.current = null
     }
-  }, [isInViewport, src, hdReady])
+  }, [isInViewport, src, hdReady, thumbSrc])
 
   // 决定当前显示哪个 src + opacity
   const showHd = hdReady

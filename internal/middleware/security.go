@@ -115,6 +115,12 @@ type RateLimitConfig struct {
 	MaxRequests  int           // 窗口期内最大请求数
 	Window       time.Duration // 滑动窗口时长
 	ExcludePaths []string      // 排除的路径前缀（不受速率限制）
+	// ExcludeImageEndpoints 是否对海报/封面/背景图等静态媒体接口取消限流。
+	// 这类带鉴权的图片是客户端批量加载的资源（影视库每页几十张），用与普通接口
+	// 相同的每分钟限制会被立即打爆（429），导致海报加载不全、轮播无法显示，
+	// 甚至把 HTML/API 请求一起拖进限流。图片端点有独立的 JWT 鉴权保护，
+	// 免除全局限流不影响安全。
+	ExcludeImageEndpoints bool
 }
 
 // RateLimit 速率限制中间件（滑动窗口算法，带路径排除和自动清理）
@@ -124,6 +130,21 @@ func RateLimit(maxRequestsPerMinute int) gin.HandlerFunc {
 		MaxRequests: maxRequestsPerMinute,
 		Window:      time.Minute,
 	})
+}
+
+// isStaticMediaImage 判断是否为客户端批量加载的静态媒体图片 GET 请求：
+// 媒体/剧集/合集的海报、缩略图与背景图端点。它们带独立的 JWT 鉴权，
+// 属于正常批量加载资源，不应计入全局限流。
+func isStaticMediaImage(method, path string) bool {
+	if method != "GET" {
+		return false
+	}
+	const imageSegment = "/poster"
+	const thumbSegment = "/poster/thumb"
+	if strings.HasSuffix(path, imageSegment) || strings.Contains(path, thumbSegment) || strings.HasSuffix(path, "/backdrop") {
+		return true
+	}
+	return false
 }
 
 // RateLimitWithConfig 可配置的速率限制中间件（滑动窗口算法）
@@ -168,6 +189,11 @@ func RateLimitWithConfig(cfg RateLimitConfig) gin.HandlerFunc {
 				c.Next()
 				return
 			}
+		}
+		// 海报/封面/背景图等静态媒体接口取消全局限流（见 ExcludeImageEndpoints 注释）。
+		if cfg.ExcludeImageEndpoints && isStaticMediaImage(c.Request.Method, path) {
+			c.Next()
+			return
 		}
 
 		ip := c.ClientIP()

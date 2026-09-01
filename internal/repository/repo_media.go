@@ -6,6 +6,7 @@ import (
 
 	"github.com/fan-video/fan-video/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ==================== MediaRepo ====================
@@ -19,8 +20,42 @@ func (r *MediaRepo) DB() *gorm.DB {
 	return r.db
 }
 
+// Create 以 upsert 语义写入媒体记录。
+//
+// 以 (library_id, file_path) 作为唯一键：若该键已存在（例如并发扫描同一路径），
+// 则更新既有行而非再次插入，并把 media.ID 刷新为既有行 ID，避免产生重复分集。
+// 这样即使扫描器并发触发也只会留下一条记录，从数据库层面杜绝「目录 N 个视频却显示更多集」。
 func (r *MediaRepo) Create(media *model.Media) error {
-	return r.db.Create(media).Error
+	updateCols := []string{
+		"title", "orig_title", "year", "overview", "poster_path", "backdrop_path",
+		"rating", "runtime", "genres", "file_size", "media_type", "video_codec",
+		"audio_codec", "resolution", "duration", "subtitle_paths", "stream_url",
+		"stream_ua", "stream_referer", "stream_cookie", "stream_headers", "stream_refresh_url",
+		"tm_db_id", "im_db_id", "douban_id", "bangumi_id", "premiered", "country",
+		"language", "tagline", "studio", "trailer_url", "num", "sort_title",
+		"outline", "original_plot", "mpaa", "country_code", "maker", "publisher",
+		"label", "tags", "website", "release_date", "stack_group", "stack_order",
+		"version_tag", "scrape_status", "scrape_attempts", "last_scrape_at",
+		"collection_id", "series_id", "season_num", "episode_num", "episode_title",
+		"is_personal", "updated_at",
+	}
+	err := r.db.Clauses(
+		clause.OnConflict{
+			Columns:   []clause.Column{{Name: "library_id"}, {Name: "file_path"}},
+			DoUpdates: clause.AssignmentColumns(updateCols),
+		},
+	).Create(media).Error
+	if err != nil {
+		return err
+	}
+	// 无论走「插入」还是「更新既有行」分支，都以 (library_id, file_path) 回读真实 ID，
+	// 保证调用方拿到的 media.ID 是真正落库的这一条，避免外键关联错行。
+	var m model.Media
+	if err := r.db.Select("id").Where("library_id = ? AND file_path = ?",
+		media.LibraryID, media.FilePath).First(&m).Error; err == nil && m.ID != "" {
+		media.ID = m.ID
+	}
+	return nil
 }
 
 func (r *MediaRepo) FindByID(id string) (*model.Media, error) {

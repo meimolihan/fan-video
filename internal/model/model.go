@@ -274,7 +274,7 @@ func (mc *MovieCollection) BeforeCreate(tx *gorm.DB) error {
 // Media 媒体项（电影/剧集）
 type Media struct {
 	ID           string  `json:"id" gorm:"primaryKey;type:text"`
-	LibraryID    string  `json:"library_id" gorm:"index;type:text;not null"`
+	LibraryID    string  `json:"library_id" gorm:"index;type:text;not null;uniqueIndex:uniq_media_library_path,priority:1"`
 	Title        string  `json:"title" gorm:"index;type:text;not null"`
 	OrigTitle    string  `json:"orig_title" gorm:"type:text"` // 原始标题
 	Year         int     `json:"year" gorm:"index"`
@@ -282,9 +282,9 @@ type Media struct {
 	PosterPath   string  `json:"poster_path" gorm:"type:text"`   // 海报图片路径
 	BackdropPath string  `json:"backdrop_path" gorm:"type:text"` // 背景图路径
 	Rating       float64 `json:"rating"`
-	Runtime      int     `json:"runtime"`                             // 时长（分钟）
-	Genres       string  `json:"genres" gorm:"type:text"`             // 逗号分隔的类型
-	FilePath     string  `json:"file_path" gorm:"type:text;not null"` // 视频文件绝对路径
+	Runtime      int     `json:"runtime"`                                                                 // 时长（分钟）
+	Genres       string  `json:"genres" gorm:"type:text"`                                                 // 逗号分隔的类型
+	FilePath     string  `json:"file_path" gorm:"type:text;not null;uniqueIndex:uniq_media_library_path"` // 视频文件绝对路径
 	FileSize     int64   `json:"file_size"`
 	MediaType    string  `json:"media_type" gorm:"type:text;default:movie"` // movie / episode
 	// 视频信息
@@ -842,8 +842,99 @@ func (l *FileOperationLog) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+// DedupeMediaByPath 清理 media 表中同一 (library_id, file_path) 的重复行。
+//
+// 背景：历史版本中扫描器对同一文件路径并发/多次插入，导致同一集出现重复记录，
+// 表现为「目录只有 N 个视频、剧集却显示更多集」。
+//
+// 规则：对每组重复保留创建时间最早的那一行；把其余重复行上挂载的关联数据
+// （观看历史、收藏、稍后再看、播放列表项、书签、评论、评分、演职员、章节等）
+// 一并迁移到保留行，再删除重复行。这样后续才能安全地给 media 建唯一索引，
+// 从数据库层面杜绝重复插入。
+//
+// 注意：必须在 db.AutoMigrate(&Media{}) 之前调用，否则唯一索引会因重复行而创建失败。
+func DedupeMediaByPath(db *gorm.DB) error {
+	// 全新数据库（首次 AutoMigrate）时 media 表尚不存在，无需也无从清理重复行。
+	if !db.Migrator().HasTable(&Media{}) {
+		return nil
+	}
+
+	type dupGroup struct {
+		LibraryID string
+		FilePath  string
+	}
+	var groups []dupGroup
+	if err := db.Model(&Media{}).
+		Select("library_id, file_path").
+		Where("deleted_at IS NULL").
+		Group("library_id, file_path").
+		Having("COUNT(*) > 1").
+		Scan(&groups).Error; err != nil {
+		return err
+	}
+
+	// media_id 关联表（软删/物理删除重复行前需迁移）
+	mediaIDTables := []string{
+		"watch_histories",
+		"favorites",
+		"watch_laters",
+		"playlist_items",
+		"bookmarks",
+		"comments",
+		"content_ratings",
+		"user_ratings",
+		"media_people",
+		"video_chapters",
+		"video_highlights",
+		"ai_analysis_tasks",
+		"cover_candidates",
+		"media_probe_cache",
+		"playback_stats",
+	}
+
+	for _, g := range groups {
+		var rows []Media
+		if err := db.Where("library_id = ? AND file_path = ? AND deleted_at IS NULL",
+			g.LibraryID, g.FilePath).Order("created_at ASC, rowid ASC").Find(&rows).Error; err != nil {
+			return err
+		}
+		if len(rows) < 2 {
+			continue
+		}
+		keep := rows[0]
+		for _, dup := range rows[1:] {
+			for _, t := range mediaIDTables {
+				if !db.Migrator().HasTable(t) {
+					continue
+				}
+				// 关联到重复行的数据全部改指到保留行。若目标表对 media_id 有唯一限制、
+				// 且保留行已存在同一条关联（如首帧/探针缓存），则迁移可能冲突；
+				// 此时保留「保留行」的关联、删除重复行上的关联即可，缓存类数据丢失无妨。
+				if err := db.Table(t).
+					Where("media_id = ?", dup.ID).
+					Update("media_id", keep.ID).Error; err != nil {
+					if delErr := db.Table(t).
+						Where("media_id = ?", dup.ID).
+						Delete(nil).Error; delErr == nil {
+						continue
+					}
+				}
+			}
+			if err := db.Unscoped().Delete(&Media{}, "id = ?", dup.ID).Error; err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // AutoMigrate 自动迁移所有模型
 func AutoMigrate(db *gorm.DB) error {
+	// 先清理历史重复行，保证后续给 media 建的 (library_id, file_path) 唯一索引成功
+	if err := DedupeMediaByPath(db); err != nil {
+		return fmt.Errorf("清理重复媒体记录失败: %w", err)
+	}
+
 	if err := db.AutoMigrate(
 		&User{},
 		&LoginLog{},

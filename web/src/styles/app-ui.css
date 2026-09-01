@@ -11953,3 +11953,14 @@ html body .nv-series-hero.nv-series-hero-has-poster-slides .nv-series-backdrop >
 html body .nv-app-shell .nv-rail-brand {
   background: transparent !important;
 }
+
+/* 继续观看（Continue）横条：桌面端卡片间距由贴近改为 5px。
+ * 桌面端走 grid（column-gap: var(--nv-rail-gap)），移动端（见上面
+ * max-width: 47.999rem 段）已用 flex + gap: 5px，保持不变。这里仅限桌面 ≥48rem。 */
+@media (min-width: 48rem) {
+  html body .nv-home-page .nv-media-rail-track:has(> .nv-continue-card) {
+    --nv-rail-gap: 5px !important;
+    column-gap: 5px !important;
+    gap: 5px !important;
+  }
+}

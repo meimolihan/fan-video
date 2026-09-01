@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, type HTMLAttributes, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { Film } from 'lucide-react'
-import { resolvePosterUrl } from '@/utils/posterCache'
+import { resolvePosterUrl, getCachedPosterUrlSync } from '@/utils/posterCache'
 import PosterImage from '@/components/PosterImage'
 
 export type MediaArtworkRatio = 'poster' | 'landscape' | 'hero' | 'square'
@@ -17,22 +17,39 @@ export interface MediaArtworkProps extends HTMLAttributes<HTMLDivElement> {
   overlay?: ReactNode
 }
 
+/**
+ * 解析海报 URL 为「立即可用」的地址。
+ *
+ * 策略（避免快速翻页时海报长时间停在占位态 / 加载不完全）：
+ * 1. 同步快查内存缓存：若该海报 objectURL 已在会话内，直接返回（秒出，零网络）。
+ * 2. 否则先把原始 URL 交给 <img> 立刻渲染（浏览器 loading=lazy + Service Worker
+ *    缓存兜底），同时后台异步 resolve 真实缓存地址（IndexedDB objectURL）；
+ *    解析完成后用 `ready` 标记升级 src，让后续复用能命中缓存。这样既不阻塞首帧展示，
+ *    又能享受海报缓存带来的秒开与省流量。
+ */
 function useResolvedArtworkUrl(src: string | null | undefined) {
-  const [state, setState] = useState<{ ready: boolean; url: string | null | undefined }>(
-    () => (src ? { ready: false, url: null } : { ready: true, url: src }),
-  )
+  const [state, setState] = useState<{ ready: boolean; url: string | null | undefined }>(() => {
+    if (!src) return { ready: true, url: src }
+    const cached = getCachedPosterUrlSync(src)
+    return { ready: true, url: cached ?? src }
+  })
 
   useEffect(() => {
     if (!src) {
       setState({ ready: true, url: src })
       return
     }
+    // 同步快查：内存命中直接定格，无需异步解析。
+    const cached = getCachedPosterUrlSync(src)
+    if (cached) {
+      setState({ ready: true, url: cached })
+      return
+    }
+    // 立即用原始 URL 渲染，避免显示占位闪烁。
+    setState({ ready: true, url: src })
     let alive = true
-    setState({ ready: false, url: null })
-    // 解析期间不把原始 URL 交给 <img>：否则浏览器会照常发起网络请求，
-    // 缓存就失去意义了。解析结果要么是本地 blob URL，要么回退原始地址。
-    resolvePosterUrl(src).then((url) => {
-      if (alive) setState({ ready: true, url })
+    resolvePosterUrl(src).then((resolved) => {
+      if (alive && resolved) setState({ ready: true, url: resolved })
     })
     return () => {
       alive = false

@@ -7,6 +7,11 @@ import "gorm.io/gorm"
 // created. Existing full-profile tables are left untouched, so deployments can
 // switch between Lite and Full without destructive migrations.
 func AutoMigrateLite(db *gorm.DB) error {
+	// 先清理历史重复行，保证后续给 media 建的 (library_id, file_path) 唯一索引成功
+	if err := DedupeMediaByPath(db); err != nil {
+		return err
+	}
+
 	models := []any{
 		&User{},
 		&LoginLog{},

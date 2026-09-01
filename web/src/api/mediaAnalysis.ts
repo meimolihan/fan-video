@@ -2,50 +2,6 @@ import api from './client'
 
 export const MEDIA_COMPUTE_PROTOCOL_VERSION = 2
 
-// ==================== 缩略图生成（媒体库管理）====================
-export interface ThumbnailInfo {
-  media_id: string
-  thumb_path: string
-  width: number
-  message: string
-}
-
-export interface ThumbnailStats {
-  total: number
-  generated: number
-  missing: number
-}
-
-export interface ThumbnailAuditItem {
-  media_id: string
-  title: string
-  poster_path: string
-  thumb_path: string
-  detail: string
-}
-
-export interface ThumbnailAuditReport {
-  total: number
-  generated: number
-  poster_deleted: ThumbnailAuditItem[]
-  thumb_missing: ThumbnailAuditItem[]
-  orphan_thumbs: ThumbnailAuditItem[]
-}
-
-export interface ThumbnailBatchStatus {
-  running: boolean
-  stop_requested: boolean
-  total: number
-  generated: number
-  skipped: number
-  failed: number
-  remaining: number
-  current_title: string
-  current_percent: number
-  started_at: string
-  finished_at?: string | null
-}
-
 export const MEDIA_COMPUTE_JOB_HIGHLIGHT_V1 = 'highlight_v1'
 export const MEDIA_COMPUTE_CAPABILITY_HIGHLIGHT_V1 = 'highlight_v1'
 export const MEDIA_COMPUTE_JOB_PREVIEW_THUMBNAIL_V1 = 'preview_thumbnail_v1'
@@ -383,36 +339,4 @@ export const mediaAnalysisApi = {
 
   failWorkerTask: (taskId: string, failure: MediaAnalysisWorkerFailure) =>
     api.post<void>(`/media-analysis/workers/tasks/${taskId}/fail`, failure),
-
-  // 缩略图生成
-  ensureThumbnail: (mediaId: string) =>
-    api.post<{ data: ThumbnailInfo; message: string }>(`/admin/media/${mediaId}/thumbnail`),
-
-  startThumbnailBatch: () =>
-    api.post<{ data: ThumbnailBatchStatus; message: string }>('/admin/media/batch-thumbnail'),
-
-  getThumbnailBatchStatus: () =>
-    api.get<{ data: ThumbnailBatchStatus }>('/admin/media/batch-thumbnail/status'),
-
-  stopThumbnailBatch: () =>
-    api.delete<{ data: ThumbnailBatchStatus; message: string }>('/admin/media/batch-thumbnail/stop'),
-
-  // 缩略图删除
-  deleteThumbnail: (mediaId: string) =>
-    api.delete<{ message: string }>(`/admin/media/${mediaId}/thumbnail`),
-
-  batchDeleteThumbnails: () =>
-    api.delete<{ data: { deleted: number }; message: string }>('/admin/media/batch-thumbnail'),
-
-  // 缩略图统计
-  getThumbnailStats: () =>
-    api.get<{ data: ThumbnailStats }>('/admin/media/thumbnail-stats'),
-
-  // 缩略图完整性检查
-  getThumbnailAudit: () =>
-    api.get<{ data: ThumbnailAuditReport }>('/admin/media/thumbnail-audit'),
-
-  // 清理缩略图完整性问题（孤儿 + 源图已删除）
-  cleanThumbnailAuditIssues: () =>
-    api.post<{ deleted: number; message: string }>('/admin/media/thumbnail-audit/clean'),
 }

@@ -45,9 +45,10 @@ func buildRouter(
 	r.Use(middleware.CORS(corsOrigins...))
 	r.Use(middleware.Security())
 	r.Use(middleware.RateLimitWithConfig(middleware.RateLimitConfig{
-		MaxRequests:  600,
-		Window:       time.Minute,
-		ExcludePaths: []string{"/api/ws"},
+		MaxRequests:           3000,
+		Window:                time.Minute,
+		ExcludePaths:          []string{"/api/ws"},
+		ExcludeImageEndpoints: true,
 	}))
 	// PJAX 局部刷新：识别 X-PJAX 请求头，非 API 的 SPA 导航 GET 返回页面主体片段，
 	// 普通请求返回完整页面。保持与完整页面复用同一份 index.html，不重写业务模板。
