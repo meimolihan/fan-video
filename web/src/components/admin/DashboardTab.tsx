@@ -60,6 +60,7 @@ interface DashboardTabProps {
   switchTab: (tab: string) => void
   onDataCleared: () => void
 }
+import { formatErrMsg } from '@/utils/error'
 
 type MergeResult = {
   type: 'success' | 'error' | 'info'
@@ -163,8 +164,8 @@ export default function DashboardTab({
       if (response.data.data) setSysSettings(response.data.data)
       setSysSettingsMsg({ type: 'success', text: '系统设置已保存' })
       window.setTimeout(() => setSysSettingsMsg(null), 4000)
-    } catch (error: any) {
-      setSysSettingsMsg({ type: 'error', text: error?.response?.data?.error || '保存失败，请稍后重试' })
+    } catch (error) {
+      setSysSettingsMsg({ type: 'error', text: formatErrMsg(error, '保存失败，请稍后重试') })
     } finally {
       setSysSettingsSaving(false)
     }

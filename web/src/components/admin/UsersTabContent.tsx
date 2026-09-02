@@ -44,6 +44,7 @@ interface UsersTabProps {
   users: User[]
   setUsers: Dispatch<SetStateAction<User[]>>
 }
+import { formatErrMsg } from '@/utils/error'
 
 export default function UsersTab({ users, setUsers }: UsersTabProps) {
   const toast = useToast()
@@ -102,8 +103,8 @@ export default function UsersTab({ users, setUsers }: UsersTabProps) {
       await adminApi.deleteUser(id)
       setUsers((current) => current.filter((user) => user.id !== id))
       toast.success('用户已删除')
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || '删除用户失败')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '删除用户失败'))
     }
   }
 
@@ -121,8 +122,8 @@ export default function UsersTab({ users, setUsers }: UsersTabProps) {
       await adminApi.setUserDisabled(user.id, next)
       setUsers((current) => current.map((item) => item.id === user.id ? { ...item, disabled: next } : item))
       toast.success(`已${actionText}用户 ${user.username}`)
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || `${actionText}失败`)
+    } catch (err) {
+      toast.error(formatErrMsg(err, `${actionText}失败`))
     }
   }
 
@@ -148,8 +149,8 @@ export default function UsersTab({ users, setUsers }: UsersTabProps) {
       toast.success(`已创建用户 ${res.data.data.username}`)
       setShowCreateModal(false)
       setNewUser({ username: '', password: '', role: 'user', nickname: '', email: '' })
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || '创建失败')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '创建失败'))
     } finally {
       setCreatingUser(false)
     }
@@ -178,9 +179,9 @@ export default function UsersTab({ users, setUsers }: UsersTabProps) {
       setPermLibraries(permission.allowed_libraries ? permission.allowed_libraries.split(',').filter(Boolean) : [])
       setPermRating(permission.max_rating_level || 'NC-17')
       setPermTimeLimit(Math.min(1440, Math.max(0, permission.daily_time_limit || 0)))
-    } catch (err: any) {
+    } catch (err) {
       if (permissionRequestRef.current !== requestId) return
-      toast.error(err?.response?.data?.error || '权限加载失败，未对现有权限做任何修改')
+      toast.error(formatErrMsg(err, '权限加载失败，未对现有权限做任何修改'))
       setEditingUser(null)
     } finally {
       if (permissionRequestRef.current === requestId) setLoadingPerm(false)
@@ -199,8 +200,8 @@ export default function UsersTab({ users, setUsers }: UsersTabProps) {
       })
       toast.success('权限已保存')
       if (editingUser === userId) closePermEditor()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || '保存权限失败')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '保存权限失败'))
     } finally {
       setSavingPerm(false)
     }
@@ -218,8 +219,8 @@ export default function UsersTab({ users, setUsers }: UsersTabProps) {
       setResetPwdUser(null)
       setResetPwdValue('')
       setResetForceChange(true)
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || '重置密码失败')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '重置密码失败'))
     } finally {
       setResettingPwd(false)
     }

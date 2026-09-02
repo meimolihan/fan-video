@@ -46,6 +46,7 @@ const DEFAULT_CONFIG: WebDAVConfig = {
   max_retries: 3,
   retry_interval: 5,
 }
+import { formatErrMsg } from '@/utils/error'
 
 type ProviderKey = 'local' | 'webdav' | 'alist' | 's3'
 
@@ -138,8 +139,8 @@ export default function StorageTab() {
       await storageApi.updateWebDAVConfig(payload)
       setToast({ ok: true, msg: 'WebDAV 配置已保存' })
       await loadAll()
-    } catch (error: any) {
-      setToast({ ok: false, msg: error?.response?.data?.error || '保存失败' })
+    } catch (error) {
+      setToast({ ok: false, msg: formatErrMsg(error, '保存失败') })
     } finally {
       setSaving(false)
     }
@@ -156,8 +157,8 @@ export default function StorageTab() {
         base_path: config.base_path.trim() || '/',
       })
       setToast({ ok: true, msg: 'WebDAV 连接测试成功' })
-    } catch (error: any) {
-      setToast({ ok: false, msg: error?.response?.data?.error || '连接测试失败' })
+    } catch (error) {
+      setToast({ ok: false, msg: formatErrMsg(error, '连接测试失败') })
     } finally {
       setTesting(false)
     }
@@ -170,8 +171,8 @@ export default function StorageTab() {
       await storageApi.registerWebDAVLibrary(libraryId)
       setToast({ ok: true, msg: '已为媒体库注册 WebDAV 存储' })
       await loadAll()
-    } catch (error: any) {
-      setToast({ ok: false, msg: error?.response?.data?.error || '注册失败' })
+    } catch (error) {
+      setToast({ ok: false, msg: formatErrMsg(error, '注册失败') })
     } finally {
       setRegisteringLib(null)
     }

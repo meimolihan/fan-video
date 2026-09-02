@@ -3,7 +3,7 @@ import Hls from 'hls.js'
 import { usePlayerStore } from '@/stores/player'
 import { useAuthStore } from '@/stores/auth'
 import { mediaApi, userApi, subtitleApi } from '@/api'
-import { useWebSocket, WS_EVENTS } from '@/hooks/useWebSocket'
+import { useWebSocket, WS_EVENTS, type WSMessage } from '@/hooks/useWebSocket'
 import type { SubtitleTrack, ExternalSubtitle, ASRTask, TranslatedSubtitle, DanmakuComment } from '@/types'
 import {
   Play,
@@ -173,26 +173,30 @@ export default function VideoPlayer({
   const { on, off } = useWebSocket()
 
   useEffect(() => {
-    const handleASRProgress = (data: any) => {
-      if (data.media_id === mediaId) {
-        setAiSubtitleStatus(data as ASRTask)
-        if (data.status === 'completed' || data.status === 'failed') setAiGenerating(false)
+    const handleASRProgress = (data: WSMessage['data']) => {
+      const ev = data as { media_id?: string; status?: string }
+      if (ev.media_id === mediaId) {
+        setAiSubtitleStatus(data as unknown as ASRTask)
+        if (ev.status === 'completed' || ev.status === 'failed') setAiGenerating(false)
       }
     }
-    const handleASRCompleted = (data: any) => {
-      if (data.media_id === mediaId) {
-        setAiSubtitleStatus(data as ASRTask)
+    const handleASRCompleted = (data: WSMessage['data']) => {
+      const ev = data as { media_id?: string; status?: string }
+      if (ev.media_id === mediaId) {
+        setAiSubtitleStatus(data as unknown as ASRTask)
         setAiGenerating(false)
       }
     }
-    const handleASRFailed = (data: any) => {
-      if (data.media_id === mediaId) {
-        setAiSubtitleStatus(data as ASRTask)
+    const handleASRFailed = (data: WSMessage['data']) => {
+      const ev = data as { media_id?: string; status?: string }
+      if (ev.media_id === mediaId) {
+        setAiSubtitleStatus(data as unknown as ASRTask)
         setAiGenerating(false)
       }
     }
-    const handlePreprocessCompleted = (data: any) => {
-      if (data.media_id === mediaId && onPreprocessReady) onPreprocessReady()
+    const handlePreprocessCompleted = (data: WSMessage['data']) => {
+      const ev = data as { media_id?: string }
+      if (ev.media_id === mediaId && onPreprocessReady) onPreprocessReady()
     }
 
     on(WS_EVENTS.PREPROCESS_COMPLETED, handlePreprocessCompleted)
@@ -200,21 +204,24 @@ export default function VideoPlayer({
     on(WS_EVENTS.ASR_COMPLETED, handleASRCompleted)
     on(WS_EVENTS.ASR_FAILED, handleASRFailed)
 
-    const handleTranslateProgress = (data: any) => {
-      if (data.media_id === mediaId) setTranslateStatus(data as ASRTask)
+    const handleTranslateProgress = (data: WSMessage['data']) => {
+      const ev = data as { media_id?: string }
+      if (ev.media_id === mediaId) setTranslateStatus(data as unknown as ASRTask)
     }
-    const handleTranslateCompleted = (data: any) => {
-      if (data.media_id === mediaId) {
-        setTranslateStatus(data as ASRTask)
+    const handleTranslateCompleted = (data: WSMessage['data']) => {
+      const ev = data as { media_id?: string; status?: string }
+      if (ev.media_id === mediaId) {
+        setTranslateStatus(data as unknown as ASRTask)
         setTranslating(false)
         subtitleApi.listTranslated(mediaId).then((res) => {
           if (Array.isArray(res.data.data)) setTranslatedSubs(res.data.data)
         }).catch(() => {})
       }
     }
-    const handleTranslateFailed = (data: any) => {
-      if (data.media_id === mediaId) {
-        setTranslateStatus(data as ASRTask)
+    const handleTranslateFailed = (data: WSMessage['data']) => {
+      const ev = data as { media_id?: string; status?: string }
+      if (ev.media_id === mediaId) {
+        setTranslateStatus(data as unknown as ASRTask)
         setTranslating(false)
       }
     }

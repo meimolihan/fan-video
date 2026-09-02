@@ -39,7 +39,7 @@ func NewMetadataService(mediaRepo *repository.MediaRepo, seriesRepo *repository.
 		seriesRepo: seriesRepo,
 		cfg:        cfg,
 		logger:     logger,
-		client:     &http.Client{Timeout: 30 * time.Second},
+		client:     newSSRFSafeClient(30 * time.Second),
 	}
 }
 
@@ -395,6 +395,9 @@ func (s *MetadataService) DownloadURLImageForSeries(seriesID string, imageURL st
 
 // downloadImageFromURL 从 URL 下载图片数据（限制 10MB）
 func downloadImageFromURL(client *http.Client, imageURL string) ([]byte, string, error) {
+	if err := validateDownloadURL(imageURL); err != nil {
+		return nil, "", err
+	}
 	resp, err := client.Get(imageURL)
 	if err != nil {
 		return nil, "", fmt.Errorf("下载图片失败: %w", err)
@@ -405,7 +408,7 @@ func downloadImageFromURL(client *http.Client, imageURL string) ([]byte, string,
 		return nil, "", fmt.Errorf("下载图片失败，HTTP状态码: %d", resp.StatusCode)
 	}
 
-	imageData, err := io.ReadAll(resp.Body)
+	imageData, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024+1))
 	if err != nil {
 		return nil, "", fmt.Errorf("读取图片数据失败: %w", err)
 	}

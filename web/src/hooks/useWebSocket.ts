@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useAuthStore } from '@/stores/auth'
+import type { SubExtractProgressData } from '@/types'
 
 // ==================== 事件类型 ====================
 
@@ -163,7 +164,49 @@ export interface WSMessage {
 
 // ==================== 事件监听器类型 ====================
 
-type WSEventHandler = (data: any) => void
+// EventDataMap 按事件类型映射其负载数据类型，使 on/off 具备按事件的类型安全。
+export interface EventDataMap {
+  [WS_EVENTS.SCAN_STARTED]: ScanProgressData
+  [WS_EVENTS.SCAN_PROGRESS]: ScanProgressData
+  [WS_EVENTS.SCAN_COMPLETED]: ScanProgressData
+  [WS_EVENTS.SCAN_FAILED]: ScanProgressData
+  [WS_EVENTS.SCAN_PHASE]: ScanPhaseData
+  [WS_EVENTS.SCRAPE_STARTED]: ScrapeProgressData
+  [WS_EVENTS.SCRAPE_PROGRESS]: ScrapeProgressData
+  [WS_EVENTS.SCRAPE_COMPLETED]: ScrapeProgressData
+  [WS_EVENTS.TRANSCODE_STARTED]: TranscodeProgressData
+  [WS_EVENTS.TRANSCODE_PROGRESS]: TranscodeProgressData
+  [WS_EVENTS.TRANSCODE_COMPLETED]: TranscodeProgressData
+  [WS_EVENTS.TRANSCODE_FAILED]: TranscodeProgressData
+  [WS_EVENTS.MEDIA_ANALYSIS_PROGRESS]: MediaAnalysisProgressData
+  [WS_EVENTS.MEDIA_ANALYSIS_COMPLETE]: MediaAnalysisProgressData
+  [WS_EVENTS.TASK_UPDATED]: TaskUpdatedData
+  [WS_EVENTS.ASR_PROGRESS]: WSMessage['data']
+  [WS_EVENTS.ASR_COMPLETED]: WSMessage['data']
+  [WS_EVENTS.ASR_FAILED]: WSMessage['data']
+  [WS_EVENTS.TRANSLATE_PROGRESS]: WSMessage['data']
+  [WS_EVENTS.TRANSLATE_COMPLETED]: WSMessage['data']
+  [WS_EVENTS.TRANSLATE_FAILED]: WSMessage['data']
+  [WS_EVENTS.PREPROCESS_COMPLETED]: WSMessage['data']
+  [WS_EVENTS.SUB_EXTRACT_STARTED]: SubExtractProgressData
+  [WS_EVENTS.SUB_EXTRACT_PROGRESS]: SubExtractProgressData
+  [WS_EVENTS.SUB_EXTRACT_COMPLETED]: SubExtractProgressData
+  [WS_EVENTS.SUB_EXTRACT_FAILED]: SubExtractProgressData
+  [WS_EVENTS.LIBRARY_DELETED]: WSMessage['data']
+  [WS_EVENTS.LIBRARY_UPDATED]: WSMessage['data']
+  [WS_EVENTS.FILE_IMPORTED]: WSMessage['data']
+  [WS_EVENTS.FILE_DELETED]: WSMessage['data']
+  [WS_EVENTS.BATCH_RENAME_COMPLETE]: WSMessage['data']
+  [WS_EVENTS.FILE_SCRAPE_PROGRESS]: WSMessage['data']
+  [WS_EVENTS.FOLDER_RENAMED]: WSMessage['data']
+  [WS_EVENTS.FOLDER_DELETED]: WSMessage['data']
+  [WS_EVENTS.ADULT_BATCH_PROGRESS]: WSMessage['data']
+  [WS_EVENTS.ADULT_BATCH_COMPLETED]: WSMessage['data']
+  [WS_EVENTS.ADULT_BATCH_FAILED]: WSMessage['data']
+  [WS_EVENTS.INGEST_PROGRESS]: WSMessage['data']
+}
+
+type WSEventHandler<T> = (data: T) => void
 
 // ==================== WebSocket Hook ====================
 
@@ -180,9 +223,9 @@ interface UseWebSocketReturn {
   /** 是否已连接 */
   connected: boolean
   /** 订阅事件 */
-  on: (event: WSEventType, handler: WSEventHandler) => void
+  on: <K extends keyof EventDataMap & string>(event: K, handler: WSEventHandler<EventDataMap[K]>) => void
   /** 取消订阅 */
-  off: (event: WSEventType, handler: WSEventHandler) => void
+  off: <K extends keyof EventDataMap & string>(event: K, handler: WSEventHandler<EventDataMap[K]>) => void
   /** 最后一条消息 */
   lastMessage: WSMessage | null
 }
@@ -196,7 +239,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 
   const wsRef = useRef<WebSocket | null>(null)
   const retriesRef = useRef(0)
-  const listenersRef = useRef<Map<string, Set<WSEventHandler>>>(new Map())
+  const listenersRef = useRef<Map<string, Set<(...args: unknown[]) => void>>>(new Map())
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [connected, setConnected] = useState(false)
   const [lastMessage, setLastMessage] = useState<WSMessage | null>(null)
@@ -204,15 +247,15 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
   const token = useAuthStore((s) => s.token)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
 
-  const on = useCallback((event: WSEventType, handler: WSEventHandler) => {
+  const on = useCallback(<K extends keyof EventDataMap & string>(event: K, handler: WSEventHandler<EventDataMap[K]>) => {
     if (!listenersRef.current.has(event)) {
       listenersRef.current.set(event, new Set())
     }
-    listenersRef.current.get(event)!.add(handler)
+    listenersRef.current.get(event)!.add(handler as (...args: unknown[]) => void)
   }, [])
 
-  const off = useCallback((event: WSEventType, handler: WSEventHandler) => {
-    listenersRef.current.get(event)?.delete(handler)
+  const off = useCallback(<K extends keyof EventDataMap & string>(event: K, handler: WSEventHandler<EventDataMap[K]>) => {
+    listenersRef.current.get(event)?.delete(handler as (...args: unknown[]) => void)
   }, [])
 
   const dispatchEvent = useCallback((msg: WSMessage) => {
@@ -220,7 +263,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     if (handlers) {
       handlers.forEach((handler) => {
         try {
-          handler(msg.data)
+          ;(handler as (data: unknown) => void)(msg.data)
         } catch (e) {
           console.error('[WS] 事件处理器错误:', e)
         }
@@ -233,10 +276,11 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     if (wsRef.current?.readyState === WebSocket.OPEN) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/api/ws?token=${encodeURIComponent(token)}`
+    // 令牌通过 WebSocket 子协议携带，避免出现在 URL / 访问日志中。
+    const wsUrl = `${protocol}//${window.location.host}/api/ws`
 
     try {
-      const ws = new WebSocket(wsUrl)
+      const ws = new WebSocket(wsUrl, [token])
       wsRef.current = ws
 
       ws.onopen = () => {
@@ -244,7 +288,6 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
           ws.close()
           return
         }
-        console.log('[WS] 已连接')
         setConnected(true)
         retriesRef.current = 0
       }
@@ -263,15 +306,13 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
         }
       }
 
-      ws.onclose = (event) => {
+      ws.onclose = () => {
         if (ws !== wsRef.current) return
-        console.log('[WS] 连接关闭:', event.code, event.reason)
         setConnected(false)
         wsRef.current = null
 
         if (autoReconnect && retriesRef.current < maxRetries && isAuthenticated) {
           retriesRef.current++
-          console.log(`[WS] ${reconnectInterval}ms 后重连 (${retriesRef.current}/${maxRetries})`)
           reconnectTimerRef.current = setTimeout(connect, reconnectInterval)
         }
       }

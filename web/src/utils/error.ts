@@ -8,23 +8,39 @@
  *   4) 原生 Error.message
  *   5) 返回空字符串（调用方自行决定 fallback 文案）
  */
+interface AxiosLikeError {
+  response?: {
+    data?: unknown
+    status?: number
+    statusText?: string
+  }
+  code?: string
+  message?: string
+}
+
+function isObjectLike(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
 export function extractErrMsg(err: unknown): string {
   if (!err) return ''
 
   // axios error 结构：{ response: { data: { message } }, code, message, ... }
-  const anyErr = err as any
+  const anyErr = (isObjectLike(err) ? err : {}) as AxiosLikeError
 
   // 1) 后端返回的业务错误 message
-  const data = anyErr?.response?.data
-  if (data) {
+  const data = anyErr.response?.data
+  if (data !== undefined && data !== null) {
     if (typeof data === 'string' && data.trim()) return data.trim()
-    const msg = data.message || data.error || data.msg
-    if (typeof msg === 'string' && msg.trim()) return msg.trim()
+    if (isObjectLike(data)) {
+      const raw = data.message ?? data.error ?? data.msg
+      if (typeof raw === 'string' && raw.trim()) return raw.trim()
+    }
   }
 
   // 2) HTTP 层状态
-  const status = anyErr?.response?.status
-  const statusText = anyErr?.response?.statusText
+  const status = anyErr.response?.status
+  const statusText = anyErr.response?.statusText
   if (status) {
     if (status === 401) return '未授权（401），请重新登录'
     if (status === 403) return '无权限（403）'
@@ -33,12 +49,12 @@ export function extractErrMsg(err: unknown): string {
   }
 
   // 3) 网络层错误（常见：TMDb 国内直连超时就走这里）
-  const code = anyErr?.code
+  const code = anyErr.code
   if (code === 'ECONNABORTED') return '请求超时，请检查网络或配置 TMDb 代理'
   if (code === 'ERR_NETWORK') return '网络不通，请检查服务端网络或代理配置'
 
   // 4) 兜底：原生 error message
-  if (typeof anyErr?.message === 'string' && anyErr.message.trim()) {
+  if (typeof anyErr.message === 'string' && anyErr.message.trim()) {
     return anyErr.message.trim()
   }
 

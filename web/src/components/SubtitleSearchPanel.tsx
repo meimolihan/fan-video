@@ -12,6 +12,7 @@ interface SubtitleSearchPanelProps {
   onClose: () => void
   onDownloaded?: (subtitle?: SubtitleDownloadResult) => void
 }
+import { extractErrMsg, formatErrMsg } from '@/utils/error'
 
 type OnlineSubtitleResult = SubtitleSearchResult & {
   file_size?: string
@@ -145,9 +146,9 @@ export default function SubtitleSearchPanel({
           text: keyword ? `未找到「${keyword}」的在线字幕` : '未找到与当前视频匹配的在线字幕',
         })
       }
-    } catch (err: any) {
+    } catch (err) {
       setResults([])
-      const errorText = err.response?.data?.error || err.message || '搜索失败'
+      const errorText = extractErrMsg(err) || '搜索失败'
       setMessage({ type: 'error', text: errorText.includes('暂时不可用') ? errorText : `字幕搜索失败：${errorText}` })
     } finally {
       setSearching(false)
@@ -175,8 +176,8 @@ export default function SubtitleSearchPanel({
       await activateDownloadedSubtitle(downloaded)
       setMessage({ type: 'success', text: `${sub.language_name || sub.language} 字幕已保存并加载` })
       window.setTimeout(onClose, 650)
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.response?.data?.error || err.message || '下载失败' })
+    } catch (err) {
+      setMessage({ type: 'error', text: formatErrMsg(err, '下载失败') })
     } finally {
       setDownloading(null)
     }

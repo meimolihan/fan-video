@@ -12,7 +12,8 @@ import (
 // ==================== MediaRepo ====================
 
 type MediaRepo struct {
-	db *gorm.DB
+	db        *gorm.DB
+	ftsEnabled bool // 是否成功初始化 FTS5 全文索引（失败时退回 LIKE 搜索）
 }
 
 // DB 返回底层数据库连接（供复杂查询使用）
@@ -136,6 +137,16 @@ func (r *MediaRepo) Recent(limit int, excludeLibraryIDs ...string) ([]model.Medi
 }
 
 func (r *MediaRepo) Search(keyword string, page, size int, excludeLibraryIDs ...string) ([]model.Media, int64, error) {
+	if keyword == "" {
+		return nil, 0, nil
+	}
+	if r.ftsEnabled {
+		if media, total, err := r.searchWithFTS(keyword, page, size, excludeLibraryIDs...); err == nil {
+			return media, total, nil
+		}
+		// FTS 查询异常时降级到 LIKE 路径，保证搜索始终可用。
+	}
+
 	var media []model.Media
 	var total int64
 
@@ -148,12 +159,57 @@ func (r *MediaRepo) Search(keyword string, page, size int, excludeLibraryIDs ...
 		query = query.Where("library_id NOT IN ?", excludeLibraryIDs)
 	}
 	query.Count(&total)
-	// 优先显示标题精确匹配的结果，然后按评分降序
+	// 优先显示标题精确匹配的结果，然后按评分降序。
+	// 注意：ORDER BY 不支持 GORM 参数绑定，keyword 需安全处理后再拼入 SQL 字面量，
+	// 通过转义单引号防止 SQL 注入，并转义 LIKE 通配符以免影响相关性排序。
+	lit := escapeSQLLiteral(keyword)
+	like := escapeSQLLikePattern(keyword)
 	err := query.Order(
 		fmt.Sprintf("CASE WHEN title = '%s' THEN 0 WHEN title LIKE '%s%%' THEN 1 ELSE 2 END, rating DESC, created_at DESC",
-			keyword, keyword),
+			lit, like),
 	).Offset((page - 1) * size).Limit(size).Find(&media).Error
 	return media, total, err
+}
+
+// searchWithFTS 通过 FTS5 全文索引检索媒体（trigram 子串匹配，等价 %keyword%）。
+func (r *MediaRepo) searchWithFTS(keyword string, page, size int, excludeLibraryIDs ...string) ([]model.Media, int64, error) {
+	var media []model.Media
+	var total int64
+
+	query := r.db.Model(&model.Media{}).
+		Select("media.*").
+		Joins("JOIN media_fts ON media_fts.rowid = media.rowid").
+		Where("media_fts MATCH ?", ftsPhrase(keyword))
+	if len(excludeLibraryIDs) > 0 {
+		query = query.Where("media.library_id NOT IN ?", excludeLibraryIDs)
+	}
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("fts 计数失败: %w", err)
+	}
+	// 与 LIKE 路径保持一致的排序语义：标题精确匹配优先，其次评分/时间。
+	lit := escapeSQLLiteral(keyword)
+	like := escapeSQLLikePattern(keyword)
+	err := query.Order(
+		fmt.Sprintf("CASE WHEN media.title = '%s' THEN 0 WHEN media.title LIKE '%s%%' THEN 1 ELSE 2 END, media.rating DESC, media.created_at DESC",
+			lit, like),
+	).Offset((page - 1) * size).Limit(size).Find(&media).Error
+	if err != nil {
+		return nil, 0, fmt.Errorf("fts 查询失败: %w", err)
+	}
+	return media, total, nil
+}
+
+// escapeSQLLiteral 将字符串转义为安全的 SQL 字面量（SQLite：单引号翻倍）。
+func escapeSQLLiteral(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
+}
+
+// escapeSQLLikePattern 转义 LIKE 通配符，使关键字被当作字面量进行前缀匹配。
+func escapeSQLLikePattern(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return escapeSQLLiteral(s)
 }
 
 // SearchAdvancedParams 高级搜索参数

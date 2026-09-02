@@ -28,6 +28,7 @@ interface RenameModalProps {
   onClose: () => void
   onSuccess: () => void
 }
+import { formatErrMsg } from '@/utils/error'
 
 const AI_APPLY_CONCURRENCY = 5
 
@@ -81,8 +82,8 @@ export default function RenameModal({ selectedCount, selectedIds, onClose, onSuc
         : await fileManagerApi.previewRename(ids, renameTemplate)
       setRenamePreviews(res.data.data || [])
       setPreviewsExpanded(true)
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || '生成预览失败')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '生成预览失败'))
     } finally {
       setRenaming(false)
     }
@@ -135,8 +136,8 @@ export default function RenameModal({ selectedCount, selectedIds, onClose, onSuc
         onClose()
         onSuccess()
       }
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || '重命名失败')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '重命名失败'))
     } finally {
       setRenaming(false)
     }

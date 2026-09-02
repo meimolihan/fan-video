@@ -19,6 +19,7 @@ interface EditFileModalProps {
   onClose: () => void
   onSuccess: () => void
 }
+import { formatErrMsg } from '@/utils/error'
 
 type EditForm = Record<string, unknown>
 
@@ -59,8 +60,8 @@ export default function EditFileModal({ media, onClose, onSuccess }: EditFileMod
       toast.success('更新成功')
       onClose()
       onSuccess()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || '更新失败')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '更新失败'))
     } finally {
       setSaving(false)
     }

@@ -1523,10 +1523,6 @@
   margin-top: 2px !important;
 }
 
-.nv-filter-panel {
-  padding: 12px;
-}
-
 .nv-filter-group {
   display: grid;
   grid-template-columns: minmax(78px, 92px) minmax(0, 1fr);

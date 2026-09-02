@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { subtitleApi } from '@/api'
+import { formatErrMsg } from '@/utils/error'
 import { useWebSocket, WS_EVENTS } from '@/hooks/useWebSocket'
 import type { ExtractedSubtitleFile, SubExtractProgressData, SubtitleInfo } from '@/types'
 import { Button, EmptyState, Surface, Tag } from '@/components/design-system'
@@ -30,8 +31,8 @@ export default function SubtitleManager({ mediaId, mediaTitle, onClose }: Subtit
     try {
       const response = await subtitleApi.getTracks(mediaId)
       setSubtitleInfo(response.data.data)
-    } catch (exception: any) {
-      setError(exception.response?.data?.error || '加载字幕信息失败')
+    } catch (exception) {
+      setError(formatErrMsg(exception, '加载字幕信息失败'))
     } finally {
       setLoading(false)
     }
@@ -57,15 +58,15 @@ export default function SubtitleManager({ mediaId, mediaTitle, onClose }: Subtit
       setExtracting(false)
     }
 
-    on(WS_EVENTS.SUB_EXTRACT_STARTED as any, handleProgress)
-    on(WS_EVENTS.SUB_EXTRACT_PROGRESS as any, handleProgress)
-    on(WS_EVENTS.SUB_EXTRACT_COMPLETED as any, handleCompleted)
-    on(WS_EVENTS.SUB_EXTRACT_FAILED as any, handleFailed)
+    on(WS_EVENTS.SUB_EXTRACT_STARTED, handleProgress)
+    on(WS_EVENTS.SUB_EXTRACT_PROGRESS, handleProgress)
+    on(WS_EVENTS.SUB_EXTRACT_COMPLETED, handleCompleted)
+    on(WS_EVENTS.SUB_EXTRACT_FAILED, handleFailed)
     return () => {
-      off(WS_EVENTS.SUB_EXTRACT_STARTED as any, handleProgress)
-      off(WS_EVENTS.SUB_EXTRACT_PROGRESS as any, handleProgress)
-      off(WS_EVENTS.SUB_EXTRACT_COMPLETED as any, handleCompleted)
-      off(WS_EVENTS.SUB_EXTRACT_FAILED as any, handleFailed)
+      off(WS_EVENTS.SUB_EXTRACT_STARTED, handleProgress)
+      off(WS_EVENTS.SUB_EXTRACT_PROGRESS, handleProgress)
+      off(WS_EVENTS.SUB_EXTRACT_COMPLETED, handleCompleted)
+      off(WS_EVENTS.SUB_EXTRACT_FAILED, handleFailed)
     }
   }, [mediaId, off, on])
 
@@ -96,8 +97,8 @@ export default function SubtitleManager({ mediaId, mediaTitle, onClose }: Subtit
       const tracks = selectedTracks.size > 0 ? Array.from(selectedTracks) : undefined
       const response = await subtitleApi.extractAll(mediaId, extractFormat, tracks)
       setExtractResults(response.data.data.files)
-    } catch (exception: any) {
-      setError(exception.response?.data?.error || '批量提取失败')
+    } catch (exception) {
+      setError(formatErrMsg(exception, '批量提取失败'))
     } finally {
       setExtracting(false)
     }
@@ -110,8 +111,8 @@ export default function SubtitleManager({ mediaId, mediaTitle, onClose }: Subtit
     try {
       const tracks = selectedTracks.size > 0 ? Array.from(selectedTracks) : undefined
       await subtitleApi.extractAllAsync(mediaId, mediaTitle, extractFormat, tracks)
-    } catch (exception: any) {
-      setError(exception.response?.data?.error || '启动异步提取失败')
+    } catch (exception) {
+      setError(formatErrMsg(exception, '启动异步提取失败'))
       setExtracting(false)
     }
   }

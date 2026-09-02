@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import { swPrecacheManifest } from './vite.sw-precache'
 
 // 开发环境使用项目专属高位端口，避开常见前端开发端口和影音服务端口。
 // scripts/run-dev.bat 会在冲突时自动选择后续空闲端口，并通过环境变量覆盖这里。
@@ -28,7 +29,7 @@ function stripRetiredLocaleEntries(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [stripRetiredLocaleEntries(), react()],
+  plugins: [stripRetiredLocaleEntries(), react(), swPrecacheManifest()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

@@ -4,6 +4,7 @@ import { Eye, EyeOff, KeyRound, Loader2, LogOut } from 'lucide-react'
 import { authApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useTranslation } from '@/i18n'
+import { formatErrMsg } from '@/utils/error'
 import AuthShell from '@/components/auth/AuthShell'
 import { Button, Input } from '@/components/design-system'
 
@@ -36,8 +37,8 @@ export default function ForceChangePasswordPage() {
 
       setAuth(tokenData.token, { ...tokenData.user, must_change_pwd: false })
       navigate('/', { replace: true })
-    } catch (err: any) {
-      setError(err?.response?.data?.error || '修改密码失败')
+    } catch (err) {
+      setError(formatErrMsg(err, '修改密码失败'))
     } finally {
       setLoading(false)
     }

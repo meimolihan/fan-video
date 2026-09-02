@@ -116,7 +116,7 @@ export default function HighlightsBatchPanel() {
     try {
       const response = await mediaAnalysisApi.getHighlightAudit()
       setAuditReport(response.data.data || { total_videos: 0, with_highlights: 0, source_missing: [], assets_missing: [], orphan_caches: [] })
-    } catch (error: any) {
+    } catch (error) {
       toast.error(formatErrMsg(error, '完整性检查失败'))
       setShowAudit(false)
     } finally {
@@ -132,7 +132,7 @@ export default function HighlightsBatchPanel() {
       toast.success(response.data.message || '清理完成')
       setShowAudit(false)
       await refreshStats()
-    } catch (error: any) {
+    } catch (error) {
       toast.error(formatErrMsg(error, '清理失败'))
     } finally {
       setAuditCleaning(false)
@@ -186,7 +186,7 @@ export default function HighlightsBatchPanel() {
       setStatus(response.data.data || null)
       toast.success(response.data.message || '批量任务已启动')
       setShowStartConfirm(false)
-    } catch (error: any) {
+    } catch (error) {
       toast.error(formatErrMsg(error, '启动批量任务失败'))
     } finally {
       setStarting(false)
@@ -200,7 +200,7 @@ export default function HighlightsBatchPanel() {
       setStatus(response.data.data || null)
       setShowStopConfirm(false)
       toast.info('已请求停止：剩余视频不再处理，当前视频会正常完成并保留结果')
-    } catch (error: any) {
+    } catch (error) {
       toast.error(formatErrMsg(error, '停止失败'))
     } finally {
       setStopping(false)
@@ -217,7 +217,7 @@ export default function HighlightsBatchPanel() {
       setShowClearConfirm(false)
       await refresh()
       await refreshStats()
-    } catch (error: any) {
+    } catch (error) {
       toast.error(formatErrMsg(error, '清空精彩片段失败'))
     } finally {
       setClearing(false)

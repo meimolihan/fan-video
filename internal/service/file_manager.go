@@ -272,12 +272,12 @@ func (s *FileManagerService) CreateFolder(parentPath, folderName, userID string)
 	if parentPath == "" || folderName == "" {
 		return fmt.Errorf("路径和文件夹名不能为空")
 	}
-	// 检查文件夹名是否包含非法字符
-	invalidChars := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|"}
-	for _, ch := range invalidChars {
-		if strings.Contains(folderName, ch) {
-			return fmt.Errorf("文件夹名包含非法字符: %s", ch)
-		}
+	// 检查文件夹名是否包含非法字符或路径穿越
+	if err := validateFolderName(folderName); err != nil {
+		return err
+	}
+	if err := s.validateDirectoryPath(parentPath); err != nil {
+		return err
 	}
 	fullPath := filepath.Join(parentPath, folderName)
 	if _, err := os.Stat(fullPath); err == nil {
@@ -295,11 +295,11 @@ func (s *FileManagerService) RenameFolder(folderPath, newName, userID string) er
 	if folderPath == "" || newName == "" {
 		return fmt.Errorf("路径和新名称不能为空")
 	}
-	invalidChars := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|"}
-	for _, ch := range invalidChars {
-		if strings.Contains(newName, ch) {
-			return fmt.Errorf("文件夹名包含非法字符: %s", ch)
-		}
+	if err := validateFolderName(newName); err != nil {
+		return err
+	}
+	if err := s.validateDirectoryPath(folderPath); err != nil {
+		return err
 	}
 	info, err := os.Stat(folderPath)
 	if err != nil {
@@ -343,6 +343,9 @@ func (s *FileManagerService) DeleteFolder(folderPath string, force bool, userID 
 	if folderPath == "" {
 		return fmt.Errorf("文件夹路径不能为空")
 	}
+	if err := s.validateDirectoryPath(folderPath); err != nil {
+		return err
+	}
 	info, err := os.Stat(folderPath)
 	if err != nil {
 		return fmt.Errorf("文件夹不存在: %s", folderPath)
@@ -383,6 +386,37 @@ func (s *FileManagerService) DeleteFolder(folderPath string, force bool, userID 
 		"path":  folderPath,
 		"force": force,
 	})
+	return nil
+}
+
+// validateFolderName 校验文件夹名：拒绝非法字符与路径穿越（..）。
+func validateFolderName(name string) error {
+	invalidChars := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|"}
+	for _, ch := range invalidChars {
+		if strings.Contains(name, ch) {
+			return fmt.Errorf("文件夹名包含非法字符: %s", ch)
+		}
+	}
+	if name == ".." || strings.Contains(name, "..") {
+		return fmt.Errorf("文件夹名不能包含路径穿越符（..）")
+	}
+	return nil
+}
+
+// validateDirectoryPath 校验目录路径：防止 .. 解析跳出父目录。
+func (s *FileManagerService) validateDirectoryPath(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("路径不能为空")
+	}
+	clean := filepath.Clean(path)
+	if clean == ".." || strings.HasPrefix(filepath.Base(clean), "..") {
+		return fmt.Errorf("路径不能包含路径穿越符（..）")
+	}
+	for _, seg := range strings.Split(filepath.ToSlash(clean), "/") {
+		if seg == ".." {
+			return fmt.Errorf("路径不能包含路径穿越符（..）")
+		}
+	}
 	return nil
 }
 

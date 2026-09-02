@@ -19,7 +19,7 @@ import {
   X,
 } from 'lucide-react'
 import { Button, EmptyState, SearchField, Select, Surface, Tag } from '@/components/design-system'
-import { FilterChip, MediaArtwork, MediaGrid as SharedMediaGrid } from '@/ui'
+import { FilterChip, FilterGroup, MediaArtwork, MediaGrid as SharedMediaGrid } from '@/ui'
 
 const SORT_OPTIONS = [
   { value: 'created_desc', label: '最近添加' },
@@ -53,17 +53,6 @@ const MAX_CLIENT_ITEMS = 2000
 
 function parseViewMode(value: string | null): LibraryViewMode {
   return value === 'list' || value === 'poster' ? value : 'grid'
-}
-
-function FilterGroup({ icon, label, count, children }: { icon: ReactNode; label: string; count?: number; children: ReactNode }) {
-  return (
-    <div className="grid gap-2 sm:grid-cols-[92px_minmax(0,1fr)] sm:items-start">
-      <div className="flex min-h-[30px] items-center gap-1.5 text-[11px] font-medium text-[var(--nv-text-tertiary)]">
-        <span aria-hidden="true">{icon}</span><span>{label}</span>{!!count && <Tag tone="brand">{count}</Tag>}
-      </div>
-      <div className="flex flex-wrap gap-1">{children}</div>
-    </div>
-  )
 }
 
 function ContentTabButton({ active, icon, label, count, onClick }: { active: boolean; icon: ReactNode; label: string; count: number; onClick: () => void }) {

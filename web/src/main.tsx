@@ -7,7 +7,6 @@ import { initI18n } from './i18n'
 import { installSubtitleTrackActivationGuard } from './utils/subtitleTrackActivation'
 import { installMediaDetailHeroEnhancer } from './utils/mediaDetailHeroEnhancer'
 import './styles/base.css'
-import './styles/player.css'
 import './styles/pages-theme.css'
 import './styles/app-ui.css'
 

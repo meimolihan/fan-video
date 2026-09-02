@@ -40,6 +40,7 @@ const DEFAULT_ALIST: AlistConfig = {
   read_block_size_mb: 8,
   read_block_count: 4,
 }
+import { formatErrMsg } from '@/utils/error'
 
 const DEFAULT_S3: S3Config = {
   enabled: false,
@@ -115,8 +116,8 @@ export function AlistSection() {
       setTokenDirty(false)
       setToast({ ok: true, msg: 'Alist 配置已保存' })
       await load()
-    } catch (error: any) {
-      setToast({ ok: false, msg: '保存失败: ' + (error.response?.data?.error || error.message) })
+    } catch (error) {
+      setToast({ ok: false, msg: '保存失败: ' + formatErrMsg(error, '') })
     } finally {
       setSaving(false)
     }
@@ -134,8 +135,8 @@ export function AlistSection() {
         base_path: config.base_path,
       })
       setToast({ ok: true, msg: 'Alist 连接测试成功' })
-    } catch (error: any) {
-      setToast({ ok: false, msg: error.response?.data?.error || '连接测试失败' })
+    } catch (error) {
+      setToast({ ok: false, msg: formatErrMsg(error, '连接测试失败') })
     } finally {
       setTesting(false)
     }
@@ -365,8 +366,8 @@ export function S3Section() {
       setSecretDirty(false)
       setToast({ ok: true, msg: 'S3 配置已保存' })
       await load()
-    } catch (error: any) {
-      setToast({ ok: false, msg: '保存失败: ' + (error.response?.data?.error || error.message) })
+    } catch (error) {
+      setToast({ ok: false, msg: '保存失败: ' + formatErrMsg(error, '') })
     } finally {
       setSaving(false)
     }
@@ -386,8 +387,8 @@ export function S3Section() {
         path_style: config.path_style,
       })
       setToast({ ok: true, msg: 'S3 连接测试成功' })
-    } catch (error: any) {
-      setToast({ ok: false, msg: error.response?.data?.error || '连接测试失败' })
+    } catch (error) {
+      setToast({ ok: false, msg: formatErrMsg(error, '连接测试失败') })
     } finally {
       setTesting(false)
     }

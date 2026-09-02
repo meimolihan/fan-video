@@ -30,6 +30,7 @@ import type { TabType, DialogType, FolderDialogType } from '@/components/file-ma
 function resolveFileManagerTab(_tab: string | null): TabType {
   return 'files'
 }
+import { formatErrMsg } from '@/utils/error'
 
 function normalizeFsPath(path: string) {
   let normalized = path.trim().replace(/\\/g, '/')
@@ -265,8 +266,8 @@ export default function FileManagerPage() {
       toast.success('文件记录已删除')
       setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n })
       fetchFiles(); fetchStats()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || '删除失败')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '删除失败'))
     }
   }
 
@@ -297,8 +298,8 @@ export default function FileManagerPage() {
     try {
       await fileManagerApi.scrapeFile(id)
       toast.success('图片匹配已启动')
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || '图片匹配失败')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '图片匹配失败'))
     }
   }
 
@@ -382,8 +383,8 @@ export default function FileManagerPage() {
       setFolderDialog('none')
       fetchFolderTree()
       fetchFiles()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || '创建文件夹失败')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '创建文件夹失败'))
     }
   }, [folderDialogTarget, folderInputValue, toast, fetchFolderTree, fetchFiles])
 
@@ -406,8 +407,8 @@ export default function FileManagerPage() {
       }
       fetchFolderTree()
       fetchFiles()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || '重命名失败')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '重命名失败'))
     }
   }, [folderDialogTarget, folderInputValue, currentFolderPath, toast, fetchFolderTree, fetchFiles])
 
@@ -424,8 +425,8 @@ export default function FileManagerPage() {
       fetchFolderTree()
       fetchFiles()
       fetchStats()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || '删除失败')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '删除失败'))
     }
   }, [folderDialogTarget, currentFolderPath, toast, handleClearFolder, fetchFolderTree, fetchFiles, fetchStats])
 

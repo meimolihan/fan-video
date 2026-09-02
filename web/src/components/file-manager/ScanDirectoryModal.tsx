@@ -29,6 +29,7 @@ interface ScanDirectoryModalProps {
   onClose: () => void
   onSuccess: () => void
 }
+import { formatErrMsg } from '@/utils/error'
 
 function failedImportPaths(errors: string[], selectedPaths: Set<string>) {
   const failed = new Set<string>()
@@ -71,8 +72,8 @@ export default function ScanDirectoryModal({ libraries, onClose, onSuccess }: Sc
       setScanPath(normalizedPath)
       setScannedFiles(res.data.data || [])
       setScanSelectedPaths(new Set())
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || '扫描失败')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '扫描失败'))
     } finally {
       setScanning(false)
     }
@@ -140,8 +141,8 @@ export default function ScanDirectoryModal({ libraries, onClose, onSuccess }: Sc
       }
 
       onClose()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || '批量导入失败')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '批量导入失败'))
     } finally {
       setImporting(false)
     }

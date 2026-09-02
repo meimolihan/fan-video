@@ -48,9 +48,6 @@ export { adminApi } from './admin'
 export { fileManagerApi } from './scrape'
 export { batchMetadataApi, importExportApi } from './backup'
 
-// V6: P1~P3 新增功能
-export { batchMoveApi } from './v4'
-
 // 社交与互动
 export { recommendApi } from './recommend'
 export { homeApi } from './home'

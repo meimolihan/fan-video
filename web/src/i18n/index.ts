@@ -49,7 +49,8 @@ interface I18nStore {
 
 // 检测浏览器语言
 function detectBrowserLocale(): LocaleCode {
-  const browserLang = navigator.language || (navigator as any).userLanguage || ''
+  const legacy = navigator as Navigator & { userLanguage?: string }
+  const browserLang = navigator.language || legacy.userLanguage || ''
   if (browserLang.startsWith('zh')) return 'zh-CN'
   if (browserLang.startsWith('ja')) return 'ja-JP'
   if (browserLang.startsWith('en')) return 'en-US'

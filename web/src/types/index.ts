@@ -1759,19 +1759,6 @@ export interface GPUInfo {
   utilization: number
 }
 
-// ==================== P1: 批量移动媒体 ====================
-export interface BatchMoveRequest {
-  media_ids: string[]
-  target_library_id: string
-}
-
-export interface BatchMoveResult {
-  total: number
-  success: number
-  failed: number
-  errors: string[]
-}
-
 // ==================== 视频预处理 ====================
 export interface PreprocessTask {
   id: string

@@ -39,6 +39,7 @@ const TYPE_CONFIG: Record<string, { label: string; icon: typeof Film }> = {
   mixed: { label: '混合影片', icon: Layers },
   other: { label: '其他视频', icon: Video },
 }
+import { formatErrMsg } from '@/utils/error'
 
 interface LibraryManagerProps {
   libraries: Library[]
@@ -117,13 +118,13 @@ function LibraryManager({
     setScanning((current) => new Set(current).add(id))
     try {
       await libraryApi.scan(id)
-    } catch (err: any) {
+    } catch (err) {
       setScanning((current) => {
         const next = new Set(current)
         next.delete(id)
         return next
       })
-      toast.error(err?.response?.data?.error || '扫描启动失败')
+      toast.error(formatErrMsg(err, '扫描启动失败'))
     }
   }
 
@@ -154,8 +155,8 @@ function LibraryManager({
       if (started.length === 0 && errors.length === 0) {
         toast.info('没有新的媒体库扫描任务被启动')
       }
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || '批量扫描启动失败')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '批量扫描启动失败'))
     } finally {
       setScanAllLoading(false)
     }
@@ -212,8 +213,8 @@ function LibraryManager({
           return next
         })
         toast.success('媒体库已删除，派生缓存将在后台继续回收')
-      } catch (err: any) {
-        toast.error(err?.response?.data?.error || '删除失败')
+      } catch (err) {
+        toast.error(formatErrMsg(err, '删除失败'))
       }
     } finally {
       deleteFlowRef.current.delete(id)
@@ -246,8 +247,8 @@ function LibraryManager({
       invalidateMediaListCaches()
       setLibraries((current) => current.map((l) => (l.id === library.id ? response.data.data : l)))
       toast.success(nextHidden ? '媒体库已隐藏，数据完整保留' : '媒体库已恢复显示')
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || '切换媒体库显示状态失败')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '切换媒体库显示状态失败'))
     } finally {
       setTogglingHidden((current) => {
         const next = new Set(current)
@@ -283,13 +284,13 @@ function LibraryManager({
     setScanning((current) => new Set(current).add(id))
     try {
       await libraryApi.reindex(id)
-    } catch (err: any) {
+    } catch (err) {
       setScanning((current) => {
         const next = new Set(current)
         next.delete(id)
         return next
       })
-      toast.error(err?.response?.data?.error || '重建索引失败')
+      toast.error(formatErrMsg(err, '重建索引失败'))
     }
   }
 

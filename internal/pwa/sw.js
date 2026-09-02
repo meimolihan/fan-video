@@ -1,7 +1,7 @@
 // Nowen Video Service Worker v8
 // 缓存生产环境的静态资源与海报图片；认证、HTML 导航、开发模块、写请求和其余 API 全部直连网络。
 
-const CACHE_VERSION = 'v11'
+const CACHE_VERSION = 'v12'
 const STATIC_CACHE = `nowen-static-${CACHE_VERSION}`
 const IMAGE_CACHE = `nowen-images-${CACHE_VERSION}`
 // 海报/背景图独立缓存：媒体库海报数量远超普通图片，
@@ -11,6 +11,8 @@ const MAX_POSTER_CACHE = 2000
 
 // 不缓存 HTML 应用壳。页面结构和导航必须始终来自当前部署版本，
 // 避免已经下线的页面与菜单被离线回退重新启动。
+// 首屏核心资源（入口 JS/CSS + favicon）由构建期生成 /assets/sw-precache.json
+// 动态注入，install 阶段拉取并预热，二次访问可离线秒开。
 const PRECACHE_ASSETS = [
   '/assets/manifest.json',
   '/assets/icon-192.png',
@@ -18,18 +20,31 @@ const PRECACHE_ASSETS = [
 
 const MAX_IMAGE_CACHE = 200
 
+async function precacheStaticAsset(asset) {
+  try {
+    const response = await fetch(asset)
+    if (!response.ok) return
+    const cache = await caches.open(STATIC_CACHE)
+    await cache.put(asset, response)
+  } catch {
+    // 单个资源预缓存失败不阻断安装，避免整体抛出的未捕获异常。
+  }
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    Promise.all(PRECACHE_ASSETS.map(async (asset) => {
+    (async () => {
+      await Promise.all(PRECACHE_ASSETS.map(precacheStaticAsset))
       try {
-        const response = await fetch(asset)
-        if (!response.ok) return
-        const cache = await caches.open(STATIC_CACHE)
-        await cache.put(asset, response)
+        const list = await fetch('/assets/sw-precache.json', { cache: 'no-store' })
+        if (list.ok) {
+          const assets = await list.json()
+          await Promise.all(assets.map(precacheStaticAsset))
+        }
       } catch {
-        // 单个资源预缓存失败不阻断安装，避免 addAll 整体失败抛出的未捕获异常。
+        // manifest 拉取失败不阻塞安装，运行时缓存仍会兜底。
       }
-    })),
+    })(),
   )
   self.skipWaiting()
 })

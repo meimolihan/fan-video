@@ -76,6 +76,7 @@ func buildRouter(
 	}
 	jwtMiddleware := middleware.JWTAuthWithValidator(cfg.Secrets.JWTSecret, services.Auth.ValidateTokenVersion)
 	jwtRefreshMiddleware := middleware.JWTAuthAllowExpired(cfg.Secrets.JWTSecret, services.Auth.ValidateTokenVersion)
+	wsMiddleware := middleware.WSAuth(cfg.Secrets.JWTSecret, services.Auth.ValidateTokenVersion)
 	profileRuntime := serverprofile.NewLiteRuntime(cfg)
 	executionRepo := repository.NewTranscodeExecutionRepo(repos.DB())
 	taskCenterService := service.NewTaskCenterService(
@@ -120,7 +121,7 @@ func buildRouter(
 	mediaAnalysisHandler := handler.NewMediaAnalysisHandler(mediaAnalysisService, logger)
 
 	startMaintenanceJobs(repos)
-	registerPublicRoutes(r, cfg, handlers, profileRuntime, appVer, jwtMiddleware, jwtRefreshMiddleware)
+	registerPublicRoutes(r, cfg, handlers, profileRuntime, appVer, jwtMiddleware, jwtRefreshMiddleware, wsMiddleware)
 	registerCoreAPI(r, cfg, services, handlers, playbackPlanHandler, playbackSessionHandler, mediaAnalysisHandler, mediaAnalysisService, repos, jwtMiddleware)
 	registerAdminAPI(r, cfg, handlers, taskCenterHandler, runtimeHistoryHandler, jwtMiddleware)
 	r.POST("/api/admin/tasks/:kind/:id/:action", jwtMiddleware, middleware.AdminOnly(), taskCenterHandler.Action)
@@ -169,6 +170,7 @@ func registerPublicRoutes(
 	appVer string,
 	jwtMiddleware gin.HandlerFunc,
 	jwtRefreshMiddleware gin.HandlerFunc,
+	wsMiddleware gin.HandlerFunc,
 ) {
 	auth := r.Group("/api/auth")
 	auth.POST("/login", handlers.Auth.Login)
@@ -244,7 +246,7 @@ func registerPublicRoutes(
 		c.Header("Expires", "0")
 		c.Data(http.StatusOK, "text/javascript", pwa.SWJS())
 	})
-	r.GET("/api/ws", jwtMiddleware, handlers.WS.HandleWebSocket)
+	r.GET("/api/ws", wsMiddleware, handlers.WS.HandleWebSocket)
 }
 
 func getLocalIPv4Addresses() []string {

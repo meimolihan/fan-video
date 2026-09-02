@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import type { User } from '@/types'
 
 let currentApiBaseURL = '/api'
 
@@ -66,12 +67,12 @@ async function refreshAccessToken(expectedToken: string): Promise<string | null>
   const promise = (async () => {
     try {
       const baseURL = await resolveApiBaseURL()
-      const response = await axios.post<{ token: string; user: unknown; expires_at: number }>(
+      const response = await axios.post<{ token: string; user: User; expires_at: number }>(
         `${baseURL}/auth/refresh`,
         {},
         { headers: { Authorization: `Bearer ${expectedToken}` }, timeout: 10000 },
       )
-      const { token, user } = response.data as { token: string; user: any }
+      const { token, user } = response.data
       if (!token || !user) return null
 
       const tokenBeforeApply = useAuthStore.getState().token
@@ -128,7 +129,11 @@ api.interceptors.response.use(
     const config = error.config as AuthRequestConfig | undefined
     const failedToken = config?._authToken ?? null
     const currentToken = useAuthStore.getState().token
-    const serverError = (error.response?.data as any)?.error || ''
+    const body = error.response?.data
+    const serverError =
+      typeof body === 'object' && body !== null && 'error' in body && typeof (body as { error: unknown }).error === 'string'
+        ? (body as { error: string }).error
+        : ''
     console.warn(`[auth] 401 on ${url}: ${serverError}`)
 
     if (config && currentToken && failedToken !== currentToken) {

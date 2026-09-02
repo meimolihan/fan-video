@@ -5,12 +5,12 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/fan-video/fan-video/internal/config"
 	"github.com/fan-video/fan-video/internal/model"
 	"github.com/fan-video/fan-video/internal/repository"
 	"github.com/fan-video/fan-video/internal/service"
 	"github.com/fan-video/fan-video/internal/version"
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -19,7 +19,9 @@ import (
 
 // processStartedAt 进程启动时间，用于系统状态展示运行时长
 var processStartedAt = time.Now()
-type AdminHandler struct {
+
+// adminDeps 管理区处理器依赖包，按服务与仓储分组，避免 AdminHandler 直接持有十余个独立字段。
+type adminDeps struct {
 	userService       *service.UserService
 	authService       *service.AuthService
 	mediaExecution    *service.MediaExecutionService
@@ -32,10 +34,16 @@ type AdminHandler struct {
 	loginLogRepo      *repository.LoginLogRepo
 	auditLogRepo      *repository.AuditLogRepo
 	inviteRepo        *repository.InviteCodeRepo
+	backupService     *service.SystemBackupService
 	cfg               *config.Config
 	logger            *zap.SugaredLogger
 	db                *gorm.DB
-	backupService     *service.SystemBackupService
+}
+
+// AdminHandler 管理处理器，内嵌 adminDeps 以聚合各领域依赖。
+type AdminHandler struct {
+	// 通过内嵌继承全部依赖字段（h.userService 等引用保持不变）
+	*adminDeps
 }
 
 // ==================== 用户管理 ====================

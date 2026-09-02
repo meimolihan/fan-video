@@ -10,7 +10,7 @@ import MediaCard from '@/components/MediaCard'
 import VirtualGrid from '@/components/VirtualGrid'
 import Pagination from '@/components/Pagination'
 import { Button, EmptyState, SearchField, Select, Surface, Tag as SemanticTag } from '@/components/design-system'
-import { FilterChip, MediaArtwork, MediaGrid } from '@/ui'
+import { FilterChip, FilterGroup, MediaArtwork, MediaGrid } from '@/ui'
 import {
   X,
   Grid3X3,
@@ -102,19 +102,6 @@ function getItemPosterUrl(item: MixedItem, version: number): string {
   if (item.type === 'series' && item.series) return streamApi.getSeriesPosterUrl(item.series.id, version)
   // 分集与电影一律用各自的海报端点，禁止回退到剧集共享海报
   return streamApi.getPosterUrl(item.media?.id || '', version)
-}
-
-function FilterGroup({ icon, label, count, children }: { icon: ReactNode; label: string; count?: number; children: ReactNode }) {
-  return (
-    <div className="grid gap-2 sm:grid-cols-[92px_minmax(0,1fr)] sm:items-start">
-      <div className="flex min-h-[30px] items-center gap-1.5 text-[11px] font-medium text-[var(--nv-text-tertiary)]">
-        <span aria-hidden="true">{icon}</span>
-        <span>{label}</span>
-        {!!count && <SemanticTag tone="brand">{count}</SemanticTag>}
-      </div>
-      <div className="flex flex-wrap gap-1">{children}</div>
-    </div>
-  )
 }
 
 function ViewButton({ active, title, onClick, children }: { active: boolean; title: string; onClick: () => void; children: ReactNode }) {

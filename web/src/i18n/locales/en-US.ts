@@ -716,6 +716,13 @@ const enUS: Record<string, string> = {
   'pulse.resolutionDist': 'Resolution Distribution',
   'pulse.codecDist': 'Codec Distribution',
   'pulse.growthTrend': 'Library Growth Trend',
+  'timeFormat.seconds': '{seconds} seconds',
+  'timeFormat.minutes': '{minutes} minutes',
+  'timeFormat.hours': '{hours} hours',
+  'timeFormat.days': '{days} days',
+  'timeFormat.weeks': '{weeks} weeks',
+  'timeFormat.months': '{months} months',
+  'timeFormat.years': '{years} years',
 }
 
 export default enUS

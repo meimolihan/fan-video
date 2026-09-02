@@ -11,6 +11,7 @@ import { useTitleClock } from '@/hooks/useTitleClock'
 import { Zap, Loader2, Cpu, Clapperboard } from 'lucide-react'
 import { detectWebCodecs, canUseWebCodecs, type WebCodecsCapability } from '@/utils/webcodecs'
 import { getMediaCapabilities, type BrowserMediaCapability } from '@/utils/media-capabilities'
+import '../styles/player.css'
 
 function getBrowserCaps(): BrowserMediaCapability {
   return getMediaCapabilities()

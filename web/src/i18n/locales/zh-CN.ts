@@ -707,6 +707,22 @@ const zhCN: Record<string, string> = {
   'pulse.resolutionDist': '画质分布',
   'pulse.codecDist': '编码格式分布',
   'pulse.growthTrend': '媒体库增长趋势',
+  'sync.title': '云同步',
+  'sync.devices': '我的设备',
+  'sync.settings': '同步设置',
+  'sync.export': '数据导出',
+  'sync.syncNow': '立即同步',
+  'sync.syncing': '同步中...',
+  'sync.syncProgress': '观看进度',
+  'sync.syncFavorites': '收藏夹',
+  'sync.syncPlaylists': '播放列表',
+  'sync.syncHistory': '观看历史',
+  'sync.syncSettings': '用户设置',
+  'sync.autoSync': '自动同步',
+  'sync.syncInterval': '同步间隔',
+  'sync.unregisterDevice': '注销设备',
+  'sync.exportData': '导出数据',
+  'sync.noDevices': '暂无已注册设备',
 }
 
 export default zhCN

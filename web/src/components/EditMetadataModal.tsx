@@ -21,6 +21,7 @@ interface EditMetadataModalProps {
   onClose: () => void
   hasTagline?: boolean
 }
+import { formatErrMsg } from '@/utils/error'
 
 export default function EditMetadataModal({
   type,
@@ -86,8 +87,8 @@ export default function EditMetadataModal({
       }
       toast.success(`${imageTab === 'poster' ? '海报' : '背景图'}已更新`)
       resetImageMode()
-    } catch (error: any) {
-      toast.error(error?.response?.data?.error || '图片更新失败')
+    } catch (error) {
+      toast.error(formatErrMsg(error, '图片更新失败'))
     } finally {
       setImageUploading(false)
     }

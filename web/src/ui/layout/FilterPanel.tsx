@@ -1,22 +1,5 @@
 import type { HTMLAttributes, ReactNode } from 'react'
 import clsx from 'clsx'
-import { Surface } from '@/components/design-system'
-
-export interface FilterPanelProps extends HTMLAttributes<HTMLDivElement> {
-  children: ReactNode
-}
-
-export function FilterPanel({ className, children, ...props }: FilterPanelProps) {
-  return (
-    <Surface
-      {...props}
-      variant="glass"
-      className={clsx('nv-filter-panel', className)}
-    >
-      {children}
-    </Surface>
-  )
-}
 
 export interface FilterGroupProps extends HTMLAttributes<HTMLDivElement> {
   icon?: ReactNode
@@ -53,5 +36,3 @@ export function FilterGroup({
     </div>
   )
 }
-
-export default FilterPanel

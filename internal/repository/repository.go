@@ -1,6 +1,9 @@
 package repository
 
 import (
+	"fmt"
+	"os"
+
 	"gorm.io/gorm"
 )
 
@@ -59,11 +62,20 @@ func NewRepositories(db *gorm.DB) *Repositories {
 		panic("failed to remove legacy system_logs table: " + err.Error())
 	}
 
+	// 初始化 FTS5 全文索引（搜索性能优化）。
+	// media_fts 由触发器与 media 表保持同步；初始化失败时静默降级为 LIKE 搜索，
+	// 由 MediaRepo.ftsEnabled 标记，Search 方法据此选择查询路径。
+	ftsEnabled := true
+	if err := initMediaFTS(db); err != nil {
+		ftsEnabled = false
+		fmt.Fprintf(os.Stderr, "⚠️  FTS5 全文索引初始化失败，搜索将回退到 LIKE 模式: %v\n", err)
+	}
+
 	return &Repositories{
 		db:             db,
 		User:           &UserRepo{db: db},
 		Library:        &LibraryRepo{db: db},
-		Media:          &MediaRepo{db: db},
+		Media:          &MediaRepo{db: db, ftsEnabled: ftsEnabled},
 		Series:         &SeriesRepo{db: db},
 		Person:         &PersonRepo{db: db},
 		MediaPerson:    &MediaPersonRepo{db: db},

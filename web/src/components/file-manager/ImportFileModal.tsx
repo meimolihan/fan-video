@@ -18,6 +18,7 @@ interface ImportFileModalProps {
   onClose: () => void
   onSuccess: () => void
 }
+import { formatErrMsg } from '@/utils/error'
 
 export default function ImportFileModal({ libraries, onClose, onSuccess }: ImportFileModalProps) {
   const toast = useToast()
@@ -45,8 +46,8 @@ export default function ImportFileModal({ libraries, onClose, onSuccess }: Impor
       toast.success('文件导入成功')
       onClose()
       onSuccess()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || '导入失败')
+    } catch (err) {
+      toast.error(formatErrMsg(err, '导入失败'))
     } finally {
       setImporting(false)
     }

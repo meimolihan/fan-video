@@ -324,11 +324,12 @@ const WebCodecsPlayer = forwardRef<WebCodecsPlayerHandle, WebCodecsPlayerProps>(
           videoDecoderRef.current = decoder
           decoder.addEventListener('dequeue', drainVideoSamples)
           drainVideoSamples()
-        } catch (e: any) {
+        } catch (e) {
           closeVideoDecoder(decoder)
           if (!isActive()) return
-          setError(`视频解码器配置失败: ${e.message || e}`)
-          cbRef.current.onError?.(e.message || String(e))
+          const msg = e instanceof Error ? e.message : String(e)
+          setError(`视频解码器配置失败: ${msg}`)
+          cbRef.current.onError?.(msg)
           return
         }
       }
@@ -384,7 +385,7 @@ const WebCodecsPlayer = forwardRef<WebCodecsPlayerHandle, WebCodecsPlayerProps>(
           if (!isActive()) return
           encodedAudioQueueRef.current = []
           console.warn('[WebCodecs] 音频解码器配置失败，将回退播放:', e)
-          const cfgMsg = `音频解码器配置失败: ${(e as any)?.message || String(e)}`
+          const cfgMsg = `音频解码器配置失败: ${e instanceof Error ? e.message : String(e)}`
           setError(cfgMsg)
           cbRef.current.onError?.(cfgMsg)
         }
@@ -597,7 +598,7 @@ const WebCodecsPlayer = forwardRef<WebCodecsPlayerHandle, WebCodecsPlayerProps>(
           if (canvas.width !== picked.displayWidth) canvas.width = picked.displayWidth
           if (canvas.height !== picked.displayHeight) canvas.height = picked.displayHeight
           try {
-            ctx2d.drawImage(picked as any, 0, 0)
+            ctx2d.drawImage(picked, 0, 0)
           } catch { /* ignore */ }
           closeVideoFrame(picked)
           drainVideoSamples()

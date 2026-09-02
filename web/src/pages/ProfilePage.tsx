@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { authApi, userApi } from '@/api'
 import { useToast } from '@/components/Toast'
 import { useTranslation } from '@/i18n'
+import { formatErrMsg } from '@/utils/error'
 import { Button, Input, PageContainer, Section, Tag } from '@/components/design-system'
 import { PersonalWorkspaceHeader } from '@/ui'
 
@@ -37,9 +38,10 @@ export default function ProfilePage() {
       if (res.data.token) setAuth(res.data.token, updatedUser)
       else updateUser(updatedUser)
       toast.success(t('profile.usernameChangeSuccess'))
-    } catch (err: any) {
-      if (err?.response?.status === 409) toast.error(t('profile.usernameTaken'))
-      else toast.error(err?.response?.data?.error || t('profile.usernameChangeFailed'))
+    } catch (err) {
+      const errData = err as { response?: { status?: number; data?: { error?: string } } }
+      if (errData?.response?.status === 409) toast.error(t('profile.usernameTaken'))
+      else toast.error(formatErrMsg(err, t('profile.usernameChangeFailed')))
     } finally {
       setSavingUsername(false)
     }
@@ -69,10 +71,10 @@ export default function ProfilePage() {
       setOldPassword('')
       setNewPassword('')
       setConfirmPassword('')
-    } catch (err: any) {
-      const errorMsg = err?.response?.data?.error
-      if (err?.response?.status === 401) toast.error(t('profile.passwordVerifyFailed'))
-      else toast.error(errorMsg || t('profile.passwordChangeFailed'))
+    } catch (err) {
+      const errData = err as { response?: { status?: number; data?: { error?: string } } }
+      if (errData?.response?.status === 401) toast.error(t('profile.passwordVerifyFailed'))
+      else toast.error(formatErrMsg(err, t('profile.passwordChangeFailed')))
     } finally {
       setChangingPwd(false)
     }
