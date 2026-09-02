@@ -221,6 +221,12 @@ func (s *MediaAnalysisService) runHighlightTask(taskID, mediaID string) {
 		s.failTask(task, "probe", err)
 		return
 	}
+	// 兜底修复数据库缺失/为 0 的时长：整套管线都依赖 duration > 0，
+	// 否则采样、窗口定位与兜底分段全部落空，永远生成 0 个精彩片段。
+	if err := s.resolveMediaDuration(media); err != nil {
+		s.failTask(task, "probe", err)
+		return
+	}
 	fingerprint, err := s.mediaFingerprint(media)
 	if err != nil {
 		s.failTask(task, "probe", err)
@@ -439,6 +445,36 @@ func (s *MediaAnalysisService) mediaFingerprint(media *model.Media) (string, err
 		return "", err
 	}
 	return fmt.Sprintf("%d:%d:%.3f", info.Size(), info.ModTime().UnixNano(), media.Duration), nil
+}
+
+// resolveMediaDuration 保证分析管线拿到合法时长。
+//
+// 背景：部分媒体记录（旧扫描 / 扫描竞态 / 特殊容器）数据库里 duration 为 0，
+// 而整套精彩片段管线（采样数、窗口位置、兜底分段）都依赖 duration > 0，
+// 一旦为 0 就必然「永远生成 0 个片段」。因此在分析前主动用 FFprobe 兜底补算：
+//   - 数据库 duration 已合法：直接用，不再探测
+//   - duration <= 0：FFprobe 读 format.duration，成功则回填内存并持久化到 DB，
+//     让后续扫描/详情/列表也拿到正确时长（彻底修复旧脏数据）
+//
+// 仅当文件无法探测（损坏/非媒体）时才返回错误，由外层导致任务失败。
+func (s *MediaAnalysisService) resolveMediaDuration(media *model.Media) error {
+	if media.Duration > 0 {
+		return nil
+	}
+	duration, err := probeFileDuration(s.cfg.App.FFprobePath, media.FilePath)
+	if err != nil || duration <= 0 {
+		if err == nil {
+			err = errors.New("FFprobe 无法读取有效时长")
+		}
+		return fmt.Errorf("媒体缺少有效时长且探测失败: %w", err)
+	}
+	s.logger.Debugf("media analysis repaired zero duration media=%s old=0 -> %.3fs", media.ID, duration)
+	media.Duration = duration
+	// 回写数据库，永久修复脏数据；失败不阻断本次分析（内存中已够用）。
+	if media.ID != "" {
+		_ = s.mediaRepo.UpdateFields(media.ID, map[string]interface{}{"duration": duration})
+	}
+	return nil
 }
 
 func adaptiveSampleCount(duration float64) int {
@@ -803,18 +839,72 @@ func (s *MediaAnalysisService) heuristicHighlights(media *model.Media) []model.V
 		{0.75, "第二幕转折", 8.5},
 	}
 	out := make([]model.VideoHighlight, 0, len(points))
+	// clipLen 默认 30s；对较短媒体自适应收缩，避免相邻片段互相重叠出 0 长片段。
+	clipLen := 30.0
+	if media.Duration < 90 {
+		clipLen = math.Max(media.Duration/3, 5)
+	}
+	// 对极短媒体（<15s）仍保证产出 1 段，绝不让精彩片段落空。
+	if media.Duration < 15 {
+		out = append(out, model.VideoHighlight{
+			Title:          "完整片段",
+			StartTime:      0,
+			EndTime:        media.Duration,
+			Score:          7.0,
+			Tags:           media.Genres,
+			AnalysisMethod: "heuristic",
+		})
+		return out
+	}
 	for _, point := range points {
-		start := math.Max(0, media.Duration*point.ratio-15)
+		start := math.Max(0, media.Duration*point.ratio-clipLen/2)
+		end := math.Min(media.Duration, start+clipLen)
+		if end-start < 0.5 {
+			start = math.Max(0, media.Duration-clipLen)
+			end = media.Duration
+		}
 		out = append(out, model.VideoHighlight{
 			Title:          point.title,
 			StartTime:      start,
-			EndTime:        math.Min(media.Duration, start+30),
+			EndTime:        end,
 			Score:          point.score,
 			Tags:           media.Genres,
 			AnalysisMethod: "heuristic",
 		})
 	}
 	return out
+}
+
+// probeFileDuration 用 FFprobe 读取媒体文件时长（秒）。无序执行、带超时，
+// 仅在需要兜底补算时调用。返回 0 表示未读到有效时长。
+func probeFileDuration(ffprobePath, filePath string) (float64, error) {
+	if strings.TrimSpace(ffprobePath) == "" {
+		ffprobePath = "ffprobe"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, ffprobePath,
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		filePath,
+	)
+	output, err := cmd.Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return 0, ctx.Err()
+		}
+		return 0, err
+	}
+	line := strings.TrimSpace(string(output))
+	if line == "" {
+		return 0, fmt.Errorf("FFprobe 未返回时长")
+	}
+	duration, err := strconv.ParseFloat(line, 64)
+	if err != nil || duration <= 0 {
+		return 0, fmt.Errorf("无效时长 %q", line)
+	}
+	return duration, nil
 }
 
 func (s *MediaAnalysisService) generateThumbnails(media *model.Media, task *model.AIAnalysisTask, highlights []model.VideoHighlight, runDir string) {

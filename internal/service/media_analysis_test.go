@@ -24,6 +24,31 @@ func TestMediaAnalysisHeuristicHighlights(t *testing.T) {
 	}
 }
 
+func TestMediaAnalysisHeuristicShortVideosNeverEmpty(t *testing.T) {
+	svc := &MediaAnalysisService{}
+	cases := []float64{8, 20, 45, 89, 150}
+	for _, duration := range cases {
+		media := &model.Media{Duration: duration, Genres: "动作"}
+		highlights := svc.heuristicHighlights(media)
+		if len(highlights) == 0 {
+			t.Fatalf("duration %.0fs produced zero highlights, must never be empty", duration)
+		}
+		for _, item := range highlights {
+			if item.EndTime <= item.StartTime || item.StartTime < 0 || item.EndTime > duration+0.001 {
+				t.Fatalf("duration %.0fs invalid interval: %+v", duration, item)
+			}
+		}
+	}
+}
+
+func TestProbeFileDuration(t *testing.T) {
+	// 指向一个不存在的文件应返回错误，而非 panic
+	if _, err := probeFileDuration("ffprobe", "/nonexistent/does-not-exist.mp4"); err == nil {
+		t.Fatal("expected error for nonexistent file")
+	}
+}
+
+
 func TestAdaptiveSampleCountIsBounded(t *testing.T) {
 	cases := []struct {
 		duration float64
