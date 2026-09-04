@@ -5598,7 +5598,7 @@ html body .nv-media-detail-page > .nv-detail-hero {
 }
 
 html body .nv-media-detail-page > .nv-detail-hero > .absolute.inset-0 {
-  border-radius: inherit;
+  border-radius: 0;
   opacity: .34;
   filter: blur(22px) saturate(108%);
   transform: scale(1.055);
@@ -5926,10 +5926,6 @@ html body .nv-media-detail-page #detail-highlights .grid:has(> button) > button 
   border-radius: 11px !important;
   scroll-snap-align: start;
   box-shadow: none !important;
-}
-
-html body .nv-media-detail-page #detail-highlights .grid:has(> button) > button > .relative {
-  border-radius: 10px 10px 0 0;
 }
 
 html body .nv-media-detail-page #detail-highlights .grid:has(> button) > button > .p-4 {
@@ -7963,7 +7959,7 @@ html body .nv-media-detail-page #detail-highlights .nv-highlight-card {
 html body .nv-media-detail-page #detail-highlights .nv-highlight-card-media {
   width: 100% !important;
   min-width: 0 !important;
-  border-radius: calc(var(--nv-radius-container) - 1px) calc(var(--nv-radius-container) - 1px) 0 0 !important;
+  border-radius: 0 !important;
 }
 
 html body .nv-media-detail-page #detail-highlights .nv-highlight-card-copy {

@@ -181,7 +181,7 @@ export default function SeriesHero({
           <AnimatePresence initial={false} mode="sync">
             <motion.div
               key={`series-poster-${series.id}-${activeIndex}-${posterVersion}`}
-              className="absolute inset-0 overflow-hidden rounded-[inherit]"
+              className="absolute inset-0 overflow-hidden"
               initial={{ opacity: 0.04, scale: 1.045, filter: 'blur(14px)' }}
               animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, scale: 1.015 }}
@@ -197,7 +197,7 @@ export default function SeriesHero({
                 decoding="async"
                 loading="eager"
                 draggable={false}
-                className="h-full w-full select-none rounded-[inherit] object-cover object-center"
+                className="h-full w-full select-none object-cover object-center"
               />
             </motion.div>
           </AnimatePresence>
