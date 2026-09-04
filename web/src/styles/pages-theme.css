@@ -5348,32 +5348,22 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
   inset: 0;
   z-index: 1;
   opacity: 0;
-  transform: scale(1.012);
-  transition: opacity .9s ease, transform 5.2s ease;
+  transform: scale(1.02);
+  transition: opacity .7s ease, transform 5.2s ease;
   will-change: opacity, transform;
 }
 
+/* Symmetric crossfade: the incoming and outgoing layers swap opacity at the
+ * same rate, so their combined coverage never dips below the frame beneath —
+ * unlike the old blur-in animation (which started at 0.04 opacity after a
+ * delay) that let the solid slideshow background flash through mid-switch. */
 .nv-detail-highlight-slide.is-active {
   opacity: 1;
   transform: scale(1);
-  animation: nv-detail-highlight-in .95s ease-out .12s both;
 }
 
-/* Match the homepage hero carousel's switching animation: the incoming frame
- * starts slightly blurred, scaled up and near-transparent, then sharpens and
- * settles (ease-out, ~0.12s delay). Shared with .nv-series-poster-slideshow via
- * the same values as the framer-motion hero. */
-@keyframes nv-detail-highlight-in {
-  0% {
-    opacity: .04;
-    transform: scale(1.045);
-    filter: blur(14px);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-    filter: blur(0);
-  }
+.nv-detail-highlight-slide.is-active.is-leaving {
+  opacity: 0;
 }
 
 .nv-detail-highlight-slide.is-failed {

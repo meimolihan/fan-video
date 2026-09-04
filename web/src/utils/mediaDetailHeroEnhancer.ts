@@ -110,11 +110,21 @@ function renderSlides(target: HeroSession, urls: string[]) {
     image.src = url
     image.alt = ''
     image.decoding = 'async'
-    image.loading = index < 2 ? 'eager' : 'lazy'
+    image.loading = 'eager'
     image.addEventListener('error', () => slide.classList.add('is-failed'), { once: true })
 
     slide.appendChild(image)
     layer.appendChild(slide)
+
+    // Preload every highlight up front so a switch never reveals a half-loaded
+    // frame (the source of the crossfade flash). The next slide only becomes
+    // visible once its pixels are decoded, mirroring the series-poster carousel.
+    const preload = new window.Image()
+    preload.decoding = 'async'
+    preload.onload = () => slide.classList.add('is-ready')
+    preload.onerror = () => slide.classList.add('is-failed')
+    preload.src = url
+
     return slide
   })
 
@@ -130,10 +140,34 @@ function renderSlides(target: HeroSession, urls: string[]) {
   let activeIndex = 0
   target.slideTimer = window.setInterval(() => {
     if (document.hidden || !target.hero.isConnected) return
-    const nextIndex = (activeIndex + 1) % slides.length
+
+    // Only ever reveal a slide whose pixels are already decoded (is-ready set
+    // by preload/onload). If the next frame isn't ready yet, hold the current
+    // one instead of crossfading onto a blank frame — that gap was the flash
+    // visible on every switch. All slides are preloaded, so this only defers
+    // when the network is genuinely slow and the cache is cold.
+    let nextIndex = (activeIndex + 1) % slides.length
+    let guard = 0
+    while (
+      guard < slides.length &&
+      !slides[nextIndex].classList.contains('is-ready') &&
+      !slides[nextIndex].classList.contains('is-failed')
+    ) {
+      nextIndex = (nextIndex + 1) % slides.length
+      guard += 1
+    }
+    if (guard >= slides.length || slides[nextIndex].classList.contains('is-failed')) return
+
     const outgoing = slides[activeIndex]
-    slides[activeIndex]?.classList.remove('is-active')
+
+    // Symmetric crossfade: outgoing fades 1→0 while incoming fades 0→1 at the
+    // same rate, so both composite to full coverage and the background never
+    // flashes through (the old one-sided transition let the underlying surface
+    // show mid-switch).
+    outgoing?.classList.add('is-leaving')
+    if (outgoing) outgoing.classList.remove('is-active')
     slides[nextIndex]?.classList.add('is-active')
+    if (slides[nextIndex]) slides[nextIndex].classList.remove('is-leaving')
     activeIndex = nextIndex
 
     const outgoingImage = outgoing?.querySelector<HTMLImageElement>('img')
