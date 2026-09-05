@@ -58,6 +58,10 @@ type AppConfig struct {
 	VAAPIDevice string `mapstructure:"vaapi_device"`
 	// 全量备份存储目录，默认 <data_dir>/backups（Docker 下随 /data 卷持久化）
 	BackupDir string `mapstructure:"backup_dir"`
+	// 还原（staged 数据库）成功后是否自动退出并由进程管理器重启以立即生效。
+	// 默认 false；systemd/install.sh 安装会置为 true，配合 Restart=on-failure
+	// 使网页端还原无需手动重启服务即可应用（非零退出码触发重启）。
+	RestartAfterRestore bool `mapstructure:"restart_after_restore"`
 	// 允许的跨域来源列表
 	CORSOrigins []string `mapstructure:"cors_origins"`
 }
@@ -417,6 +421,7 @@ func setDefaults() {
 	viper.SetDefault("app.ffprobe_path", "ffprobe")
 	viper.SetDefault("app.vaapi_device", "/dev/dri/renderD128")
 	viper.SetDefault("app.backup_dir", "")
+	viper.SetDefault("app.restart_after_restore", false)
 	viper.SetDefault("app.cors_origins", []string{})
 
 	// ---- 日志 ----

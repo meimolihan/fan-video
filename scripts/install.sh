@@ -340,6 +340,7 @@ Environment=NOWEN_DATABASE_DB_PATH=${DATA_DIR}/data/nowen.db
 Environment=NOWEN_CACHE_CACHE_DIR=${DATA_DIR}/cache
 Environment=NOWEN_LOGGING_LEVEL=info
 Environment=TZ=Asia/Shanghai
+Environment=NOWEN_APP_RESTART_AFTER_RESTORE=true
 ${WEB_DIR_LINE}
 Restart=on-failure
 RestartSec=3

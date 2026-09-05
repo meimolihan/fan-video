@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/fan-video/fan-video/internal/service"
 	"github.com/gin-gonic/gin"
@@ -64,6 +65,20 @@ func (h *AdminHandler) DeleteBackup(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "备份已删除", "data": gin.H{"name": name}})
 }
 
+// maybeRestartAfterRestore 还原暂存成功后，若配置了自动重启则安排进程退出，
+// 由 systemd/docker 等进程管理器以非零退出码重启，使暂存的数据库立即生效。
+// 延迟退出以先让 HTTP 响应送达客户端。
+func (h *AdminHandler) maybeRestartAfterRestore() {
+	if h.cfg == nil || !h.cfg.App.RestartAfterRestore {
+		return
+	}
+	h.logger.Warn("还原已暂存，1.5 秒后自动重启服务以应用数据库（配置 app.restart_after_restore=true）")
+	go func() {
+		time.Sleep(1500 * time.Millisecond)
+		os.Exit(1)
+	}()
+}
+
 // RestoreBackup 上传备份并还原。
 // multipart 字段： file（zip 文件）+ confirm（必须为 CONFIRM_RESTORE）
 func (h *AdminHandler) RestoreBackup(c *gin.Context) {
@@ -100,6 +115,7 @@ func (h *AdminHandler) RestoreBackup(c *gin.Context) {
 		"message": "还原成功，数据库将在下次重启服务后生效",
 		"data":    result,
 	})
+	h.maybeRestartAfterRestore()
 }
 
 // RestoreBackupLocal 直接还原服务器上已存在的备份文件
@@ -140,4 +156,5 @@ func (h *AdminHandler) RestoreBackupLocal(c *gin.Context) {
 		"message": "还原成功，数据库将在下次重启服务后生效",
 		"data":    result,
 	})
+	h.maybeRestartAfterRestore()
 }
