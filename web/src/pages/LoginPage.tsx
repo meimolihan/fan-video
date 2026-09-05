@@ -22,6 +22,8 @@ export default function LoginPage() {
   const [inviteRequired, setInviteRequired] = useState(false)
   const [registrationOpen, setRegistrationOpen] = useState(true)
   const [showPassword, setShowPassword] = useState(false)
+  const [defaultPassword, setDefaultPassword] = useState('')
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     authApi.getStatus().then((res) => {
@@ -29,11 +31,36 @@ export default function LoginPage() {
       setInitialized(status.initialized)
       setInviteRequired(!!(status as { invite_required?: boolean }).invite_required)
       setRegistrationOpen(!!status.registration_open)
+      setDefaultPassword((status as { default_password?: string }).default_password || '')
       if (!status.initialized) setIsRegister(true)
     }).catch(() => {
       // 接口不可用时保持登录模式，沿用原有容错行为。
     })
   }, [])
+
+  const copyDefaultPassword = async () => {
+    const text = defaultPassword
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      }
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      setError('复制失败，请手动复制')
+      setTimeout(() => setError(''), 3000)
+    }
+  }
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -152,6 +179,27 @@ export default function LoginPage() {
           {loading ? <Loader2 size={17} className="animate-spin" aria-hidden="true" /> : isRegister ? <UserPlus size={17} aria-hidden="true" /> : <LogIn size={17} aria-hidden="true" />}
           {loading ? t('auth.processing') : isRegister ? t('auth.register') : t('auth.enterDeepSpace')}
         </Button>
+
+        {!isRegister && defaultPassword && (
+          <div className="space-y-2 rounded-[var(--nv-radius-control)] border border-dashed border-[var(--nv-border-strong)] bg-[var(--nv-bg-surface-soft)] px-4 py-3 text-center">
+            <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--nv-text-tertiary)]">
+              首次登录默认密码
+            </div>
+            <div className="flex items-center justify-center gap-2">
+              <code className="select-all rounded-[var(--nv-radius-control)] bg-[var(--nv-fill-subtle)] px-2 py-1 text-sm font-mono text-[var(--nv-text-primary)]">
+                {defaultPassword}
+              </code>
+              <button
+                type="button"
+                onClick={copyDefaultPassword}
+                className="rounded-md px-2 py-1 text-xs font-medium text-[var(--nv-text-secondary)] transition-colors hover:bg-[var(--nv-fill-hover)]"
+              >
+                {copied ? '已复制' : '复制'}
+              </button>
+            </div>
+            <div className="text-xs text-[var(--nv-text-tertiary)]">登录后请在右上角「修改密码」中更换初始密码。</div>
+          </div>
+        )}
 
         {canSwitchMode && (
           <div className="border-t border-[var(--nv-border-subtle)] pt-4 text-center">

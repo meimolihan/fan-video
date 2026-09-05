@@ -33,7 +33,7 @@ func setupAuthService(t *testing.T) *AuthService {
 	cfg := &config.Config{}
 	cfg.Secrets.JWTSecret = "test-secret-key-for-unit-tests"
 	cfg.Registration.Enabled = true // 测试中允许注册
-	authService := NewAuthService(repos.User, repos.InviteCode, repos.LoginLog, repos.AuditLog, cfg, logger.Sugar())
+	authService := NewAuthService(repos.User, repos.InviteCode, repos.LoginLog, repos.AuditLog, repos.SystemSetting, cfg, logger.Sugar())
 	return authService
 }
 

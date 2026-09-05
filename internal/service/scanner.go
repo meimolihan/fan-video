@@ -489,7 +489,7 @@ func (s *ScannerService) healFirstFramePosters(library *model.Library) {
 // 返回实际删除的文件数。
 func (s *ScannerService) deleteVideoFirstFrame(m *model.Media, storedPath string) int {
 	targets := map[string]struct{}{}
-	if storedPath != "" {
+	if storedPath != "" && s.nfoService.IsFirstFrameCachePath(storedPath) {
 		targets[storedPath] = struct{}{}
 	}
 	if m != nil && m.FilePath != "" && !IsWebDAVPath(m.FilePath) {

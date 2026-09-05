@@ -55,9 +55,11 @@ func (h *AuthHandler) Status(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": gin.H{
-			"initialized":       status.Initialized,
-			"registration_open": status.RegistrationOpen,
-			"invite_required":   status.InviteRequired,
+			"initialized":         status.Initialized,
+			"registration_open":   status.RegistrationOpen,
+			"invite_required":     status.InviteRequired,
+			"has_default_password": status.HasDefaultPasswd,
+			"default_password":     status.DefaultPassword,
 			// 服务器身份信息（供局域网发现识别）
 			"server_name": serverName,
 			"server_type": "fan-video",

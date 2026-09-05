@@ -14,14 +14,15 @@ import (
 
 // UserService 用户服务
 type UserService struct {
-	repo      *repository.UserRepo
-	auditRepo *repository.AuditLogRepo
-	cfg       *config.Config
-	logger    *zap.SugaredLogger
+	repo        *repository.UserRepo
+	auditRepo   *repository.AuditLogRepo
+	settingRepo *repository.SystemSettingRepo
+	cfg         *config.Config
+	logger      *zap.SugaredLogger
 }
 
-func NewUserService(repo *repository.UserRepo, auditRepo *repository.AuditLogRepo, cfg *config.Config, logger *zap.SugaredLogger) *UserService {
-	return &UserService{repo: repo, auditRepo: auditRepo, cfg: cfg, logger: logger}
+func NewUserService(repo *repository.UserRepo, auditRepo *repository.AuditLogRepo, settingRepo *repository.SystemSettingRepo, cfg *config.Config, logger *zap.SugaredLogger) *UserService {
+	return &UserService{repo: repo, auditRepo: auditRepo, settingRepo: settingRepo, cfg: cfg, logger: logger}
 }
 
 // generateSecurePassword 生成安全的随机密码（16字符十六进制）
@@ -65,13 +66,17 @@ func (s *UserService) EnsureAdminExists() error {
 		return err
 	}
 
-	// 初始密码仅在首次启动时输出一次（不落盘保存明文），首次登录后强制修改密码。
+	// 初始密码仅在首次启动时输出一次，同时持久化到设置表供登录页展示，
+	// 首次登录强制修改密码成功后会自动清除（见 ChangePassword）。
 	s.logger.Infof("╔══════════════════════════════════════════════════════════╗")
 	s.logger.Infof("║  首次启动 — 已创建默认管理员账号（初始密码为一次性随机值）   ║")
 	s.logger.Infof("║  用户名: admin                                          ║")
 	s.logger.Infof("║  密码:     %s", initialPassword)
 	s.logger.Infof("║  ⚠️  首次登录后需强制修改密码                              ║")
 	s.logger.Infof("╚══════════════════════════════════════════════════════════╝")
+	if s.settingRepo != nil {
+		_ = s.settingRepo.Set(SettingDefaultPassword, initialPassword)
+	}
 	return nil
 }
 

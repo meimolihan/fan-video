@@ -12,24 +12,30 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// SettingDefaultPassword 设置表 key：首次启动生成的 admin 初始密码（明文，
+// 仅用于登录页展示，管理员修改密码成功后立即清除）。
+const SettingDefaultPassword = "default_password"
+
 // AuthService 认证服务
 type AuthService struct {
-	userRepo   *repository.UserRepo
-	inviteRepo *repository.InviteCodeRepo
-	logRepo    *repository.LoginLogRepo
-	auditRepo  *repository.AuditLogRepo
-	cfg        *config.Config
-	logger     *zap.SugaredLogger
+	userRepo    *repository.UserRepo
+	inviteRepo  *repository.InviteCodeRepo
+	logRepo     *repository.LoginLogRepo
+	auditRepo   *repository.AuditLogRepo
+	settingRepo *repository.SystemSettingRepo
+	cfg         *config.Config
+	logger      *zap.SugaredLogger
 }
 
-func NewAuthService(userRepo *repository.UserRepo, inviteRepo *repository.InviteCodeRepo, logRepo *repository.LoginLogRepo, auditRepo *repository.AuditLogRepo, cfg *config.Config, logger *zap.SugaredLogger) *AuthService {
+func NewAuthService(userRepo *repository.UserRepo, inviteRepo *repository.InviteCodeRepo, logRepo *repository.LoginLogRepo, auditRepo *repository.AuditLogRepo, settingRepo *repository.SystemSettingRepo, cfg *config.Config, logger *zap.SugaredLogger) *AuthService {
 	return &AuthService{
-		userRepo:   userRepo,
-		inviteRepo: inviteRepo,
-		logRepo:    logRepo,
-		auditRepo:  auditRepo,
-		cfg:        cfg,
-		logger:     logger,
+		userRepo:    userRepo,
+		inviteRepo:  inviteRepo,
+		logRepo:     logRepo,
+		auditRepo:   auditRepo,
+		settingRepo: settingRepo,
+		cfg:         cfg,
+		logger:      logger,
 	}
 }
 
@@ -104,9 +110,11 @@ func (s *AuthService) Login(req *LoginRequest, ip, ua string) (*TokenResponse, e
 
 // InitStatus 系统初始化状态
 type InitStatus struct {
-	Initialized      bool `json:"initialized"`       // 是否已有用户
-	RegistrationOpen bool `json:"registration_open"` // 是否允许注册
-	InviteRequired   bool `json:"invite_required"`   // 是否要求邀请码
+	Initialized      bool   `json:"initialized"`        // 是否已有用户
+	RegistrationOpen bool   `json:"registration_open"`  // 是否允许注册
+	InviteRequired   bool   `json:"invite_required"`    // 是否要求邀请码
+	HasDefaultPasswd bool   `json:"has_default_password,omitempty"` // 是否存在未修改的初始密码
+	DefaultPassword  string `json:"default_password,omitempty"`     // 初始密码（仅 has_default_password 为 true 时返回）
 }
 
 // GetInitStatus 获取系统初始化状态（公开接口，无需认证）
@@ -122,11 +130,21 @@ func (s *AuthService) GetInitStatus() (*InitStatus, error) {
 			inviteRequired = true
 		}
 	}
-	return &InitStatus{
+
+	status := &InitStatus{
 		Initialized:      count > 0,
 		RegistrationOpen: count == 0 || s.cfg.Registration.Enabled,
 		InviteRequired:   count > 0 && inviteRequired,
-	}, nil
+	}
+
+	// 存在未修改的 admin 初始密码时返回给登录页展示（改密成功后清除）
+	if s.settingRepo != nil {
+		if pwd, err := s.settingRepo.Get(SettingDefaultPassword); err == nil && pwd != "" {
+			status.HasDefaultPasswd = true
+			status.DefaultPassword = pwd
+		}
+	}
+	return status, nil
 }
 
 // Register 用户注册
@@ -300,6 +318,10 @@ func (s *AuthService) ChangePassword(userID string, req *ChangePasswordRequest) 
 		"must_change_pwd": false,
 	}); err != nil {
 		return err
+	}
+	// 清除登录页展示的初始密码（若有）
+	if s.settingRepo != nil {
+		_ = s.settingRepo.Set(SettingDefaultPassword, "")
 	}
 	_ = s.userRepo.IncrTokenVersion(userID)
 

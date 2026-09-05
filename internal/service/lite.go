@@ -110,8 +110,8 @@ func NewLiteServices(repos *repository.Repositories, cfg *config.Config, logger 
 	streamService.SetNFOService(nfoService)
 
 	svcs := &Services{
-		User:                NewUserService(repos.User, repos.AuditLog, cfg, logger),
-		Auth:                NewAuthService(repos.User, repos.InviteCode, repos.LoginLog, repos.AuditLog, cfg, logger),
+		User:                NewUserService(repos.User, repos.AuditLog, repos.SystemSetting, cfg, logger),
+		Auth:                NewAuthService(repos.User, repos.InviteCode, repos.LoginLog, repos.AuditLog, repos.SystemSetting, cfg, logger),
 		Library:             libraryService,
 		Media:               NewMediaService(repos.Media, repos.Series, repos.WatchHistory, repos.Favorite, repos.WatchLater, repos.Library, repos.PlaybackStats, cfg, logger),
 		Series:              NewSeriesService(repos.Series, repos.Media, logger),

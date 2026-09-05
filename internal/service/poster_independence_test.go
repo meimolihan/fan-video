@@ -217,6 +217,52 @@ func TestHealFirstFramePosterRemovesOrphanWhenPosterAlreadyReplaced(t *testing.T
 	}
 }
 
+// 规则：数据库海报已指向媒体目录中的真实海报（如同名 webp/jpg）时，
+// heal 不得把该源图片当作首帧残留删除，仅清理孤儿首帧缓存。
+func TestHealFirstFramePosterNeverDeletesDirectoryPoster(t *testing.T) {
+	_, repos, _, nfoSvc, _, _, scanner := newCoverTestStack(t)
+
+	dir := t.TempDir()
+	videoPath := filepath.Join(dir, "movie.mp4")
+	createTestVideo(t, videoPath, 2)
+	writeFakeJPEG(t, filepath.Join(dir, "movie.jpg"))
+
+	library := &model.Library{ID: "lib-heal4", Name: "修复库4", Path: dir}
+	m := &model.Media{
+		LibraryID:  library.ID,
+		Title:      "movie",
+		FilePath:   videoPath,
+		MediaType:  "movie",
+		PosterPath: filepath.Join(dir, "movie.jpg"),
+	}
+	if err := repos.Media.Create(m); err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := os.Stat(videoPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	orphan := filepath.Join(nfoSvc.firstFrameCacheDir(), firstFrameCacheKey(videoPath, info)+".jpg")
+	writeFakeJPEG(t, orphan)
+
+	scanner.healFirstFramePosters(library)
+
+	if _, err := os.Stat(filepath.Join(dir, "movie.jpg")); err != nil {
+		t.Fatalf("媒体目录中的真实海报不得被删除: %v", err)
+	}
+	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
+		t.Fatalf("遗留首帧缓存文件应被删除，实际仍存在: %v", err)
+	}
+	updated, err := repos.Media.FindByID(m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.PosterPath != filepath.Join(dir, "movie.jpg") {
+		t.Fatalf("海报不应被改写，实际 %s", updated.PosterPath)
+	}
+}
+
 // 规则：目录中没有真实海报时，应保留首帧封面、不删除也不改写。
 func TestHealFirstFramePosterKeepsFallbackWhenNoDirectoryPoster(t *testing.T) {
 	_, repos, _, nfoSvc, _, _, scanner := newCoverTestStack(t)
