@@ -4,30 +4,43 @@ set -e
 gl_hong='\033[0;31m'
 gl_lv='\033[0;32m'
 gl_huang='\033[1;33m'
-gl_hui='\033[1;90m'
 gl_end='\033[0m'
 
 info(){ echo -e "${gl_lv}▶ $*${gl_end}"; }
 warn(){ echo -e "${gl_huang}[警告] $*${gl_end}"; }
 err(){ echo -e "${gl_hong}[错误] $*${gl_end}"; }
 
-if [ $# -ne 1 ];then
-    err "用法: $0 <版本号> 例 $0 1.2.3"
+YES_MODE=0
+VER=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --yes)
+      YES_MODE=1
+      shift
+      ;;
+    *)
+      if [[ -z "${VER}" ]];then
+        VER="$1"
+      fi
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "${VER}" ]];then
+    err "用法: $0 <版本号> [--yes] 例 $0 1.2.3 [--yes]"
     exit 1
 fi
 
-VER="$1"
 TAG="v${VER}"
-
 info "版本: ${VER} tag: ${TAG}"
 
-# 本地tag检测
 if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null;then
     err "本地Git tag已存在: ${TAG}，请更换版本或删除本地tag"
     exit 1
 fi
 
-# 远端tag检测
 if git ls-remote --tags origin | grep -q "refs/tags/${TAG}";then
     err "远端origin已存在tag ${TAG}，请更换版本号"
     exit 1
@@ -46,10 +59,15 @@ git push origin main
 git tag "${TAG}"
 git push origin "${TAG}"
 
-# ---------- 创建/更新GitHub Release ----------
 if command -v gh >/dev/null 2>&1; then
     info "检测到 gh cli，准备处理 GitHub Release ${TAG}"
-    read -p "确认创建/更新Release ${TAG} ? [y/N] " ans
+    ans="n"
+    if [[ ${YES_MODE} -eq 1 ]];then
+        ans="y"
+    else
+        read -p "确认创建/更新Release ${TAG} ? [y/N] " ans
+    fi
+
     if [[ "${ans}" =~ ^[yY]$ ]];then
         if gh release view "${TAG}" >/dev/null 2>&1; then
             info "Release ${TAG} 已存在，上传资产文件"
