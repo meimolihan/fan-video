@@ -79,7 +79,7 @@ type BackupManifest struct {
 	ConfigDir  string                   `json:"config_dir"`
 	DBPath     string                   `json:"db_path"`
 	Resources  []BackupManifestResource `json:"resources"`
-	Entries    []BackupFileEntry       `json:"entries"`
+	Entries    []BackupFileEntry        `json:"entries"`
 }
 
 // BackupManifestResource 资源目录记录（name 用于还原时映射到当前环境目录）
@@ -296,13 +296,16 @@ func (s *SystemBackupService) Create() (*BackupEntry, error) {
 			if base == "config" || base == "backups" || base == ".restore" {
 				continue
 			}
-		} else if base == "nowen.db" || strings.HasPrefix(base, "nowen.db-") {
+		} else if s.isDBFile(filepath.Join(s.cfg.App.DataDir, base)) {
 			continue
 		}
 		p := filepath.Join(s.cfg.App.DataDir, base)
 		if de.IsDir() {
 			_ = filepath.Walk(p, func(p string, info os.FileInfo, err error) error {
 				if err != nil || info.IsDir() {
+					return nil
+				}
+				if s.isDBFile(p) {
 					return nil
 				}
 				rel, rerr := filepath.Rel(s.cfg.App.DataDir, p)
@@ -406,6 +409,21 @@ func (s *SystemBackupService) buildManifest() BackupManifest {
 	}
 }
 
+// isDBFile 判断绝对路径是否为当前数据库文件（含 WAL/SHM 伴生文件）。
+// 默认布局下库文件位于 <data_dir>/nowen.db 根部；二进制/setup 安装经
+// NOWEN_DATABASE_DB_PATH 可能落在 <data_dir>/data/nowen.db 子目录。
+// 无论哪种布局，全量备份都必须排除运行中的 SQLite 文件（主库 + -wal + -shm），
+// 防止把 WAL 模式的瞬时状态原始拷贝进备份包并污染还原流程。
+func (s *SystemBackupService) isDBFile(abs string) bool {
+	dbPath := s.cfg.Database.DBPath
+	if dbPath == "" {
+		return false
+	}
+	abs = filepath.Clean(abs)
+	dbPath = filepath.Clean(dbPath)
+	return abs == dbPath || strings.HasPrefix(abs, dbPath+"-")
+}
+
 // snapshotDatabase 使用 VACUUM INTO 生成一致性数据库快照
 func (s *SystemBackupService) snapshotDatabase(dest string) error {
 	sql := "VACUUM INTO '" + strings.ReplaceAll(dest, "'", "''") + "'"
@@ -463,7 +481,7 @@ func (s *SystemBackupService) Restore(r io.Reader, sourceName string) (*RestoreR
 	}
 	defer os.RemoveAll(tmpDir)
 
-	manifest, restoredFiles, err := extractBackupZip(&zr.Reader, tmpDir)
+	manifest, restoredFiles, zipWarnings, err := extractBackupZip(&zr.Reader, tmpDir)
 	if err != nil {
 		return nil, err
 	}
@@ -474,6 +492,7 @@ func (s *SystemBackupService) Restore(r io.Reader, sourceName string) (*RestoreR
 	result := &RestoreResult{
 		PreBackupName: preBackup.Name,
 	}
+	result.Warnings = append(result.Warnings, zipWarnings...)
 
 	// 4) 数据库 → 暂存，下次启动替换
 	if _, ok := restoredFiles["database/nowen.db"]; ok {
@@ -703,12 +722,13 @@ func writeJSONToZip(zw *zip.Writer, root, zipPath string, v interface{}) error {
 // 每个条目需位于 <根目录>/<相对路径>：剥离首个路径段（根目录名）后，
 // 校验相对路径必须属于 database / config / data / resources/<name> / manifest.json。
 // 返回备份清单与所有有效文件的相对路径集合。
-func extractBackupZip(zr *zip.Reader, dstDir string) (*BackupManifest, map[string]struct{}, error) {
+func extractBackupZip(zr *zip.Reader, dstDir string) (*BackupManifest, map[string]struct{}, []string, error) {
+	var warnings []string
 	if len(zr.File) < 1 {
-		return nil, nil, fmt.Errorf("备份 zip 为空")
+		return nil, nil, warnings, fmt.Errorf("备份 zip 为空")
 	}
 	if len(zr.File) > maxRestoreEntries {
-		return nil, nil, fmt.Errorf("备份条目过多（>%d），已拒绝解压", maxRestoreEntries)
+		return nil, nil, warnings, fmt.Errorf("备份条目过多（>%d），已拒绝解压", maxRestoreEntries)
 	}
 
 	var manifest *BackupManifest
@@ -720,13 +740,13 @@ func extractBackupZip(zr *zip.Reader, dstDir string) (*BackupManifest, map[strin
 		}
 		name := f.Name
 		if strings.HasPrefix(name, "/") {
-			return nil, nil, fmt.Errorf("备份包含绝对路径条目: %s", name)
+			return nil, nil, warnings, fmt.Errorf("备份包含绝对路径条目: %s", name)
 		}
 
 		// 使用 path 处理 zip 内的 '/' 分隔；拒绝任何未归一化（含 ".." / "."）的条目名
 		clean := path.Clean(name)
 		if clean != name || strings.Contains(name, "..") {
-			return nil, nil, fmt.Errorf("备份包含非法路径（存在穿越风险）: %s", name)
+			return nil, nil, warnings, fmt.Errorf("备份包含非法路径（存在穿越风险）: %s", name)
 		}
 
 		seg := strings.Split(clean, "/")
@@ -742,66 +762,70 @@ func extractBackupZip(zr *zip.Reader, dstDir string) (*BackupManifest, map[strin
 		if rel == "manifest.json" {
 			rc, e := f.Open()
 			if e != nil {
-				return nil, nil, fmt.Errorf("读取 %s 失败: %w", name, e)
+				return nil, nil, warnings, fmt.Errorf("读取 %s 失败: %w", name, e)
 			}
 			data, e := io.ReadAll(io.LimitReader(rc, 16<<20))
 			rc.Close()
 			if e != nil {
-				return nil, nil, fmt.Errorf("读取 %s 失败: %w", name, e)
+				return nil, nil, warnings, fmt.Errorf("读取 %s 失败: %w", name, e)
 			}
 			var m BackupManifest
 			if e := json.Unmarshal(data, &m); e != nil {
-				return nil, nil, fmt.Errorf("解析备份清单失败: %w", e)
+				return nil, nil, warnings, fmt.Errorf("解析备份清单失败: %w", e)
 			}
 			manifest = &m
 			continue
 		}
 
 		if !isSafeRestoreRel(rel) {
-			return nil, nil, fmt.Errorf("备份包含非法路径（存在穿越风险）: %s", name)
+			return nil, nil, warnings, fmt.Errorf("备份包含非法路径（存在穿越风险）: %s", name)
 		}
 		if !isSupportedRestoreCategory(rel) {
-			return nil, nil, fmt.Errorf("备份包含未知目录条目，已拒绝: %s", name)
+			return nil, nil, warnings, fmt.Errorf("备份包含未知目录条目，已拒绝: %s", name)
 		}
 		if strings.HasPrefix(rel, "data/") && hasDBConflict(strings.TrimPrefix(rel, "data/")) {
-			return nil, nil, fmt.Errorf("备份包含受限数据库文件条目: %s", name)
+			// 旧版本备份可能包含运行中数据库的原始拷贝（<data_dir>/data/nowen.db*
+			// 等嵌套条目）。它们不是一致性快照，且会覆盖还原期间的活库，直接跳过；
+			// 权威数据库始终来自 database/nowen.db（VACUUM INTO 快照）。
+			warnings = append(warnings, "跳过备份中的数据库文件条目，改用一致性快照: "+name)
+			continue
 		}
 
 		dest := filepath.Join(dstDir, filepath.FromSlash(rel))
 		if !pathWithin(dstDir, dest) {
-			return nil, nil, fmt.Errorf("备份条目超出解压目录: %s", name)
+			return nil, nil, warnings, fmt.Errorf("备份条目超出解压目录: %s", name)
 		}
 		if f.UncompressedSize64 > maxRestoredFileSize {
-			return nil, nil, fmt.Errorf("备份包含过大文件（>2 GiB）: %s", name)
+			return nil, nil, warnings, fmt.Errorf("备份包含过大文件（>2 GiB）: %s", name)
 		}
 		if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
-			return nil, nil, fmt.Errorf("创建解压目录失败: %w", err)
+			return nil, nil, warnings, fmt.Errorf("创建解压目录失败: %w", err)
 		}
 		out, err := os.Create(dest)
 		if err != nil {
-			return nil, nil, fmt.Errorf("解压失败: %w", err)
+			return nil, nil, warnings, fmt.Errorf("解压失败: %w", err)
 		}
 		rc, err := f.Open()
 		if err != nil {
 			out.Close()
-			return nil, nil, fmt.Errorf("解压 %s 失败: %w", name, err)
+			return nil, nil, warnings, fmt.Errorf("解压 %s 失败: %w", name, err)
 		}
 		_, copyErr := io.Copy(out, io.LimitReader(rc, maxRestoredFileSize))
 		rc.Close()
 		closeErr := out.Close()
 		if copyErr != nil {
-			return nil, nil, fmt.Errorf("解压 %s 失败: %w", name, copyErr)
+			return nil, nil, warnings, fmt.Errorf("解压 %s 失败: %w", name, copyErr)
 		}
 		if closeErr != nil {
-			return nil, nil, fmt.Errorf("解压 %s 失败: %w", name, closeErr)
+			return nil, nil, warnings, fmt.Errorf("解压 %s 失败: %w", name, closeErr)
 		}
 		relFiles[rel] = struct{}{}
 	}
 
 	if manifest == nil {
-		return nil, nil, fmt.Errorf("备份缺少 manifest.json 清单")
+		return nil, nil, warnings, fmt.Errorf("备份缺少 manifest.json 清单")
 	}
-	return manifest, relFiles, nil
+	return manifest, relFiles, warnings, nil
 }
 
 // isSupportedRestoreCategory 判断相对路径是否属于允许的还原类别
@@ -847,13 +871,23 @@ func isSafeRestoreRel(rel string) bool {
 	return true
 }
 
-// hasDBConflict 检测路径是否会覆盖 SQLite 主库文件
+// hasDBConflict 检测还原目标是否会覆盖 SQLite 数据库文件。
+// 数据库既可能位于数据目录根部（<data_dir>/nowen.db），也可能位于子目录
+// （二进制安装 <data_dir>/data/nowen.db），因此需逐段扫描而非只看首段。
 func hasDBConflict(inner string) bool {
-	first := strings.SplitN(inner, "/", 2)[0]
-	if strings.HasPrefix(first, "nowen.db") {
+	segs := strings.Split(inner, "/")
+	if len(segs) == 0 {
+		return false
+	}
+	if segs[0] == ".restore" || segs[0] == "backups" {
 		return true
 	}
-	return first == ".restore" || first == "backups"
+	for _, seg := range segs {
+		if seg == "nowen.db" || strings.HasPrefix(seg, "nowen.db-") {
+			return true
+		}
+	}
+	return false
 }
 
 // installFile 将文件原子写回目标路径（先写临时文件再改名），并确保父目录存在
