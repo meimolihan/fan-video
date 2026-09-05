@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"runtime"
@@ -35,7 +36,13 @@ func buildRouter(
 	// gin.Default() = Logger + Recovery；此处显式构建并在两者之间插入 Gzip，
 	// 使 Gzip 位于 Recovery 外层，panic 时错误响应同样完整经过 gzip 流。
 	r := gin.New()
-	r.Use(gin.Logger())
+	// 生产模式下 GIN 访问日志（含管理面板轮询）不进入 journal，
+	// 避免高频请求日志将 systemctl status 的启动横幅挤出 20 行日志窗口。
+	if cfg.App.Debug {
+		r.Use(gin.Logger())
+	} else {
+		gin.DefaultWriter = io.Discard
+	}
 	r.Use(middleware.Gzip())
 	r.Use(gin.Recovery())
 	corsOrigins := append([]string{
