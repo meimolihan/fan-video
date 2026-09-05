@@ -1,7 +1,7 @@
 {
   "name": "fan-video",
   "private": true,
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Nowen Video development workspace",
   "scripts": {
     "dev": "node scripts/dev.mjs"
