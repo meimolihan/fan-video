@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -34,6 +35,8 @@ func main() {
 		log.Fatalf("应用运行端口失败: %v", err)
 	}
 	desktopRuntime := isDesktopRuntime()
+
+	printStartupBanner(cfg, appVer, desktopRuntime)
 
 	logger, _ := zap.NewProduction()
 	if cfg.App.Debug {
@@ -140,6 +143,72 @@ func main() {
 
 func isDesktopRuntime() bool {
 	return strings.TrimSpace(os.Getenv("NOWEN_DESKTOP_RUNTIME")) == "1"
+}
+
+// printStartupBanner 在启动时打印 ASCII 横幅、版本号与访问地址，
+// 使 systemctl status 能像 opencode 等服务一样直观展示版本信息。
+func printStartupBanner(cfg *config.Config, appVer string, desktopRuntime bool) {
+	banner := `
+ ███████╗ █████╗ ███╗   ██╗    ██╗   ██╗██╗██████╗ ███████╗ ██████╗
+ ██╔════╝██╔══██╗████╗  ██║    ██║   ██║██║██╔══██╗██╔════╝██╔═══██╗
+ █████╗  ███████║██╔██╗ ██║    ██║   ██║██║██║  ██║█████╗  ██║   ██║
+ ██╔══╝  ██╔══██║██║╚██╗██║    ╚██╗ ██╔╝██║██║  ██║██╔══╝  ██║   ██║
+ ██║     ██║  ██║██║ ╚████║     ╚████╔╝ ██║██████╔╝███████╗╚██████╔╝
+ ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═══╝      ╚═══╝  ╚═╝╚═════╝ ╚══════╝ ╚═════╝
+`
+	fmt.Print(banner)
+	fmt.Printf("  fan-video v%s\n", appVer)
+	if desktopRuntime {
+		fmt.Printf("  Local access:      http://127.0.0.1:%d\n", cfg.App.Port)
+	} else {
+		fmt.Printf("  Local access:      http://localhost:%d\n", cfg.App.Port)
+		for _, ip := range localIPv4Addrs() {
+			fmt.Printf("  Network access:    http://%s:%d\n", ip, cfg.App.Port)
+		}
+	}
+	fmt.Println()
+}
+
+// localIPv4Addrs 返回所有非回环的本机 IPv4 地址字符串。
+func localIPv4Addrs() []string {
+	var addrs []string
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return addrs
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		// 跳过 Docker 等虚拟网桥，仅展示真实局域网地址。
+		if isVirtualInterface(iface.Name) {
+			continue
+		}
+		ifAddrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range ifAddrs {
+			ipNet, ok := a.(*net.IPNet)
+			if !ok || ipNet.IP.To4() == nil {
+				continue
+			}
+			addrs = append(addrs, ipNet.IP.To4().String())
+		}
+	}
+	return addrs
+}
+
+// isVirtualInterface 判断网卡是否为 Docker 等虚拟网桥（非真实局域网接口）。
+func isVirtualInterface(name string) bool {
+	if name == "docker0" || name == "docker_gwbridge" {
+		return true
+	}
+	if strings.HasPrefix(name, "br-") || strings.HasPrefix(name, "veth") ||
+		strings.HasPrefix(name, "virbr") || strings.HasPrefix(name, "vnet") {
+		return true
+	}
+	return false
 }
 
 // applyRuntimePortOverride restores the documented precedence for development
