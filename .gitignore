@@ -3,6 +3,9 @@ bin/
 dist/
 dist-fpk/
 dist-release/
+
+# go:embed 编译期生成的内部前端副本（由 make sync-webdist 从 web/dist 同步生成）
+/internal/embedded/dist/
 fnpack
 fnpack.exe
 fnpack-*

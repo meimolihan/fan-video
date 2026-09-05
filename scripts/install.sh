@@ -63,9 +63,28 @@ DEFAULT_PORT=8080
 DEFAULT_DATA_DIR="/var/lib/fan-video"
 BIN_PATH="/usr/local/bin/${APP_NAME}"
 CONFIG_FILE="/etc/${APP_NAME}.conf"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" && pwd)"
 DEFAULT_BIN_SRC="${SCRIPT_DIR}/../bin/${APP_NAME}"
-WEB_SRC="${SCRIPT_DIR}/../web/dist"
+
+# 经 curl|bash 远程执行时，SCRIPT_DIR 指向 bash 抽取的临时目录，本地构建产物
+# 需按常见目录回退探测（当前目录 / 上一级目录），否则会误判"无本地产物"。
+resolve_local_src() {
+  local candidates=(
+    "${SCRIPT_DIR:-}/../$1"
+    "$(pwd)/$1"
+    "$(pwd)/../$1"
+    "$(dirname "$(pwd)")/$1"
+  )
+  for c in "${candidates[@]}"; do
+    if [ -e "${c}" ]; then
+      printf '%s' "${c}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+WEB_SRC="$(resolve_local_src "web/dist")" || true
 # ==================================================
 
 PORT=""
@@ -229,6 +248,16 @@ DATA_DIR="${DATA_DIR:-$DEFAULT_DATA_DIR}"
 # binary source
 BIN_SRC="${BIN_SRC:-$DEFAULT_BIN_SRC}"
 if [ ! -f "${BIN_SRC}" ]; then
+  # 经 curl|bash 远程执行：探测当前目录/仓库目录中的本地产物
+  if [ "${BIN_SRC_EXPLICIT}" != "1" ]; then
+    DISCOVERED_BIN="$(resolve_local_src "bin/${APP_NAME}")" || true
+    if [ -n "${DISCOVERED_BIN:-}" ]; then
+      ok "已从仓库目录发现本地产物 ${gl_bai}${DISCOVERED_BIN}${reset}"
+      BIN_SRC="${DISCOVERED_BIN}"
+    fi
+  fi
+fi
+if [ ! -f "${BIN_SRC}" ]; then
   if [ "${BIN_SRC_EXPLICIT}" = "1" ]; then
     error "未找到二进制文件 ${BIN_SRC}（-b 显式指定）"
   fi
@@ -270,15 +299,16 @@ ok "正在创建数据目录 ${gl_lan}${DATA_DIR}${reset} ${gl_hong}.${gl_huang}
 mkdir -p "${DATA_DIR}/data" "${DATA_DIR}/cache"
 chmod 700 "${DATA_DIR}"
 
-# 可选：复制前端构建产物（二进制内嵌了前端，拷贝后可用外部目录覆盖）
+# 可选：复制前端构建产物（二进制已内嵌前端；拷贝后可用外部目录覆盖并启用
+# immutable 缓存。未找到时仍由内嵌副本提供服务，页面不会 404。）
 WEB_DIR_LINE=""
-if [ -d "${WEB_SRC}" ]; then
+if [ -n "${WEB_SRC:-}" ] && [ -d "${WEB_SRC}" ]; then
   mkdir -p "${DATA_DIR}/web-dist"
   cp -rf "${WEB_SRC}/." "${DATA_DIR}/web-dist/"
   WEB_DIR_LINE="Environment=NOWEN_APP_WEB_DIR=${DATA_DIR}/web-dist"
   ok "已复制前端资源至 ${gl_bai}${DATA_DIR}/web-dist${reset}"
 else
-  skip "未找到前端构建产物 ${gl_bai}${WEB_SRC}${reset}，使用二进制内嵌前端。"
+  skip "未找到磁盘前端产物，使用二进制内嵌前端（页面无需额外文件即可访问）。"
 fi
 
 mkdir -p "$(dirname "${CONFIG_FILE}")"

@@ -2,7 +2,9 @@ package main
 
 import (
 	"net/http"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/fan-video/fan-video/internal/pwa"
@@ -19,8 +21,9 @@ import (
 //     摆脱对运行时构建目录、文件权限、以及反向代理对顶层路径拦截的依赖：无论在何种
 //     部署形态下都稳定可用。
 //
-// 所有非 PWA 的 /assets/* 仍回落到 webDir/assets 磁盘目录（内容哈希、可 immutable 缓存）。
-func registerPWAAndAssets(r *gin.Engine, webDir string) {
+// 所有非 PWA 的 /assets/* 仍回落到 webDir/assets 磁盘目录（内容哈希、可 immutable 缓存）；
+// 磁盘目录缺失时由 webRoot（internal/embedded）的内嵌副本兜底，任何部署形态下页面资源都可用。
+func registerPWAAndAssets(r *gin.Engine, webDir string, webRoot http.FileSystem) {
 	r.GET("/assets/*filepath", func(c *gin.Context) {
 		reqPath := c.Param("filepath")
 		switch reqPath {
@@ -44,6 +47,13 @@ func registerPWAAndAssets(r *gin.Engine, webDir string) {
 			return
 		}
 		c.Header("Cache-Control", "public, max-age=31536000, immutable")
-		c.File(filePath)
+		if webDir != "" {
+			if _, err := os.Stat(filepath.Join(webDir, "index.html")); err == nil {
+				c.File(filePath)
+				return
+			}
+		}
+		// 磁盘前端缺失（Release 二进制直装场景）：从内嵌副本提供。
+		serveFrontendFile(c, webRoot, "assets"+path.Clean("/"+reqPath), "")
 	})
 }

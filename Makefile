@@ -1,4 +1,4 @@
-.PHONY: all build build-lite build-full build-server build-server-full build-web run run-full dev dev-full dev-server dev-server-full dev-web clean docker docker-full docker-stop tidy sync-pwa
+.PHONY: all build build-lite build-full build-server build-server-full build-web run run-full dev dev-full dev-server dev-server-full dev-web clean docker docker-full docker-stop tidy sync-pwa sync-webdist
 
 VERSION ?= $(shell git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null | sed 's/^v//' || echo 0.1.0)
 GO_VERSION_PKG := github.com/fan-video/fan-video/internal/version.Version
@@ -27,8 +27,16 @@ sync-pwa:
 	@cp web/public/assets/sw.js internal/pwa/sw.js
 	@cp web/public/assets/manifest.json internal/pwa/manifest.json
 
+# 将前端构建产物同步到 internal/embedded/dist，供 go:embed 内嵌进二进制。
+# 这样 Release 二进制自包含：即便部署机器上没有任何磁盘 web/dist，
+# server-lite 也能回退到内嵌副本提供页面（见 internal/embedded.Resolve）。
+.PHONY: sync-webdist
+sync-webdist:
+	@mkdir -p internal/embedded/dist
+	@cp -rf web/dist/. internal/embedded/dist/
+
 build-server:
-	@$(MAKE) -s sync-pwa
+	@$(MAKE) -s sync-pwa sync-webdist
 	@CGO_ENABLED=1 NOWEN_VERSION=$(VERSION) go build -ldflags "$(GO_LDFLAGS)" -o bin/fan-video ./cmd/server-lite
 
 build-server-full:
@@ -36,13 +44,14 @@ build-server-full:
 
 build-web:
 	cd web && VITE_APP_VERSION=$(VERSION) npm run build
+	@$(MAKE) -s sync-webdist
 
 # 默认开发模式运行 Nowen Video 正式服务端。
 # cmd/server-lite 暂作为内部稳定实现路径保留，避免破坏数据库迁移与回滚链路；
 # 它不再代表一个对外的 Lite 产品版本。
 # Go 服务直接读取 web/dist，因此每次启动前必须重建当前分支前端。
 dev: build-web
-	@$(MAKE) -s sync-pwa
+	@$(MAKE) -s sync-pwa sync-webdist
 	@NOWEN_APP_PORT=$(DEV_SERVER_PORT) NOWEN_DEBUG=true NOWEN_VERSION=$(VERSION) go run -ldflags "$(GO_LDFLAGS)" ./cmd/server-lite
 
 # 旧版完整服务，仅用于兼容验证与必要回滚。
@@ -52,7 +61,7 @@ dev-full: build-web
 # 仅供明确需要复用现有 dist 的后端调试场景使用。
 # 常规开发请使用 make dev。
 dev-server:
-	@$(MAKE) -s sync-pwa
+	@$(MAKE) -s sync-pwa sync-webdist
 	@NOWEN_APP_PORT=$(DEV_SERVER_PORT) NOWEN_DEBUG=true NOWEN_VERSION=$(VERSION) go run -ldflags "$(GO_LDFLAGS)" ./cmd/server-lite
 
 dev-server-full:
@@ -80,6 +89,7 @@ docker-stop:
 clean:
 	rm -rf bin/
 	rm -rf cache/transcode/
+	rm -rf internal/embedded/dist/
 	cd web && rm -rf dist/ node_modules/
 
 install-web:

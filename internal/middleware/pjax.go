@@ -3,9 +3,9 @@ package middleware
 import (
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/fan-video/fan-video/internal/embedded"
 	"github.com/gin-gonic/gin"
 )
 
@@ -40,14 +40,16 @@ func PJAX(webDir string) gin.HandlerFunc {
 			return
 		}
 
-		// 读取同一份 index.html，抽取 <body>...</body> 之间的主体片段返回。
-		fragment, err := readBodyFragment(filepath.Join(webDir, "index.html"))
+		// 读取同一份 index.html（优先磁盘 webDir，缺失时回退二进制内嵌副本），
+		// 抽取 <body>...</body> 之间的主体片段返回。
+		html, err := embedded.IndexHTML(webDir)
 		if err != nil {
 			// 读取失败时降级为完整页面，保证任何情况下页面都可用。
 			c.Next()
 			return
 		}
 
+		fragment := extractBodyFragment(string(html))
 		c.Header("Content-Type", "text/html; charset=utf-8")
 		c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
 		c.Header("Pragma", "no-cache")
@@ -57,9 +59,30 @@ func PJAX(webDir string) gin.HandlerFunc {
 	}
 }
 
-// readBodyFragment 读取 index.html，抽取 <body> ... </body> 之间的主体片段。
+// extractBodyFragment 从完整 HTML 文档中抽取 <body> ... </body> 之间的主体片段。
 // 返回的片段保留 body 内的挂载点(root)与模块脚本，React 挂载后即可完成路由渲染，
 // 是 SPA 场景下可作为“页面主体片段”交付的最小单元。
+func extractBodyFragment(html string) string {
+	start := strings.Index(html, "<body")
+	if start < 0 {
+		return html
+	}
+	// 找到 <body ...> 的闭合 '>'，片段从该处之后开始。
+	gt := strings.IndexByte(html[start:], '>')
+	if gt < 0 {
+		return html
+	}
+	contentStart := start + gt + 1
+
+	end := strings.LastIndex(html, "</body>")
+	if end < 0 || end < contentStart {
+		return html
+	}
+
+	return strings.TrimSpace(html[contentStart:end])
+}
+
+// readBodyFragment 读取 index.html，抽取 <body> ... </body> 之间的主体片段。
 func readBodyFragment(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

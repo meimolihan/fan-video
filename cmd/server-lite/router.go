@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/fan-video/fan-video/internal/config"
+	"github.com/fan-video/fan-video/internal/embedded"
 	"github.com/fan-video/fan-video/internal/handler"
 	"github.com/fan-video/fan-video/internal/middleware"
 	"github.com/fan-video/fan-video/internal/pwa"
@@ -121,7 +122,8 @@ func buildRouter(
 	mediaAnalysisHandler := handler.NewMediaAnalysisHandler(mediaAnalysisService, logger)
 
 	startMaintenanceJobs(repos)
-	registerPublicRoutes(r, cfg, handlers, profileRuntime, appVer, jwtMiddleware, jwtRefreshMiddleware, wsMiddleware)
+	webRoot := embedded.Resolve(cfg.App.WebDir)
+	registerPublicRoutes(r, cfg, handlers, profileRuntime, appVer, jwtMiddleware, jwtRefreshMiddleware, wsMiddleware, webRoot)
 	registerCoreAPI(r, cfg, services, handlers, playbackPlanHandler, playbackSessionHandler, mediaAnalysisHandler, mediaAnalysisService, repos, jwtMiddleware)
 	registerAdminAPI(r, cfg, handlers, taskCenterHandler, runtimeHistoryHandler, jwtMiddleware)
 	r.POST("/api/admin/tasks/:kind/:id/:action", jwtMiddleware, middleware.AdminOnly(), taskCenterHandler.Action)
@@ -141,12 +143,12 @@ func buildRouter(
 	r.GET("/pulse", redirectLegacyPulse)
 	r.GET("/pulse/*path", redirectLegacyPulse)
 
-	registerPWAAndAssets(r, cfg.App.WebDir)
+	registerPWAAndAssets(r, cfg.App.WebDir, webRoot)
 	r.NoRoute(func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
 		c.Header("Pragma", "no-cache")
 		c.Header("Expires", "0")
-		c.File(cfg.App.WebDir + "/index.html")
+		serveFrontendFile(c, webRoot, "index.html", "")
 	})
 	return r
 }
@@ -171,6 +173,7 @@ func registerPublicRoutes(
 	jwtMiddleware gin.HandlerFunc,
 	jwtRefreshMiddleware gin.HandlerFunc,
 	wsMiddleware gin.HandlerFunc,
+	webRoot http.FileSystem,
 ) {
 	auth := r.Group("/api/auth")
 	auth.POST("/login", handlers.Auth.Login)
@@ -224,7 +227,7 @@ func registerPublicRoutes(
 	r.GET("/favicon.ico", func(c *gin.Context) {
 		c.Header("Content-Type", "image/png")
 		c.Header("Cache-Control", "public, max-age=604800")
-		c.File(cfg.App.WebDir + "/assets/icon-192.png")
+		serveFrontendFile(c, webRoot, "assets/icon-192.png", "")
 	})
 	r.GET("/webmanifest", func(c *gin.Context) {
 		c.Header("Content-Type", "application/manifest+json")
