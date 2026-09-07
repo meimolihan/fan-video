@@ -1144,3 +1144,14 @@
  */
 
 
+
+/* ==========================================================================
+ * 审计公开修复块（播放器）——触屏粗指针下把关键控件热区提到 ≥44px
+ * ========================================================================== */
+@media (hover: none) and (pointer: coarse) {
+  .group\/player .player-overlay-close,
+  .group\/player .player-overlay-toolbar-btn {
+    height: 44px;
+    min-width: 44px;
+  }
+}

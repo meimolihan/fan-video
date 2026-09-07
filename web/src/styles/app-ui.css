@@ -11956,3 +11956,158 @@ html body .nv-app-shell .nv-rail-brand {
     gap: 5px !important;
   }
 }
+
+/* ==========================================================================
+ * 审计公开修复块（本仓库 UI 审计汇总）
+ * 仅新增样式，不改 DOM / 类名 / JS。放在 app-ui.css 末尾以赢得级联。
+ * ========================================================================== */
+
+/* --------------------------------------------------------------------------
+ * A1. 补齐 6 个「被引用但从未定义」的 CSS 变量（复用既有同义变量）。
+ *     影响：HomeFeaturedPanel / HighlightsBatchPanel 边框边缘、
+ *           SeriesPosterPickerModal 悬停/占位底、ErrorBoundary 主按钮文字、
+ *           LoginPage 默认密码徽章底、剧集进度条轨道、频道源列表底。
+ * ------------------------------------------------------------------------ */
+:root,
+[data-theme="dark"] {
+  --nv-border: var(--nv-border-default);
+  --nv-bg-input: var(--nv-bg-control);
+  --nv-border-focus: var(--nv-action-primary);
+  --nv-bg-subtle: var(--nv-fill-hover);
+  --nv-color-on-primary: var(--nv-text-on-brand);
+  --nv-fill-subtle: var(--nv-fill-hover);
+}
+
+[data-theme="light"] {
+  --nv-border: var(--nv-border-default);
+  --nv-bg-input: var(--nv-bg-control);
+  --nv-border-focus: var(--nv-action-primary);
+  --nv-bg-subtle: var(--nv-fill-hover);
+  --nv-color-on-primary: var(--nv-text-on-brand);
+  --nv-fill-subtle: var(--nv-fill-hover);
+}
+
+/* --------------------------------------------------------------------------
+ * A2. 浅色模式下进度条轨道误用深色（pages-theme:1591 的 !important 压过了
+ *     pages-theme:676 的浅色覆盖）。这里用更高的主题化专用选择器更正，
+ *     并以相同的 !important 权重在级联中胜出（app-ui.css 加载次序在
+ *     pages-theme.css 之后）。
+ * ------------------------------------------------------------------------ */
+[data-theme="light"] .nv-media-card-progress {
+  background: rgba(23, 28, 45, .13) !important;
+}
+[data-theme="light"] .nv-media-card-progress > span {
+  background: var(--nv-action-primary) !important;
+}
+
+/* --------------------------------------------------------------------------
+ * B1. 触屏（粗指针）命中目标 ≥44px：现有 base.css 只覆盖 ≤479px 全部按钮 +
+ *     粗指针下的一小撮 40px 控件；把平板 >479px 暴露的不达标按钮补齐，
+ *     并把既有 40px 类提升到 44px。同时弱化 hover-only 副作用。
+ * ------------------------------------------------------------------------ */
+@media (hover: none) and (pointer: coarse) {
+  .nv-button,
+  .nv-filter-chip,
+  .nv-pagination-arrow,
+  .nv-pagination-page,
+  .nv-rail-action,
+  .nv-menu-item {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* 认证页：密码可见性切换 / 复制默认密码 */
+  .nv-auth-root form button[type="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* 列表行 / 海报覆盖层播放按钮（title="立即播放"） */
+  button[title="立即播放"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* 管理页标签、剧集横滑、媒体横条的滚动箭头 */
+  button[aria-label$="向左滚动"],
+  button[aria-label$="向右滚动"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* 文件浏览器面包屑 */
+  nav[aria-label="当前文件夹路径"] button {
+    min-height: 44px;
+    min-width: 40px;
+  }
+
+  /* 文件选择覆盖层复选框 */
+  button[class*="h-7 w-7"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* 右键菜单条目 */
+  [role="menu"] button {
+    min-height: 44px;
+  }
+
+  /* 详情页后台操作按钮：覆盖 760px 断点下被压缩到 32px 的规则 */
+  .nv-detail-admin-actions .nv-button {
+    width: 44px !important;
+    min-width: 44px !important;
+  }
+
+  /* 开关：伪元素扩大点击热区到 ~44px，不改视觉 */
+  [role="switch"] {
+    position: relative !important;
+  }
+  [role="switch"]::before {
+    content: "";
+    position: absolute;
+    inset: -10px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * B2. 触屏常显 hover 才浮现的交互控件（进度条手柄 / 删除/滚动箭头 / 播放遮罩）
+ * ------------------------------------------------------------------------ */
+@media (hover: none) and (pointer: coarse) {
+  button[class*="group-hover:opacity-100"],
+  [class*="group-hover:opacity-100"]:has(button),
+  [class*="group-hover:opacity-100"]:has(a),
+  [class*="group-hover/series-slider:opacity-100"],
+  [class*="group-hover/progress:opacity-100"] {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * B3. 极端窄屏（≤479px）不让封面网格挤成 3 列：回到 2 列基线。
+ *     覆盖 pages-theme.css:2476 在 ≤640px 强加的 repeat(3)。
+ * ------------------------------------------------------------------------ */
+@media (max-width: 479px) {
+  .nv-media-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 14px 10px !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * C1. 管理面板合并候选表格：超长「包含的标题」不把单元格顶破（ellipsis）。
+ * ------------------------------------------------------------------------ */
+.nv-admin-panel table[class*="min-w-[640px]"] td,
+.nv-admin-panel table[class*="min-w-[640px]"] th {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+ * C2. 极小字号：9px 提高到 10px（可读性底线）。
+ * ------------------------------------------------------------------------ */
+[class*="text-[9px]"] {
+  font-size: 10px;
+}
