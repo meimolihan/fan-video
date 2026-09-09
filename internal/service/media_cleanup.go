@@ -98,7 +98,16 @@ func PurgeSeriesCompletely(
 			logger.Warnf("清理剧集缓存图片失败: %s, 错误: %v", series.Title, err)
 		}
 	}
-	return seriesRepo.Delete(series.ID)
+	// 注意：必须是物理删除而非软删除。软删除的行会被 FindByFolderPath /
+	// FindByTitleAndLibrary 通过 Unscoped 复活，导致"已删除剧集目录"的旧刮削信息在
+	// 后续扫描（目录重建或重新归类）时再次出现在 UI。
+	return ApplySeriesDelete(db, series.ID)
+}
+
+// ApplySeriesDelete 永久删除剧集合集行（物理删除）。与媒体表的硬删除语义一致，
+// 也与 CleanEmptySeries 的 Unscoped 删除保持一致。
+func ApplySeriesDelete(db *gorm.DB, seriesID string) error {
+	return db.Unscoped().Delete(&model.Series{}, "id = ?", seriesID).Error
 }
 
 // PurgeEmptySeriesInLibrary 清理指定媒体库下已经没有任何剧集文件的空合集，

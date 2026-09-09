@@ -390,6 +390,14 @@ func (s *ScannerService) ScanLibraryWithOptions(library *model.Library, opts Sca
 		sizeRemoved = s.purgeUndersizedMedia(library)
 	}
 
+	// 空剧集合集清理：剧集目录被整体删除、或集数文件在前几次扫描/文件监听/过小清理
+	// 中已移除后，剧集记录会变成携带刮削信息（海报/简介/演职人员）的"空壳"，UI 仍会展示。
+	// 该清理不依赖本轮是否清理了失效媒体（依赖则漏掉"媒体早已清除"的场景），
+	// 只要扫描完成后某合集已无任何剧集文件，就无条件移除。
+	if n := PurgeEmptySeriesInLibrary(s.seriesRepo, s.mediaRepo, s.cfg.Cache.CacheDir, s.logger, library.ID); n > 0 {
+		s.logger.Infof("扫描清理: 移除已无剧集文件的空合集 %d 个 (媒体库: %s)", n, library.Name)
+	}
+
 	// 首帧封面修复：对当前仍以「首帧图片」作为海报的视频，检查视频目录是否已新增
 	// 真实海报；若两者同时匹配，则删除首帧封面并把海报更新为目录海报。
 	// 该修复在扫描完成后统一执行，确保增量扫描跳过未改动文件时也能生效。
