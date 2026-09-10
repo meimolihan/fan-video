@@ -351,21 +351,56 @@ func (s *MetadataService) SetSeriesPosterFromMedia(seriesID, mediaID string) (st
 		return "", fmt.Errorf("媒体不存在")
 	}
 
-	if media.PosterPath == "" {
-		return "", fmt.Errorf("该媒体没有可用的海报")
+	posterPath := media.PosterPath
+
+	// 数据库中的海报路径可能已失效（封面文件被重命名/删除，如 .jpg -> .webp），
+	// 读取前先校验文件是否存在；失效时尝试重新匹配本地图片并回写，
+	// 避免「设置剧集海报失败：读取海报文件失败」。若匹配不到替代图片，则返回
+	// 明确提示而非底层文件系统错误。
+	if !s.pathExists(posterPath) {
+		if poster, _ := s.findLocalImagesForMedia(media.FilePath); poster != "" {
+			posterPath = poster
+			if media.PosterPath != poster {
+				media.PosterPath = poster
+				_ = s.mediaRepo.Update(media)
+			}
+		}
+		if !s.pathExists(posterPath) {
+			return "", fmt.Errorf("该媒体的海报文件已失效，且未找到可用的本地替代图片")
+		}
 	}
 
-	data, err := os.ReadFile(media.PosterPath)
+	data, err := os.ReadFile(posterPath)
 	if err != nil {
 		return "", fmt.Errorf("读取海报文件失败: %w", err)
 	}
 
-	ext := strings.ToLower(filepath.Ext(media.PosterPath))
+	ext := strings.ToLower(filepath.Ext(posterPath))
 	if ext == "" {
 		ext = ".jpg"
 	}
 
 	return s.SaveUploadedImageForSeries(seriesID, data, ext, "poster")
+}
+
+// pathExists 判断数据库记录的图片路径是否仍存在（支持 webdav://）。
+func (s *MetadataService) pathExists(p string) bool {
+	if p == "" {
+		return false
+	}
+	if s.nfoService != nil {
+		return s.nfoService.PathExists(p)
+	}
+	_, err := os.Stat(p)
+	return err == nil
+}
+
+// findLocalImagesForMedia 重新匹配某个媒体文件对应的本地海报（失效路径兜底）。
+func (s *MetadataService) findLocalImagesForMedia(filePath string) (poster, backdrop string) {
+	if s.nfoService == nil || filePath == "" {
+		return "", ""
+	}
+	return s.nfoService.FindLocalImagesForMedia(filePath)
 }
 
 // DownloadURLImageForMedia 从 URL 下载图片并保存到本地，更新 Media 的图片路径

@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback, type ImgHTMLAttributes } from 'react'
+import { trackBlobUrl, untrackBlobUrl } from '@/utils/posterCache'
 
 type PosterImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> & {
   src: string
@@ -63,6 +64,13 @@ export default function PosterImage({ src, thumbSrc, onError, ...rest }: PosterI
   const showHd = hdReady
   const showThumb = thumbSrc && !showHd
   const currentSrc = showHd ? src : thumbSrc || src
+
+  // 正在展示的 objectURL 计入引用：被淘汰时若仍被引用则延迟 revoke，
+  // 防止图片挂载中却因缓存回收变成空白（如首页轮播当前帧）。
+  useEffect(() => {
+    trackBlobUrl(currentSrc)
+    return () => untrackBlobUrl(currentSrc)
+  }, [currentSrc])
 
   // thumbSrc 存在时：先加载 thumb，等 hdReady 后切换 src
   // thumbSrc 不存在时：直接加载原图（由浏览器 lazy 控制）

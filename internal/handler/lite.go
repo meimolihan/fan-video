@@ -54,7 +54,7 @@ func NewLiteHandlers(services *service.Services, repos *repository.Repositories,
 			logger:         logger,
 		},
 		BatchMetadata: &BatchMetadataHandler{batchService: services.BatchMetadata, importExportSvc: services.ImportExport, logger: logger},
-		Storage:       NewStorageHandler(services.WebDAV, services.RemoteStorage, cfg, logger),
+		Storage:       NewStorageHandler(services.WebDAV, services.RemoteStorage, repos.Library, cfg, logger),
 		Collection: &CollectionHandler{
 			collectionService: services.Collection,
 			streamService:     services.Stream,

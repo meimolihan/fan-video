@@ -62,6 +62,48 @@ function releaseToken() {
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
+/**
+ * blob objectURL 引用计数：revoke 只在该 URL 不再被任何 <img> 使用时进行。
+ *
+ * 背景：页面中的海报多数是「先渲染、长期驻留」的（如首页轮播当前帧）。
+ * 若 FIFO 淘汰时直接 revoke 仍被 <img> 引用的 objectURL，图片会立刻变成空白，
+ * 且 revoke 的 blob 不会触发 onerror——前端没有机会回退，只能等组件重新解析
+ * （导航离开再回来）才恢复，表现为「海报突然全部消失」。
+ */
+const blobRefCounts = new Map<string, number>()
+/** 淘汰时仍被引用、待其引用归零后再 revoke 的 URL */
+const deferredBlobRevokes = new Set<string>()
+
+function safeRevoke(url: string) {
+  try {
+    URL.revokeObjectURL(url)
+  } catch {
+    // revoke 失败不影响其余缓存
+  }
+}
+
+/** 一个 <img> 正在展示该 objectURL（渲染挂载时调用） */
+export function trackBlobUrl(url: string | null | undefined): void {
+  if (!url || !url.startsWith('blob:')) return
+  blobRefCounts.set(url, (blobRefCounts.get(url) || 0) + 1)
+  deferredBlobRevokes.delete(url)
+}
+
+/** 该 objectURL 不再被展示（卸载 / 换源时调用） */
+export function untrackBlobUrl(url: string | null | undefined): void {
+  if (!url || !url.startsWith('blob:')) return
+  const count = (blobRefCounts.get(url) || 0) - 1
+  if (count <= 0) {
+    blobRefCounts.delete(url)
+    if (deferredBlobRevokes.has(url)) {
+      deferredBlobRevokes.delete(url)
+      safeRevoke(url)
+    }
+    return
+  }
+  blobRefCounts.set(url, count)
+}
+
 function setMemUrl(key: string, objUrl: string) {
   // 已存在同一 key 的 objectURL，直接复用，避免重复创建与占用。
   if (memUrls.has(key)) return
@@ -70,11 +112,14 @@ function setMemUrl(key: string, objUrl: string) {
     const oldestKey = memUrls.keys().next().value as string
     const oldestUrl = memUrls.get(oldestKey)
     memUrls.delete(oldestKey)
-    try {
-      if (oldestUrl) URL.revokeObjectURL(oldestUrl)
-    } catch {
-      // revoke 失败不影响其余缓存
+    if (!oldestUrl) continue
+    // 仍被页面中的 <img> 引用：延迟 revoke，等引用归零后再释放，
+    // 避免轮播/随手势保持显示的插图在淘汰瞬间变成空白。
+    if ((blobRefCounts.get(oldestUrl) || 0) > 0) {
+      deferredBlobRevokes.add(oldestUrl)
+      continue
     }
+    safeRevoke(oldestUrl)
   }
 }
 

@@ -4,9 +4,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"github.com/fan-video/fan-video/internal/config"
+	"github.com/fan-video/fan-video/internal/repository"
 	"github.com/fan-video/fan-video/internal/service"
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
@@ -16,15 +17,17 @@ import (
 type StorageHandler struct {
 	webdavService        *service.WebDAVService
 	remoteStorageService *service.RemoteStorageService // V2.3: Alist / S3
+	libraryRepo          *repository.LibraryRepo
 	cfg                  *config.Config
 	logger               *zap.SugaredLogger
 }
 
 // NewStorageHandler 创建存储管理处理器
-func NewStorageHandler(webdavService *service.WebDAVService, remoteStorageService *service.RemoteStorageService, cfg *config.Config, logger *zap.SugaredLogger) *StorageHandler {
+func NewStorageHandler(webdavService *service.WebDAVService, remoteStorageService *service.RemoteStorageService, libraryRepo *repository.LibraryRepo, cfg *config.Config, logger *zap.SugaredLogger) *StorageHandler {
 	return &StorageHandler{
 		webdavService:        webdavService,
 		remoteStorageService: remoteStorageService,
+		libraryRepo:          libraryRepo,
 		cfg:                  cfg,
 		logger:               logger,
 	}
@@ -202,8 +205,9 @@ func (h *StorageHandler) GetStorageStatus(c *gin.Context) {
 	response := gin.H{
 		"webdav": webdavStatus,
 		"local": gin.H{
-			"enabled": true,
-			"type":    "local",
+			"enabled":   true,
+			"type":      "local",
+			"connected": h.isLocalStorageConnected(),
 		},
 	}
 	if remoteStatus != nil {
@@ -212,6 +216,28 @@ func (h *StorageHandler) GetStorageStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": response})
+}
+
+// isLocalStorageConnected 本地存储（文件系统直读）的连接状态：
+// 只要存在配置了本地路径（非 webdav:// / alist:// / s3:// 前缀）的媒体库，
+// 本地存储即视为已连接；媒体库全部迁移到远程存储后显示为未连接。
+// 不依据目录实时挂载状态判断，避免远程挂载瞬时不可用导致状态抖动。
+func (h *StorageHandler) isLocalStorageConnected() bool {
+	if h.libraryRepo == nil {
+		return false
+	}
+	libraries, err := h.libraryRepo.List()
+	if err != nil {
+		return false
+	}
+	for i := range libraries {
+		for _, path := range libraries[i].AllPaths() {
+			if !service.IsRemotePath(path) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // maskPassword 密码掩码处理

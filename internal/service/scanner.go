@@ -409,6 +409,11 @@ func (s *ScannerService) ScanLibraryWithOptions(library *model.Library, opts Sca
 	if err == nil {
 		s.healFirstFramePosters(library)
 	}
+	// 失效封面修复：数据库仍指向已被重命名/删除的图片文件（如 目录海报.jpg -> .webp）时，
+	// 重新匹配本地图片并回写，避免「扫描全部」后旧路径读取失败。
+	if err == nil {
+		s.healStaleArtwork(library)
+	}
 	// 首帧缓存垃圾回收：清理已被真实海报替换后遗留的孤儿首帧文件。
 	// 与 healFirstFramePosters 不同，这里按全体媒体/剧集引用做全局比对，
 	// 不依赖键匹配或目录海报匹配规则，能可靠删除任何残留首帧缓存。
@@ -493,6 +498,93 @@ func (s *ScannerService) healFirstFramePosters(library *model.Library) {
 	}
 	if deletedFiles > 0 {
 		s.logger.Infof("扫描后清理首帧封面缓存: 删除 %d 个文件", deletedFiles)
+	}
+}
+
+// healStaleArtwork 修复数据库中已经失效的海报/背景图路径：
+// 当用户重命名/删除封面图片文件（例如 目录海报.jpg -> .webp）后，数据库仍记录旧路径，
+// 导致「设置剧集海报」等读取操作失败。该修复在扫描完成后统一执行，
+// 对仍指向不存在文件的库内海报/背景图路径重新匹配本地图片并回写。
+func (s *ScannerService) healStaleArtwork(library *model.Library) {
+	if s.nfoService == nil || library == nil {
+		return
+	}
+	mediaList, err := s.mediaRepo.ListByLibraryID(library.ID)
+	if err != nil {
+		s.logger.Warnf("加载媒体库失效封面修复列表失败: %v", err)
+		return
+	}
+	healedPosts := 0
+	healedSeries := 0
+	for i := range mediaList {
+		m := &mediaList[i]
+		// 仅处理本地视频
+		if m.FilePath == "" || m.StreamURL != "" || IsWebDAVPath(m.FilePath) {
+			continue
+		}
+		stalePoster := m.PosterPath != "" && !s.nfoService.PathExists(m.PosterPath)
+		staleBackdrop := m.BackdropPath != "" && !s.nfoService.PathExists(m.BackdropPath)
+		if !stalePoster && !staleBackdrop {
+			continue
+		}
+		poster, backdrop := s.nfoService.FindLocalImagesForMedia(m.FilePath)
+		changed := false
+		if stalePoster && poster != "" {
+			m.PosterPath = poster
+			changed = true
+		}
+		if staleBackdrop && backdrop != "" {
+			m.BackdropPath = backdrop
+			changed = true
+		}
+		if changed {
+			if err := s.mediaRepo.Update(m); err != nil {
+				s.logger.Warnf("修复失效封面失败 media=%s: %v", m.ID, err)
+			} else {
+				healedPosts++
+				s.logger.Debugf("失效封面已修复 media=%s: %s", m.ID, m.PosterPath)
+			}
+		}
+	}
+
+	// 剧集/合集级海报路径同样可能失效（复用分集封面或目录封面被改名/删除时）
+	seriesList, err := s.seriesRepo.ListByLibraryID(library.ID)
+	if err != nil {
+		s.logger.Warnf("加载剧集失效封面修复列表失败: %v", err)
+		return
+	}
+	for i := range seriesList {
+		series := &seriesList[i]
+		stalePoster := series.PosterPath != "" && !s.nfoService.PathExists(series.PosterPath)
+		staleBackdrop := series.BackdropPath != "" && !s.nfoService.PathExists(series.BackdropPath)
+		if !stalePoster && !staleBackdrop {
+			continue
+		}
+		if series.FolderPath == "" {
+			continue
+		}
+		poster, backdrop := s.nfoService.FindLocalImagesDeep(series.FolderPath)
+		changed := false
+		if stalePoster && poster != "" {
+			series.PosterPath = poster
+			changed = true
+		}
+		if staleBackdrop && backdrop != "" {
+			series.BackdropPath = backdrop
+			changed = true
+		}
+		if changed {
+			if err := s.seriesRepo.Update(series); err != nil {
+				s.logger.Warnf("修复剧集失效封面失败 series=%s: %v", series.ID, err)
+			} else {
+				healedSeries++
+				s.logger.Debugf("剧集失效封面已修复 series=%s: %s", series.ID, series.PosterPath)
+			}
+		}
+	}
+
+	if healedPosts > 0 || healedSeries > 0 {
+		s.logger.Infof("扫描后失效封面修复: 媒体 %d 个, 剧集 %d 个", healedPosts, healedSeries)
 	}
 }
 

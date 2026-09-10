@@ -64,6 +64,15 @@ func (s *NFOService) statPath(p string) (os.FileInfo, error) {
 	return os.Stat(p)
 }
 
+// PathExists 判断路径指向的文件是否仍然存在（支持 webdav://）。
+func (s *NFOService) PathExists(p string) bool {
+	if p == "" {
+		return false
+	}
+	_, err := s.statPath(p)
+	return err == nil
+}
+
 // readDir 读取目录（支持 webdav://）
 func (s *NFOService) readDir(p string) ([]os.DirEntry, error) {
 	if s.vfsMgr != nil && IsWebDAVPath(p) {

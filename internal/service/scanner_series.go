@@ -485,11 +485,11 @@ func (s *ScannerService) scanMultiSeasonSeries(library *model.Library, seriesTit
 	// 识别本地海报封面图片（从各季目录中查找；含封面子目录）
 	for _, f := range folders {
 		if poster, backdrop := s.nfoService.FindLocalImagesDeep(f.path); poster != "" || backdrop != "" {
-			if poster != "" && series.PosterPath == "" {
+			if poster != "" && (series.PosterPath == "" || !s.nfoService.PathExists(series.PosterPath)) {
 				series.PosterPath = poster
 				s.logger.Debugf("发现多季合集本地海报: %s", poster)
 			}
-			if backdrop != "" && series.BackdropPath == "" {
+			if backdrop != "" && (series.BackdropPath == "" || !s.nfoService.PathExists(series.BackdropPath)) {
 				series.BackdropPath = backdrop
 				s.logger.Debugf("发现多季合集本地背景图: %s", backdrop)
 			}
@@ -635,14 +635,16 @@ func (s *ScannerService) scanMultiSeasonSeries(library *model.Library, seriesTit
 				}
 				// [海报回填] 同 scanSeriesFolder：旧数据缺本地封面时重扫补齐；
 				// 旧版共享的通用命名封面也一并重算，保证每个视频独立海报。
-				healPoster := existing.PosterPath != "" && s.nfoService.IsLegacySharedCover(existing.PosterPath)
-				if existing.PosterPath == "" || healPoster || existing.BackdropPath == "" {
+				// 已入库路径指向的文件被重命名/删除（如 .jpg -> .webp）时同样触发重算。
+				healPoster := existing.PosterPath != "" && (s.nfoService.IsLegacySharedCover(existing.PosterPath) || !s.nfoService.PathExists(existing.PosterPath))
+				staleBackdrop := existing.BackdropPath != "" && !s.nfoService.PathExists(existing.BackdropPath)
+				if existing.PosterPath == "" || healPoster || existing.BackdropPath == "" || staleBackdrop {
 					poster, backdrop := s.nfoService.FindLocalImagesForMedia(ep.FilePath)
 					if poster != "" && (existing.PosterPath == "" || healPoster) {
 						existing.PosterPath = poster
 						needUpdate = true
 					}
-					if backdrop != "" && existing.BackdropPath == "" {
+					if backdrop != "" && (existing.BackdropPath == "" || staleBackdrop) {
 						existing.BackdropPath = backdrop
 						needUpdate = true
 					}
@@ -761,11 +763,11 @@ func (s *ScannerService) scanSeriesFolder(library *model.Library, folderPath, se
 
 	// 识别本地海报封面图片（含封面子目录，如 剧名/xxx_封面/01.jpg）
 	if poster, backdrop := s.nfoService.FindLocalImagesDeep(folderPath); poster != "" || backdrop != "" {
-		if poster != "" && series.PosterPath == "" {
+		if poster != "" && (series.PosterPath == "" || !s.nfoService.PathExists(series.PosterPath)) {
 			series.PosterPath = poster
 			s.logger.Debugf("发现剧集本地海报: %s", poster)
 		}
-		if backdrop != "" && series.BackdropPath == "" {
+		if backdrop != "" && (series.BackdropPath == "" || !s.nfoService.PathExists(series.BackdropPath)) {
 			series.BackdropPath = backdrop
 			s.logger.Debugf("发现剧集本地背景图: %s", backdrop)
 		}
@@ -838,14 +840,16 @@ func (s *ScannerService) scanSeriesFolder(library *model.Library, folderPath, se
 			// [海报回填] 旧数据可能没有挂本地封面图，重扫时补齐，
 			// 避免用户必须清库重扫才能看到海报。
 			// 旧版共享的通用命名封面也一并重算，保证每个视频独立海报。
-			healPoster := existing.PosterPath != "" && s.nfoService.IsLegacySharedCover(existing.PosterPath)
-			if existing.PosterPath == "" || healPoster || existing.BackdropPath == "" {
+			// 已入库路径指向的文件被重命名/删除（如 .jpg -> .webp）时同样触发重算。
+			healPoster := existing.PosterPath != "" && (s.nfoService.IsLegacySharedCover(existing.PosterPath) || !s.nfoService.PathExists(existing.PosterPath))
+			staleBackdrop := existing.BackdropPath != "" && !s.nfoService.PathExists(existing.BackdropPath)
+			if existing.PosterPath == "" || healPoster || existing.BackdropPath == "" || staleBackdrop {
 				poster, backdrop := s.nfoService.FindLocalImagesForMedia(ep.FilePath)
 				if poster != "" && (existing.PosterPath == "" || healPoster) {
 					existing.PosterPath = poster
 					needUpdate = true
 				}
-				if backdrop != "" && existing.BackdropPath == "" {
+				if backdrop != "" && (existing.BackdropPath == "" || staleBackdrop) {
 					existing.BackdropPath = backdrop
 					needUpdate = true
 				}

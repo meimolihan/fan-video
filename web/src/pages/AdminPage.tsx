@@ -15,7 +15,7 @@ import {
   WifiOff,
   Zap,
 } from 'lucide-react'
-import { adminApi, libraryApi } from '@/api'
+import { adminApi, libraryApi, storageApi } from '@/api'
 import { useWebSocket, WS_EVENTS } from '@/hooks/useWebSocket'
 import type { Library, SystemInfo, SystemSettings, User } from '@/types'
 import type { ScanPhaseData, ScanProgressData, ScrapeProgressData, TranscodeProgressData } from '@/hooks/useWebSocket'
@@ -233,12 +233,14 @@ export default function AdminPage() {
     hide_cast: false,
   })
 
-  const { connected, on, off } = useWebSocket()
+  const { on, off } = useWebSocket()
   const [scanProgress, setScanProgress] = useState<Record<string, ScanProgressData>>(() => persistedScanStateRef.current.scanProgress)
   const [scrapeProgress, setScrapeProgress] = useState<Record<string, ScrapeProgressData>>(() => persistedScanStateRef.current.scrapeProgress)
   const [transcodeProgress, setTranscodeProgress] = useState<Record<string, TranscodeProgressData>>({})
   const [scanPhase, setScanPhase] = useState<Record<string, ScanPhaseData>>(() => persistedScanStateRef.current.scanPhase)
   const [realtimeMessages, setRealtimeMessages] = useState<string[]>([])
+  // 当前已连接（首要）存储的名称：本地存储 / WebDAV / Alist 聚合网盘 / S3 对象存储
+  const [activeStorageLabel, setActiveStorageLabel] = useState<string | null>(null)
 
   const switchTab = useCallback((tab: TabId) => {
     setActiveTab(tab)
@@ -249,17 +251,26 @@ export default function AdminPage() {
 
   // 清空数据等破坏性操作完成后，重新拉取面板数据，避免「设置/系统状态」继续显示历史信息。
   const refreshAll = useCallback(async () => {
-    const [systemResult, libraryResult, userResult, settingsResult] = await Promise.allSettled([
+    const [systemResult, libraryResult, userResult, settingsResult, storageResult] = await Promise.allSettled([
       adminApi.systemInfo(),
       libraryApi.list(),
       adminApi.listUsers(),
       adminApi.getSystemSettings(),
+      storageApi.getStorageStatus(),
     ])
     if (systemResult.status === 'fulfilled') setSystemInfo(systemResult.value.data.data)
     if (libraryResult.status === 'fulfilled') setLibraries(libraryResult.value.data.data || [])
     if (userResult.status === 'fulfilled') setUsers(userResult.value.data.data || [])
     if (settingsResult.status === 'fulfilled' && settingsResult.value.data.data) {
       setSysSettings(settingsResult.value.data.data)
+    }
+    if (storageResult.status === 'fulfilled') {
+      const s = storageResult.value.data.data
+      if (s?.local?.connected) setActiveStorageLabel('本地存储')
+      else if (s?.webdav?.enabled && s?.webdav?.connected) setActiveStorageLabel('WebDAV')
+      else if (s?.alist?.enabled && s?.alist?.connected) setActiveStorageLabel('Alist 聚合网盘')
+      else if (s?.s3?.enabled && s?.s3?.connected) setActiveStorageLabel('S3 对象存储')
+      else setActiveStorageLabel(null)
     }
   }, [])
 
@@ -496,11 +507,12 @@ export default function AdminPage() {
     let active = true
 
     const loadAll = async () => {
-      const [systemResult, libraryResult, userResult, settingsResult, scanStatusResult] = await Promise.allSettled([
+      const [systemResult, libraryResult, userResult, settingsResult, storageResult, scanStatusResult] = await Promise.allSettled([
         adminApi.systemInfo(),
         libraryApi.list(),
         adminApi.listUsers(),
         adminApi.getSystemSettings(),
+        storageApi.getStorageStatus(),
         libraryApi.scanStatus(),
       ])
       if (!active) return
@@ -510,6 +522,14 @@ export default function AdminPage() {
       if (userResult.status === 'fulfilled') setUsers(userResult.value.data.data || [])
       if (settingsResult.status === 'fulfilled' && settingsResult.value.data.data) {
         setSysSettings(settingsResult.value.data.data)
+      }
+      if (storageResult.status === 'fulfilled') {
+        const s = storageResult.value.data.data
+        if (s?.local?.connected) setActiveStorageLabel('本地存储')
+        else if (s?.webdav?.enabled && s?.webdav?.connected) setActiveStorageLabel('WebDAV')
+        else if (s?.alist?.enabled && s?.alist?.connected) setActiveStorageLabel('Alist 聚合网盘')
+        else if (s?.s3?.enabled && s?.s3?.connected) setActiveStorageLabel('S3 对象存储')
+        else setActiveStorageLabel(null)
       }
 
       // Only reconcile persisted progress when the server status endpoint
@@ -596,9 +616,9 @@ export default function AdminPage() {
                   </div>
                 )}
               </div>
-              <AdminStatus tone={connected ? 'connected' : 'neutral'}>
-                {connected ? <Wifi size={13} /> : <WifiOff size={13} />}
-                {connected ? t('admin.connected') : t('admin.disconnected')}
+              <AdminStatus tone={activeStorageLabel ? 'connected' : 'neutral'}>
+                {activeStorageLabel ? <Wifi size={13} /> : <WifiOff size={13} />}
+                {activeStorageLabel || t('admin.disconnected')}
               </AdminStatus>
             </div>
           )}

@@ -14,7 +14,7 @@ import {
 import { Button, Input as DesignInput, Tag } from '@/components/design-system'
 import { AdminPanel, AdminStatus, type AdminStatusTone } from '@/components/admin/AdminPrimitives'
 
-export type ProviderState = 'connected' | 'error' | 'disabled' | 'idle'
+export type ProviderState = 'connected' | 'error' | 'disabled' | 'idle' | 'disconnected'
 
 type LegacyAccent = 'neon' | 'purple' | 'amber'
 type LegacyProviderAccent = 'blue' | 'purple' | 'amber' | 'emerald'
@@ -36,6 +36,11 @@ const STATUS_CONFIG: Record<
   disabled: {
     tone: 'neutral',
     label: '未启用',
+    icon: <WifiOff size={12} />,
+  },
+  disconnected: {
+    tone: 'neutral',
+    label: '未连接',
     icon: <WifiOff size={12} />,
   },
   idle: {

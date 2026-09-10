@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { libraryApi, storageApi } from '@/api'
-import type { AlistStatus, S3Status, WebDAVConfig, WebDAVStatus } from '@/api/storage'
+import type { AlistStatus, LocalStatus, S3Status, WebDAVConfig, WebDAVStatus } from '@/api/storage'
 import type { Library } from '@/types'
 import { getLibraryPaths } from '@/types'
 import {
@@ -78,6 +78,7 @@ export default function StorageTab() {
   const [registeringLib, setRegisteringLib] = useState<string | null>(null)
   const [alistStatus, setAlistStatus] = useState<AlistStatus | null>(null)
   const [s3Status, setS3Status] = useState<S3Status | null>(null)
+  const [localStatus, setLocalStatus] = useState<LocalStatus | null>(null)
   const [activeTab, setActiveTab] = useState<ProviderKey>('webdav')
 
   const loadAll = useCallback(async () => {
@@ -114,6 +115,7 @@ export default function StorageTab() {
       if (aggregateStatusResult.status === 'fulfilled') {
         setAlistStatus(aggregateStatusResult.value.data.data.alist || null)
         setS3Status(aggregateStatusResult.value.data.data.s3 || null)
+        setLocalStatus(aggregateStatusResult.value.data.data.local || null)
       } else {
         failed.push('存储聚合状态')
       }
@@ -178,6 +180,7 @@ export default function StorageTab() {
     }
   }
 
+  const localConnected = localStatus?.connected === true
   const providers = useMemo(
     () => [
       {
@@ -185,7 +188,7 @@ export default function StorageTab() {
         name: '本地存储',
         subtitle: '文件系统直读',
         icon: <HardDrive size={20} />,
-        state: 'connected' as ProviderState,
+        state: (localConnected ? 'connected' : 'disconnected') as ProviderState,
       },
       {
         key: 'webdav' as const,
@@ -209,7 +212,7 @@ export default function StorageTab() {
         state: toState(s3Status?.enabled, s3Status?.connected),
       },
     ],
-    [status, alistStatus, s3Status],
+    [status, alistStatus, s3Status, localConnected],
   )
 
   if (loading) {
@@ -255,8 +258,14 @@ export default function StorageTab() {
           icon={<HardDrive size={18} />}
           title="本地存储"
           subtitle="直接读取宿主机挂载的目录"
-          statusSlot={<StatusBadge state="connected" label="始终启用" />}
-          description="本地存储始终启用，媒体库路径使用标准文件系统路径（如 /vol01/Media/电影），无需额外配置。"
+          statusSlot={<StatusBadge state={localConnected ? 'connected' : 'disconnected'} />}
+          description={
+            <>
+              本地存储无需额外配置。只要存在使用本地路径（非 <ProtocolCode>webdav://</ProtocolCode>
+              、<ProtocolCode>alist://</ProtocolCode>、<ProtocolCode>s3://</ProtocolCode> 前缀）的媒体库，
+              即显示为已连接；媒体库全部迁移到远程存储后则显示为未连接。
+            </>
+          }
         >
           <div className="rounded-[var(--nv-radius-control)] border border-dashed border-[var(--nv-border-default)] bg-[var(--nv-bg-surface-soft)] px-4 py-8 text-center text-sm text-[var(--nv-text-tertiary)]">
             本地存储无配置项。请在「媒体库」菜单中新增本地路径的媒体库。

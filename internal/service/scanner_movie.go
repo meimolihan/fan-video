@@ -279,14 +279,17 @@ func (s *ScannerService) scanMovieLibrary(library *model.Library) (int, error) {
 			// 回填缺失的海报/背景图：老库或此前匹配失败的记录，
 			// 在重新扫描时补跑本地图片匹配（含视频首帧兜底）。
 			// 旧版共享的通用命名封面也一并重算，保证每个视频独立海报。
-			if pm.media.PosterPath == "" || s.nfoService.IsLegacySharedCover(pm.media.PosterPath) || pm.media.BackdropPath == "" {
-				healPoster := pm.media.PosterPath != "" && s.nfoService.IsLegacySharedCover(pm.media.PosterPath)
+			// 已入库路径指向的文件被重命名/删除（如 .jpg -> .webp）时同样触发重算。
+			stalePoster := pm.media.PosterPath != "" && !s.nfoService.PathExists(pm.media.PosterPath)
+			staleBackdrop := pm.media.BackdropPath != "" && !s.nfoService.PathExists(pm.media.BackdropPath)
+			if pm.media.PosterPath == "" || stalePoster || s.nfoService.IsLegacySharedCover(pm.media.PosterPath) || pm.media.BackdropPath == "" || staleBackdrop {
+				healPoster := pm.media.PosterPath != "" && (s.nfoService.IsLegacySharedCover(pm.media.PosterPath) || stalePoster)
 				if poster, backdrop := s.nfoService.FindLocalImagesForMedia(pm.path); poster != "" || backdrop != "" {
 					if poster != "" && (pm.media.PosterPath == "" || healPoster) {
 						pm.media.PosterPath = poster
 						s.logger.Debugf("回填本地海报: %s -> %s", pm.path, poster)
 					}
-					if backdrop != "" && pm.media.BackdropPath == "" {
+					if backdrop != "" && (pm.media.BackdropPath == "" || staleBackdrop) {
 						pm.media.BackdropPath = backdrop
 						s.logger.Debugf("回填本地背景图: %s -> %s", pm.path, backdrop)
 					}

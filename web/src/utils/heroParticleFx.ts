@@ -3,6 +3,7 @@ const DURATION = 980
 const MAX_W = 1280
 const DPR_CAP = 1.5
 const TARGET_SHATTER = 1900
+const CONFIG_WAIT_MS = 15000
 
 interface Sample { x: number; y: number; r: number; g: number; b: number }
 
@@ -38,29 +39,77 @@ function hexToRgb(hex: string) {
   }
 }
 
+function sparkAccent(list: Particle[], W: number, H: number, direction: 1 | -1, accent: { r: number; g: number; b: number }) {
+  for (let i = 0; i < 64; i += 1) {
+    const side = Math.floor(Math.random() * 4)
+    const along = Math.random()
+    const depth = 6 + Math.random() * 18
+    const warm = Math.random() < 0.4
+    const out = 90 + Math.random() * 230
+    let x = 0
+    let y = 0
+    let vx = 0
+    let vy = 0
+    if (side === 0) { x = depth; y = along * H; vx = out }
+    else if (side === 1) { x = W - depth; y = along * H; vx = -out }
+    else if (side === 2) { x = along * W; y = depth; vy = out }
+    else { x = along * W; y = H - depth; vy = -out }
+    list.push({
+      x,
+      y,
+      vx: vx * (0.7 + Math.random() * 0.6) + direction * 30,
+      vy: vy * (0.7 + Math.random() * 0.6) + (Math.random() - 0.5) * 60,
+      r: 1 + Math.random() * 2,
+      delay: i < 6 ? Math.random() * 12 : Math.random() * 90,
+      life: 0.34 + Math.random() * 0.4,
+      color: warm ? rgb(255, 216, 168, 1) : rgb(255, 255, 255, 1),
+      kind: 1,
+    })
+  }
+  for (let i = 0; i < 46; i += 1) {
+    const from = Math.floor(Math.random() * 4)
+    const along = Math.random()
+    const tx = W * (0.18 + Math.random() * 0.64)
+    const ty = H * (0.26 + Math.random() * 0.48)
+    let sx = 0
+    let sy = 0
+    if (from === 0) { sx = -10; sy = along * H }
+    else if (from === 1) { sx = W + 10; sy = along * H }
+    else if (from === 2) { sx = along * W; sy = -10 }
+    else { sx = along * W; sy = H + 10 }
+    const dx = tx - sx
+    const dy = ty - sy
+    const len = Math.max(1, Math.hypot(dx, dy))
+    const spd = 260 + Math.random() * 260
+    list.push({
+      x: sx,
+      y: sy,
+      vx: (dx / len) * spd,
+      vy: (dy / len) * spd,
+      r: 1.2 + Math.random() * 2,
+      delay: 90 + Math.random() * 240,
+      life: 0.42 + Math.random() * 0.34,
+      color: Math.random() < 0.5 ? rgb(255, 255, 255, 1) : rgb(accent.r, accent.g, accent.b, 1),
+      kind: 2,
+    })
+  }
+}
+
 export function runHeroParticleFx(canvas: HTMLCanvasElement, options: HeroParticleFxOptions = {}): () => void {
   const { sourceSrc, direction = 1, onDone } = options
   const ctx = canvas.getContext('2d')
   if (!ctx) return () => undefined
   const canvasCtx = ctx
 
-  const rect = canvas.getBoundingClientRect()
-  const cssW = Math.max(1, rect.width)
-  const cssH = Math.max(1, rect.height)
-  const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP)
-  const scale = Math.min(1, MAX_W / cssW)
-  const W = Math.round(cssW * scale)
-  const H = Math.round(cssH * scale)
-  canvas.width = Math.round(W * dpr)
-  canvas.height = Math.round(H * dpr)
-  canvasCtx.setTransform((cssW * dpr) / W, 0, 0, (cssW * dpr) / W, 0, 0)
-
-  const cx = W / 2
-  const cy = H / 2
-  const start = performance.now()
+  let W = 1
+  let H = 1
+  let cx = 0.5
+  let cy = 0.5
+  let configured = false
   let raf = 0
   let particles: Particle[] = []
   let built = false
+  const start = performance.now()
 
   const accent = (() => {
     try {
@@ -70,6 +119,32 @@ export function runHeroParticleFx(canvas: HTMLCanvasElement, options: HeroPartic
       return { r: 130, g: 100, b: 250 }
     }
   })()
+
+  function synchronizeSize(): boolean {
+    if (configured) return true
+    let rect = canvas.getBoundingClientRect()
+    if (!rect.width || !rect.height) {
+      const parent = canvas.parentElement
+      if (parent) {
+        const pr = parent.getBoundingClientRect()
+        if (pr.width && pr.height) rect = pr
+      }
+    }
+    if (!rect.width || !rect.height) return false
+    const cssW = Math.max(1, rect.width)
+    const cssH = Math.max(1, rect.height)
+    const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP)
+    const scale = Math.min(1, MAX_W / cssW)
+    W = Math.round(cssW * scale)
+    H = Math.round(cssH * scale)
+    cx = W / 2
+    cy = H / 2
+    canvas.width = Math.round(W * dpr)
+    canvas.height = Math.round(H * dpr)
+    canvasCtx.setTransform((cssW * dpr) / W, 0, 0, (cssW * dpr) / W, 0, 0)
+    configured = true
+    return true
+  }
 
   function build(samples: Sample[]) {
     const list: Particle[] = []
@@ -95,61 +170,14 @@ export function runHeroParticleFx(canvas: HTMLCanvasElement, options: HeroPartic
       })
     }
 
-    for (let i = 0; i < 64; i += 1) {
-      const side = Math.floor(Math.random() * 4)
-      const along = Math.random()
-      const depth = 6 + Math.random() * 18
-      const warm = Math.random() < 0.4
-      const out = 90 + Math.random() * 230
-      let x = 0
-      let y = 0
-      let vx = 0
-      let vy = 0
-      if (side === 0) { x = depth; y = along * H; vx = out }
-      else if (side === 1) { x = W - depth; y = along * H; vx = -out }
-      else if (side === 2) { x = along * W; y = depth; vy = out }
-      else { x = along * W; y = H - depth; vy = -out }
-      list.push({
-        x,
-        y,
-        vx: vx * (0.7 + Math.random() * 0.6) + direction * 30,
-        vy: vy * (0.7 + Math.random() * 0.6) + (Math.random() - 0.5) * 60,
-        r: 1 + Math.random() * 2,
-        delay: Math.random() * 90,
-        life: 0.34 + Math.random() * 0.4,
-        color: warm ? rgb(255, 216, 168, 1) : rgb(255, 255, 255, 1),
-        kind: 1,
-      })
-    }
+    sparkAccent(list, W, H, direction, accent)
+    particles = list
+    built = true
+  }
 
-    for (let i = 0; i < 46; i += 1) {
-      const from = Math.floor(Math.random() * 4)
-      const along = Math.random()
-      const tx = W * (0.18 + Math.random() * 0.64)
-      const ty = H * (0.26 + Math.random() * 0.48)
-      let sx = 0
-      let sy = 0
-      if (from === 0) { sx = -10; sy = along * H }
-      else if (from === 1) { sx = W + 10; sy = along * H }
-      else if (from === 2) { sx = along * W; sy = -10 }
-      else { sx = along * W; sy = H + 10 }
-      const dx = tx - sx
-      const dy = ty - sy
-      const len = Math.max(1, Math.hypot(dx, dy))
-      const spd = 260 + Math.random() * 260
-      list.push({
-        x: sx,
-        y: sy,
-        vx: (dx / len) * spd,
-        vy: (dy / len) * spd,
-        r: 1.2 + Math.random() * 2,
-        delay: 90 + Math.random() * 240,
-        life: 0.42 + Math.random() * 0.34,
-        color: Math.random() < 0.5 ? rgb(255, 255, 255, 1) : rgb(accent.r, accent.g, accent.b, 1),
-        kind: 2,
-      })
-    }
-
+  function buildBase() {
+    const list: Particle[] = []
+    sparkAccent(list, W, H, direction, accent)
     particles = list
     built = true
   }
@@ -172,58 +200,81 @@ export function runHeroParticleFx(canvas: HTMLCanvasElement, options: HeroPartic
   }
 
   function trySample() {
-    if (!sourceSrc) {
-      buildFallback()
-      return
-    }
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => {
-      const iw = img.naturalWidth
-      const ih = img.naturalHeight
-      if (!iw || !ih) {
-        buildFallback()
-        return
-      }
-      const cover = Math.max(W / iw, H / ih)
-      const dw = iw * cover
-      const dh = ih * cover
-      const off = document.createElement('canvas')
-      off.width = W
-      off.height = H
-      const octx = off.getContext('2d', { willReadFrequently: true })
-      if (!octx) {
-        buildFallback()
-        return
-      }
-      octx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh)
-      const imageData = octx.getImageData(0, 0, W, H)
-      const pixels = imageData.data
-      const gap = Math.max(6, Math.round(Math.sqrt((W * H) / TARGET_SHATTER)))
-      const samples: Sample[] = []
-      for (let y = 0; y < H; y += gap) {
-        for (let x = 0; x < W; x += gap) {
-          const idx = (y * W + x) * 4
-          if (pixels[idx + 3] < 40) continue
-          const r = pixels[idx]
-          const g = pixels[idx + 1]
-          const b = pixels[idx + 2]
-          const lum = r * 0.299 + g * 0.587 + b * 0.114
-          if (lum < 12 && Math.random() > 0.2) continue
-          samples.push({ x: x + Math.random() * gap, y: y + Math.random() * gap, r, g, b })
+    const attempt = (cross: boolean) => {
+      const img = new Image()
+      if (cross) img.crossOrigin = 'anonymous'
+      let done = false
+      img.onload = () => {
+        if (done) return
+        done = true
+        try {
+          const iw = img.naturalWidth
+          const ih = img.naturalHeight
+          if (!iw || !ih) {
+            buildFallback()
+            return
+          }
+          const cover = Math.max(W / iw, H / ih)
+          const dw = iw * cover
+          const dh = ih * cover
+          const off = document.createElement('canvas')
+          off.width = W
+          off.height = H
+          const octx = off.getContext('2d', { willReadFrequently: true })
+          if (!octx) {
+            buildFallback()
+            return
+          }
+          octx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh)
+          const imageData = octx.getImageData(0, 0, W, H)
+          const pixels = imageData.data
+          const gap = Math.max(6, Math.round(Math.sqrt((W * H) / TARGET_SHATTER)))
+          const samples: Sample[] = []
+          for (let y = 0; y < H; y += gap) {
+            for (let x = 0; x < W; x += gap) {
+              const idx = (y * W + x) * 4
+              if (pixels[idx + 3] < 40) continue
+              const r = pixels[idx]
+              const g = pixels[idx + 1]
+              const b = pixels[idx + 2]
+              const lum = r * 0.299 + g * 0.587 + b * 0.114
+              if (lum < 12 && Math.random() > 0.2) continue
+              samples.push({ x: x + Math.random() * gap, y: y + Math.random() * gap, r, g, b })
+            }
+          }
+          if (samples.length > 24) build(samples)
+          else buildFallback()
+        } catch {
+          buildFallback()
         }
       }
-      if (samples.length > 24) build(samples)
-      else buildFallback()
+      img.onerror = () => {
+        if (done) return
+        done = true
+        if (cross) attempt(false)
+        else buildFallback()
+      }
+      img.src = sourceSrc!
     }
-    img.onerror = () => buildFallback()
-    img.src = sourceSrc
+    attempt(true)
   }
-
-  trySample()
 
   function framePass() {
     const elapsed = performance.now() - start
+
+    if (!configured) {
+      if (elapsed > CONFIG_WAIT_MS) {
+        onDone?.()
+        return
+      }
+      if (!synchronizeSize()) {
+        raf = requestAnimationFrame(framePass)
+        return
+      }
+      buildBase()
+      if (sourceSrc) trySample()
+      else buildFallback()
+    }
 
     if (!built) {
       if (elapsed > 1400) buildFallback()
@@ -263,5 +314,7 @@ export function runHeroParticleFx(canvas: HTMLCanvasElement, options: HeroPartic
   }
 
   raf = requestAnimationFrame(framePass)
-  return () => cancelAnimationFrame(raf)
+  return () => {
+    if (raf) cancelAnimationFrame(raf)
+  }
 }

@@ -96,12 +96,15 @@ export interface TestS3Request {
 
 // ==================== 聚合状态 ====================
 
+export interface LocalStatus {
+  enabled: boolean
+  type: string
+  connected: boolean
+}
+
 export interface StorageStatus {
   webdav: WebDAVStatus
-  local: {
-    enabled: boolean
-    type: string
-  }
+  local: LocalStatus
   alist?: AlistStatus
   s3?: S3Status
 }
