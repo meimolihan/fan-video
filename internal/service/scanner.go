@@ -398,6 +398,11 @@ func (s *ScannerService) ScanLibraryWithOptions(library *model.Library, opts Sca
 		s.logger.Infof("扫描清理: 移除已无剧集文件的空合集 %d 个 (媒体库: %s)", n, library.Name)
 	}
 
+	// 剧集集数/季数校正：各扫描器在剧集目录内打点集数后，失效媒体清理、过小清理
+	// 与单视频目录降级等步骤可能已移除部分分集记录，导致 episode_count 残留过期值
+	// （如删除一集后剧集详情仍显示「共 3 项」）。这里在整个扫描+清理流程之后统一校正。
+	s.refreshSeriesMediaCounts(library.ID)
+
 	// 首帧封面修复：对当前仍以「首帧图片」作为海报的视频，检查视频目录是否已新增
 	// 真实海报；若两者同时匹配，则删除首帧封面并把海报更新为目录海报。
 	// 该修复在扫描完成后统一执行，确保增量扫描跳过未改动文件时也能生效。

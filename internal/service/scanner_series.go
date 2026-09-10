@@ -917,6 +917,38 @@ func (s *ScannerService) scanSeriesFolder(library *model.Library, folderPath, se
 	return newCount, nil
 }
 
+// refreshSeriesMediaCounts 在整个扫描+清理流程完成后，按数据库中实际存活的
+// 分集记录重新校正每个剧集的集数（EpisodeCount）与季数（SeasonCount）。
+// 各扫描器在剧集目录内打点集数后，失效媒体清理、过小清理与单视频目录降级等
+// 步骤可能已移除部分分集记录，导致 episode_count 残留过期值
+// （如删除一集后剧集详情仍显示「共 3 项」）。本校正只在计数变化时写入。
+func (s *ScannerService) refreshSeriesMediaCounts(libraryID string) {
+	seriesList, err := s.seriesRepo.ListByLibraryID(libraryID)
+	if err != nil {
+		s.logger.Warnf("校正剧集集数失败: 无法获取剧集列表: %v", err)
+		return
+	}
+	for i := range seriesList {
+		ser := &seriesList[i]
+		eps, err := s.mediaRepo.ListBySeriesID(ser.ID)
+		if err != nil {
+			continue
+		}
+		seasonSet := make(map[int]bool)
+		for _, e := range eps {
+			seasonSet[e.SeasonNum] = true
+		}
+		if len(eps) == ser.EpisodeCount && len(seasonSet) == ser.SeasonCount {
+			continue
+		}
+		ser.EpisodeCount = len(eps)
+		ser.SeasonCount = len(seasonSet)
+		if err := s.seriesRepo.Update(ser); err != nil {
+			s.logger.Warnf("校正剧集 %s 集数失败: %v", ser.Title, err)
+		}
+	}
+}
+
 // collectEpisodes 递归收集剧集文件夹下的所有视频文件
 func (s *ScannerService) collectEpisodes(folderPath string) []EpisodeInfo {
 	var episodes []EpisodeInfo

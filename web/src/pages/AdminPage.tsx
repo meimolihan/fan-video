@@ -164,6 +164,12 @@ function TabScrollNav({
 
 const SCAN_PROGRESS_STORAGE_KEY = 'nowen:scan-progress:v2'
 
+// WebSocket 断线/事件丢失时的兜底对账频率与宽限期。
+// 后端在扫描结束时移除内存中的扫描状态（defer clearScanPhaseState），
+// 前端据此轮询 server scan-status 以释放本地 scanning 状态。
+const SCAN_STATUS_POLL_MS = 4000
+const SCAN_STATUS_GRACE_MS = 30000
+
 type PersistedScanState = {
   scanningIds: string[]
   scanProgress: Record<string, ScanProgressData>
@@ -208,6 +214,11 @@ export default function AdminPage() {
   const [libraries, setLibraries] = useState<Library[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [scanning, setScanning] = useState<Set<string>>(() => new Set(persistedScanStateRef.current.scanningIds))
+  // 记录每个媒体库进入 scanning 状态的时间戳，供轮询对账时规避「刚启动还未被服务端登记」的竞态。
+  // confirmedRef 记录曾在本对账中被服务端确认在扫描的媒体库：一旦确认过，
+  // 后续服务端不再报告时无需再等宽限期，下一个轮询周期即可清除。
+  const scanningSinceRef = useRef<Record<string, number>>({})
+  const scanningConfirmedRef = useRef<Record<string, boolean>>({})
   const [sysSettings, setSysSettings] = useState<SystemSettings>({
     enable_gpu_transcode: true,
     gpu_fallback_cpu: true,
@@ -398,6 +409,88 @@ export default function AdminPage() {
       off(WS_EVENTS.SCAN_PHASE, handleScanPhase)
     }
   }, [addMessage, off, on])
+
+  // WebSocket 断线 / 事件丢失时的兜底对账：以服务端 scan-status 为准，把
+  // 已完成但 WS 未送达完成事件（或本地未收到）的媒体库从 scanning 中回收，
+  // 避免旋转图标/禁用状态永久卡死。仅在存在扫描状态时才发起轮询。
+  useEffect(() => {
+    if (scanning.size === 0) return
+    let active = true
+
+    const storedAt = scanningSinceRef.current
+    const nowMs = Date.now()
+    for (const id of scanning) {
+      if (storedAt[id] == null) storedAt[id] = nowMs
+    }
+
+    const reconcile = async () => {
+      if (!active) return
+      try {
+        const response = await libraryApi.scanStatus()
+        if (!active) return
+        const activeScanPhases = response.data.data || []
+        const stillActive = new Set(activeScanPhases.map((phase) => phase.library_id))
+        const confirmed = scanningConfirmedRef.current
+        // 仅回收「服务端确认不再扫描、且已超过宽限期」的媒体库：
+        // - 已被服务端确认在扫描 → 服务端不再报告即视为完成，立即回收；
+        // - 尚未确认上（刚点击、后端还没登记阶段状态）→ 需超过宽限期
+        //   才回收，避免误清刚启动的扫描。
+        const toClear = new Set<string>()
+        for (const id of scanning) {
+          if (confirmed[id]) {
+            if (!stillActive.has(id)) toClear.add(id)
+            continue
+          }
+          if (stillActive.has(id)) {
+            confirmed[id] = true
+            continue
+          }
+          const startedAt = storedAt[id] ?? nowMs
+          if (Date.now() - startedAt >= SCAN_STATUS_GRACE_MS) toClear.add(id)
+        }
+        if (toClear.size === 0) return
+        for (const id of toClear) {
+          delete storedAt[id]
+          delete confirmed[id]
+        }
+        setScanning((current) => {
+          const next = new Set(current)
+          for (const id of toClear) next.delete(id)
+          return next
+        })
+        setScanProgress((previous) => {
+          const next = { ...previous }
+          for (const key of Object.keys(previous)) {
+            if (toClear.has(key)) delete next[key]
+          }
+          return next
+        })
+        setScrapeProgress((previous) => {
+          const next = { ...previous }
+          for (const key of Object.keys(previous)) {
+            if (toClear.has(key)) delete next[key]
+          }
+          return next
+        })
+        setScanPhase((previous) => {
+          const next = { ...previous }
+          for (const key of Object.keys(previous)) {
+            if (toClear.has(key)) delete next[key]
+          }
+          return next
+        })
+      } catch {
+        // 对账请求失败不改变本地状态（端到端仅做尽力而为的兜底）。
+      }
+    }
+
+    void reconcile()
+    const timer = window.setInterval(() => void reconcile(), SCAN_STATUS_POLL_MS)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
+  }, [scanning])
 
   useEffect(() => {
     let active = true

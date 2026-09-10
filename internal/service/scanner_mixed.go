@@ -241,7 +241,10 @@ func (s *ScannerService) scanMixedLibrary(library *model.Library) (int, error) {
 				return nil
 			}
 			if existing, err := s.mediaRepo.FindByFilePath(path); err == nil {
-				s.deleteSourceDuplicateIfOrganized(library, existing, path, info)
+				if s.deleteSourceDuplicateIfOrganized(library, existing, path, info) {
+					return nil
+				}
+				s.demoteEpisodeToMovie(existing, library.ID)
 				return nil // 已存在
 			}
 			if _, represented := s.findOrganizedHardlinkRecord(library, path, info); represented {
@@ -305,7 +308,10 @@ func (s *ScannerService) scanMixedLibrary(library *model.Library) (int, error) {
 			continue
 		}
 		if existing, err := s.mediaRepo.FindByFilePath(filePath); err == nil {
-			s.deleteSourceDuplicateIfOrganized(library, existing, filePath, info)
+			if s.deleteSourceDuplicateIfOrganized(library, existing, filePath, info) {
+				continue
+			}
+			s.demoteEpisodeToMovie(existing, library.ID)
 			continue // 已存在
 		}
 		if _, represented := s.findOrganizedHardlinkRecord(library, filePath, info); represented {
@@ -378,6 +384,26 @@ func (s *ScannerService) scanMixedLibrary(library *model.Library) (int, error) {
 
 	s.logger.Infof("混合媒体库扫描完成: %s, 新增 %d 个媒体", library.Name, totalCount)
 	return totalCount, nil
+}
+
+// demoteEpisodeToMovie 当某个视频文件在本次扫描中被归类为电影（所在目录不再
+// 具备剧集证据，如原本多个视频的目录被删剩单个视频），但数据库中该文件仍是
+// 某部剧集的分集记录时，将其降级为独立电影并脱离原剧集，避免残留的错误归类
+// （表现为「单视频目录仍显示在剧集页」）。仅处理本库内真实挂靠剧集的记录。
+func (s *ScannerService) demoteEpisodeToMovie(existing *model.Media, libraryID string) {
+	if existing == nil || existing.ID == "" || existing.LibraryID != libraryID {
+		return
+	}
+	if existing.SeriesID == "" || existing.MediaType == "movie" {
+		return
+	}
+	existing.MediaType = "movie"
+	existing.SeriesID = ""
+	if err := s.mediaRepo.Update(existing); err != nil {
+		s.logger.Warnf("单视频目录降级为电影失败: %s, 错误: %v", existing.FilePath, err)
+		return
+	}
+	s.logger.Infof("单视频目录降级为独立电影(脱离剧集): %s", existing.FilePath)
 }
 
 // isTVShowFolder 智能判断一个目录是否为电视剧文件夹
