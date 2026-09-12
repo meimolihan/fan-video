@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ImageOff, Plus, RefreshCw, Search, Sparkles, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, ImageOff, Plus, RefreshCw, Search, Sparkles, Trash2 } from 'lucide-react'
 import { AdminPanel } from '@/components/admin/AdminPrimitives'
 import { Button } from '@/components/design-system'
 import { useToast } from '@/components/Toast'
@@ -48,6 +48,7 @@ export default function HomeFeaturedPanel() {
   const [entries, setEntries] = useState<HomeFeaturedEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [savingOrder, setSavingOrder] = useState(false)
 
   // 添加搜索
   const [keyword, setKeyword] = useState('')
@@ -146,10 +147,30 @@ export default function HomeFeaturedPanel() {
     }
   }
 
+  const handleMove = async (index: number, direction: -1 | 1) => {
+    const target = index + direction
+    if (target < 0 || target >= entries.length) return
+    if (savingOrder) return
+
+    const next = [...entries]
+    ;[next[index], next[target]] = [next[target], next[index]]
+    setEntries(next)
+    setSavingOrder(true)
+    try {
+      await homeApi.sortFeatured(next.map((entry) => entry.id))
+      toast.success('排序已保存，首页轮播将按新顺序展示')
+    } catch (error) {
+      setEntries([...entries])
+      toast.error(`保存排序失败：${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setSavingOrder(false)
+    }
+  }
+
   return (
     <AdminPanel
       title="首页轮播精选"
-      description={`手动指定首页顶部轮播内容。添加满 ${MIN_ITEMS} 个后生效并优先于智能推荐；不足 ${MIN_ITEMS} 个时仍使用默认推荐逻辑。`}
+      description={`手动指定首页顶部轮播内容。列表顺序即展示顺序：第一个最先显示，依次类推；点击 ↑ / ↓ 调整顺序。添加满 ${MIN_ITEMS} 个后生效并优先于智能推荐；不足 ${MIN_ITEMS} 个时仍使用默认推荐逻辑。`}
       icon={<Sparkles size={16} aria-hidden="true" />}
       actions={(
         <>
@@ -264,7 +285,29 @@ export default function HomeFeaturedPanel() {
                 entry.valid ? 'border-[var(--nv-border)]' : 'border-dashed border-[var(--nv-status-danger)] opacity-70'
               }`}
             >
-              <span className="w-5 shrink-0 text-center text-xs tabular-nums text-[var(--nv-text-tertiary)]">{index + 1}</span>
+              <div className="flex w-5 shrink-0 flex-col items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => handleMove(index, -1)}
+                  disabled={savingOrder || index === 0}
+                  aria-label={`上移 ${entry.title}`}
+                  title="上移（更靠前）"
+                  className="text-[var(--nv-text-tertiary)] transition-colors hover:text-[var(--nv-text-primary)] disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  <ArrowUp size={13} aria-hidden="true" />
+                </button>
+                <span className="text-xs tabular-nums text-[var(--nv-text-tertiary)]">{index + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => handleMove(index, 1)}
+                  disabled={savingOrder || index === entries.length - 1}
+                  aria-label={`下移 ${entry.title}`}
+                  title="下移（更靠后）"
+                  className="text-[var(--nv-text-tertiary)] transition-colors hover:text-[var(--nv-text-primary)] disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  <ArrowDown size={13} aria-hidden="true" />
+                </button>
+              </div>
               <EntryThumb entry={entry} posterVersion={posterVersion} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-[var(--nv-text-primary)]" title={entry.title}>{entry.title}</p>

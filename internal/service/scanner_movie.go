@@ -55,8 +55,9 @@ func (s *ScannerService) scanMovieLibrary(library *model.Library) (int, error) {
 			return nil
 		}
 		if info.IsDir() {
-			// 跳过 extras/trailers 等非正片目录（P0: 兼容 Emby 标准）
-			if extrasExcludeDirs[strings.ToLower(filepath.Base(path))] {
+			base := filepath.Base(path)
+			// 跳过 extras/trailers 等非正片目录，以及隐藏目录（如 .highlights / .thumbnails）
+			if extrasExcludeDirs[strings.ToLower(base)] || strings.HasPrefix(base, ".") {
 				return filepath.SkipDir
 			}
 			return nil

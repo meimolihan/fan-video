@@ -9,6 +9,8 @@ export interface HomeFeaturedEntry {
   kind?: 'movie' | 'episode' | 'series'
   title?: string
   year?: number
+  /** 数字越小越靠前，首页轮播最先展示 */
+  sort_order: number
   valid: boolean
   created_at: string
 }
@@ -38,4 +40,8 @@ export const homeApi = {
     api.delete<{ data: { id: string }; min_items: number; total: number; active: boolean }>(
       `/admin/home-featured/${id}`,
     ),
+
+  /** 按 ids 数组顺序整体重排精选条目（下标 0 的条目最先展示） */
+  sortFeatured: (ids: string[]) =>
+    api.put<{ ok: boolean }>('/admin/home-featured/sort', { ids }),
 }

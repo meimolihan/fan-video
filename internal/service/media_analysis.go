@@ -51,9 +51,10 @@ type MediaAnalysisService struct {
 	// semaphore 限制同时分析的电影数。批量任务按模式调整容量时必须整体换新
 	// channel，因此读写都走 analysisMu 保护；获取/释放必须使用同一 channel 实例，
 	// 见 acquireAnalysisSlot / releaseAnalysisSlot。
-	semaphore chan struct{}
+	semaphore  chan struct{}
 	analysisMu sync.Mutex
 	batch      batchHighlightState
+	localHL    localHighlightGenState
 	previewMu  sync.Mutex
 }
 
@@ -97,6 +98,11 @@ func NewMediaAnalysisService(
 	// FFmpeg subprocesses cannot safely resume after a process restart.
 	if err := taskRepo.MarkRunningInterrupted(mediaHighlightTaskType); err != nil {
 		logger.Warnf("mark interrupted media analysis tasks: %v", err)
+	}
+	// 本地精彩片段增量模式：启动时回填存量状态（幂等，纯 SQL 不探测）。
+	// 首次升级后老影片按「是否已有 manual 片段」回填，之后新增影片自动打 pending 标记。
+	if err := mediaRepo.BackfillLocalHLStatus(); err != nil {
+		s.logger.Warnf("backfill local highlight status: %v", err)
 	}
 	return s
 }
@@ -277,7 +283,8 @@ func (s *MediaAnalysisService) runHighlightTask(taskID, mediaID string) {
 	s.generateThumbnails(media, task, highlights, runDir)
 
 	s.updateTask(task, "persist", 96, "")
-	if err := s.highlightRepo.ReplaceByMediaID(media.ID, highlights); err != nil {
+	// 仅替换自动来源片段，保留 Source=manual 的手动导入片段。
+	if err := s.highlightRepo.ReplaceNonManualByMediaID(media.ID, highlights); err != nil {
 		_ = os.RemoveAll(runDir)
 		s.failTask(task, "persist", err)
 		return

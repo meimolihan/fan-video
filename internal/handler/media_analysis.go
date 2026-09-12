@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"github.com/fan-video/fan-video/internal/model"
 	"github.com/fan-video/fan-video/internal/service"
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -75,7 +75,7 @@ func (h *MediaAnalysisHandler) ListHighlights(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"data": gin.H{
 		"highlights": items,
-		"stale": result.Stale,
+		"stale":      result.Stale,
 	}})
 }
 
@@ -299,6 +299,108 @@ func (h *MediaAnalysisHandler) HighlightAudit(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": report})
+}
+
+// ImportManualHighlights 扫描全库本地视频同目录的 .highlights/ 隐藏目录，
+// 将手工 ffmpeg 剪辑的片段导入为 Source=manual 的精彩片段（幂等，不覆盖自动结果）。
+// POST /api/admin/media-analysis/highlights-import-manual
+func (h *MediaAnalysisHandler) ImportManualHighlights(c *gin.Context) {
+	report, err := h.analysis.ImportManualHighlights()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "导入手动精彩片段失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"data":    report,
+		"message": fmt.Sprintf("已导入 %d 个手动精彩片段（涉及 %d 个视频）", report.ClipsImported, report.MediaScanned),
+	})
+}
+
+// ==================== 本地精彩片段生成（媒体库管理） ====================
+
+// GenerateLocalHighlights 启动本地精彩片段生成任务（后台执行：单视频目录 →
+// 时间线侧车 json + 缩略图 → 自动导入数据库）。
+// POST /api/admin/media-analysis/highlights-local/generate
+func (h *MediaAnalysisHandler) GenerateLocalHighlights(c *gin.Context) {
+	var req struct {
+		MediaIDs []string `json:"media_ids"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	status, err := h.analysis.StartLocalHighlightGeneration(req.MediaIDs)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrLocalHighlightGenInProgress):
+			c.JSON(http.StatusConflict, gin.H{"data": status, "error": err.Error()})
+			return
+		case strings.Contains(err.Error(), "批量任务"):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "启动本地精彩片段生成失败: " + err.Error()})
+			return
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"data": status, "message": "本地精彩片段生成任务已启动"})
+}
+
+// LocalHighlightGenerationStatus 查询本地精彩片段生成任务进度。
+// GET /api/admin/media-analysis/highlights-local/status
+func (h *MediaAnalysisHandler) LocalHighlightGenerationStatus(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"data": h.analysis.SnapshotLocalHighlightGeneration()})
+}
+
+// StopLocalHighlightGeneration 请求停止本地精彩片段生成任务。
+// DELETE /api/admin/media-analysis/highlights-local
+func (h *MediaAnalysisHandler) StopLocalHighlightGeneration(c *gin.Context) {
+	status, err := h.analysis.StopLocalHighlightGeneration()
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": status, "message": "已请求停止：剩余目录不再处理，已生成的保留结果"})
+}
+
+// ScanLocalHighlightDirs 扫描目录归属：单视频目录列入可生成集合，
+// 多视频目录报错并附原因（提示将视频放入独立目录）。
+// GET /api/admin/media-analysis/highlights-local/scan?full=true
+// full=false（默认）增量模式：DB 状态聚合计数、不探测已生成影片；full=true 全量逐片校验。
+func (h *MediaAnalysisHandler) ScanLocalHighlightDirs(c *gin.Context) {
+	full := c.Query("full") == "true"
+	report, err := h.analysis.ScanLocalHighlightDirs(full)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "扫描本地生成目录失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": report})
+}
+
+// VerifyLocalHighlights 校验已生成影片的产物是否仍在磁盘，缺失者重置回待生成。
+// POST /api/admin/media-analysis/highlights-local/verify
+func (h *MediaAnalysisHandler) VerifyLocalHighlights(c *gin.Context) {
+	report, err := h.analysis.VerifyLocalHighlights()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "校验本地精彩片段失败: " + err.Error()})
+		return
+	}
+	msg := "校验完成"
+	if report.Repaired > 0 {
+		msg = fmt.Sprintf("校验中发现 %d 个已删除产物被重置为待生成", report.Repaired)
+	}
+	c.JSON(http.StatusOK, gin.H{"data": report, "message": msg})
+}
+
+// CleanupLocalHighlights 删除本地生成的 .highlights 文件与对应 manual 精彩片段记录。
+// POST /api/admin/media-analysis/highlights-local/cleanup
+func (h *MediaAnalysisHandler) CleanupLocalHighlights(c *gin.Context) {
+	report, err := h.analysis.CleanupLocalHighlights()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "清理本地精彩片段失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"data":    report,
+		"message": fmt.Sprintf("已删除 %d 个视频的 %d 个本地片段文件", report.MediaAffected, report.FilesDeleted),
+	})
 }
 
 // CleanBrokenHighlights 删除完整性检查发现的问题片段。

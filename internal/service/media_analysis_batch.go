@@ -60,15 +60,15 @@ var ErrBatchNotFound = errors.New("当前没有正在进行的批量任务")
 
 // BatchHighlightStatus 批量生成精彩片段的全局进度快照。
 type BatchHighlightStatus struct {
-	Running       bool       `json:"running"`
-	Mode          string     `json:"mode"`        // balanced / performance（最近一次启动所用模式）
-	Parallelism   int        `json:"parallelism"` // 本模式的并行影片数
-	StopRequested bool       `json:"stop_requested"`
-	Total         int        `json:"total"`
-	Processed     int        `json:"processed"` // 本轮成功生成（含停止时保存的当前任务）
-	Skipped       int        `json:"skipped"`   // 已有片段/不支持/文件缺失
-	Failed        int        `json:"failed"`
-	Remaining     int        `json:"remaining"`
+	Running         bool       `json:"running"`
+	Mode            string     `json:"mode"`        // balanced / performance（最近一次启动所用模式）
+	Parallelism     int        `json:"parallelism"` // 本模式的并行影片数
+	StopRequested   bool       `json:"stop_requested"`
+	Total           int        `json:"total"`
+	Processed       int        `json:"processed"` // 本轮成功生成（含停止时保存的当前任务）
+	Skipped         int        `json:"skipped"`   // 已有片段/不支持/文件缺失
+	Failed          int        `json:"failed"`
+	Remaining       int        `json:"remaining"`
 	CurrentMediaID  string     `json:"current_media_id"`
 	CurrentTitle    string     `json:"current_title"`
 	CurrentProgress float64    `json:"current_progress"`
@@ -133,6 +133,14 @@ func (s *MediaAnalysisService) StartBatchHighlights(mode string) (BatchHighlight
 	if s.batch.running {
 		s.batch.mu.Unlock()
 		return s.snapshotBatch(), ErrMediaAnalysisInProgress
+	}
+	// 与本地精彩片段生成互斥（先持 batch 锁再读 localHL，顺序与 StartLocalHighlightGeneration 一致）
+	s.localHL.mu.Lock()
+	localRunning := s.localHL.running
+	s.localHL.mu.Unlock()
+	if localRunning {
+		s.batch.mu.Unlock()
+		return s.snapshotBatch(), errors.New("本地精彩片段生成任务运行中，请先停止或等待完成")
 	}
 
 	videos, err := s.mediaRepo.ListAllLocalVideos()
@@ -404,8 +412,8 @@ type HighlightAuditReport struct {
 	TotalVideos    int                  `json:"total_videos"`    // 库内本地视频总数（含尚未生成片段的）
 	WithHighlights int                  `json:"with_highlights"` // 已生成片段、纳入本次完整性检查的媒体数
 	SourceMissing  []HighlightAuditItem `json:"source_missing"`  // 源视频已删除/媒体记录不存在
-	AssetsMissing  []HighlightAuditItem `json:"assets_missing"` // 片段缩略图/预览文件缺失
-	OrphanCaches   []HighlightAuditItem `json:"orphan_caches"`  // 磁盘缓存目录无对应片段记录（失败残留/媒体已删除）
+	AssetsMissing  []HighlightAuditItem `json:"assets_missing"`  // 片段缩略图/预览文件缺失
+	OrphanCaches   []HighlightAuditItem `json:"orphan_caches"`   // 磁盘缓存目录无对应片段记录（失败残留/媒体已删除）
 }
 
 // GetHighlightAudit 检查全库已生成片段的完整性：

@@ -2,7 +2,9 @@ package repository
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/fan-video/fan-video/internal/model"
 	"gorm.io/gorm"
@@ -27,6 +29,17 @@ func (r *MediaRepo) DB() *gorm.DB {
 // 则更新既有行而非再次插入，并把 media.ID 刷新为既有行 ID，避免产生重复分集。
 // 这样即使扫描器并发触发也只会留下一条记录，从数据库层面杜绝「目录 N 个视频却显示更多集」。
 func (r *MediaRepo) Create(media *model.Media) error {
+	// 本地精彩片段增量打标：只在新入库（INSERT 分支）时设定，配合下方 updateCols
+	// 不包含 local_hl_status，重扫描 upsert 已存在影片时不会覆盖既有状态。
+	// 远程流 / STRM 直接标记为不可生成，其余本地视频待生成。
+	if media.LocalHLStatus == "" {
+		ext := strings.ToLower(strings.TrimSpace(filepath.Ext(media.FilePath)))
+		if media.StreamURL != "" || ext == ".strm" {
+			media.LocalHLStatus = model.LocalHLStatusSkipped
+		} else {
+			media.LocalHLStatus = model.LocalHLStatusPending
+		}
+	}
 	updateCols := []string{
 		"title", "orig_title", "year", "overview", "poster_path", "backdrop_path",
 		"rating", "runtime", "genres", "file_size", "media_type", "video_codec",
@@ -370,9 +383,113 @@ func (r *MediaRepo) ListByLibraryID(libraryID string) ([]model.Media, error) {
 // ListAllLocalVideos 返回全部本地视频（排除 STRM 远程流）的轻量记录，供批量任务遍历。
 func (r *MediaRepo) ListAllLocalVideos() ([]model.Media, error) {
 	var media []model.Media
-	err := r.db.Select("id", "title", "file_path", "stream_url").
+	err := r.db.Select("id", "title", "file_path", "stream_url", "local_hl_status", "local_hl_duration").
 		Where("(stream_url IS NULL OR stream_url = '')").Find(&media).Error
 	return media, err
+}
+
+// ListPendingLocalHighlights 返回待生成/生成失败的本地视频（本地精彩片段增量候选）。
+// 全库只读这两类，已生成影片不参与遍历。
+func (r *MediaRepo) ListPendingLocalHighlights() ([]model.Media, error) {
+	var media []model.Media
+	err := r.db.Select("id", "title", "file_path", "stream_url",
+		"local_hl_status", "local_hl_duration", "local_hl_failed_at", "local_hl_last_error").
+		Where("local_hl_status IN (?, ?)", model.LocalHLStatusPending, model.LocalHLStatusFailed).
+		Find(&media).Error
+	return media, err
+}
+
+// CountLocalByParentDirs 统计各父目录（dir + "/" 前缀）下的本地视频数，用于增量
+// 目录归属校验：目录内同时存在「待生成 + 已生成」影片时，仅按候选分组会漏检，须整目录计数。
+func (r *MediaRepo) CountLocalByParentDirs(dirs []string) (map[string]int64, error) {
+	result := make(map[string]int64, len(dirs))
+	seen := make(map[string]bool, len(dirs))
+	replacer := strings.NewReplacer(`%`, `\%`, `_`, `\_`)
+	for _, dir := range dirs {
+		if dir == "" || seen[dir] {
+			continue
+		}
+		seen[dir] = true
+		escaped := replacer.Replace(filepath.ToSlash(dir))
+		var n int64
+		if err := r.db.Table("media").
+			Where("(stream_url IS NULL OR stream_url = '')").
+			Where("file_path LIKE ? ESCAPE '\\'", escaped+"/%").
+			Count(&n).Error; err != nil {
+			return nil, err
+		}
+		result[dir] = n
+	}
+	return result, nil
+}
+
+// MarkLocalHLGenerated 标记本地精彩片段生成成功并缓存探测时长。
+func (r *MediaRepo) MarkLocalHLGenerated(mediaID string, duration float64) error {
+	return r.db.Model(&model.Media{}).Where("id = ?", mediaID).Updates(map[string]interface{}{
+		"local_hl_status":       model.LocalHLStatusGenerated,
+		"local_hl_duration":     duration,
+		"local_hl_generated_at": time.Now(),
+		"local_hl_failed_at":    nil,
+		"local_hl_last_error":   "",
+	}).Error
+}
+
+// MarkLocalHLFailed 标记本地精彩片段生成失败。
+func (r *MediaRepo) MarkLocalHLFailed(mediaID, errMsg string) error {
+	return r.db.Model(&model.Media{}).Where("id = ?", mediaID).Updates(map[string]interface{}{
+		"local_hl_status":     model.LocalHLStatusFailed,
+		"local_hl_failed_at":  time.Now(),
+		"local_hl_last_error": errMsg,
+	}).Error
+}
+
+// MarkLocalHLPending 重置为待生成（清理产物后 / 校验发现产物缺失时）。
+func (r *MediaRepo) MarkLocalHLPending(mediaID string) error {
+	return r.db.Model(&model.Media{}).Where("id = ?", mediaID).Updates(map[string]interface{}{
+		"local_hl_status":       model.LocalHLStatusPending,
+		"local_hl_generated_at": nil,
+		"local_hl_failed_at":    nil,
+		"local_hl_last_error":   "",
+	}).Error
+}
+
+// CacheLocalHLDuration 仅缓存探测时长（不改变生成状态）。用于未生成的影片预先缓存时长，
+// 使后续增量扫描/列表无需重复 ffprobe。
+func (r *MediaRepo) CacheLocalHLDuration(mediaID string, duration float64) error {
+	return r.db.Model(&model.Media{}).Where("id = ?", mediaID).Update("local_hl_duration", duration).Error
+}
+
+// BackfillLocalHLStatus 本地精彩片段增量模式的状态回填（幂等，纯 SQL 不探测），
+// 每次服务启动都会执行一次：
+//   - 数据库已存在「manual」精彩片段记录 → generated（含把遗留 pending 升级回来，
+//     修复「存量旧 source 回填成 pending、手动导入后状态未回归」的问题）
+//   - 远程流 / .strm → skipped
+//   - 其余仍无状态的本地视频 → pending
+func (r *MediaRepo) BackfillLocalHLStatus() error {
+	if err := r.db.Table("media").
+		Where("local_hl_status IN (?, ?)", "", model.LocalHLStatusPending).
+		Where("EXISTS (SELECT 1 FROM video_highlights vh WHERE vh.media_id = media.id AND vh.source = 'manual')").
+		Updates(map[string]interface{}{"local_hl_status": model.LocalHLStatusGenerated}).Error; err != nil {
+		return fmt.Errorf("回填本地片段状态(generated): %w", err)
+	}
+	if err := r.db.Table("media").
+		Where("local_hl_status IN (?, ?)", "", model.LocalHLStatusPending).
+		Where("(stream_url IS NOT NULL AND stream_url <> '')").
+		Updates(map[string]interface{}{"local_hl_status": model.LocalHLStatusSkipped}).Error; err != nil {
+		return fmt.Errorf("回填本地片段状态(skipped-stream): %w", err)
+	}
+	if err := r.db.Table("media").
+		Where("local_hl_status IN (?, ?)", "", model.LocalHLStatusPending).
+		Where("lower(file_path) LIKE '%.strm'").
+		Updates(map[string]interface{}{"local_hl_status": model.LocalHLStatusSkipped}).Error; err != nil {
+		return fmt.Errorf("回填本地片段状态(skipped-strm): %w", err)
+	}
+	if err := r.db.Table("media").
+		Where("local_hl_status IS NULL OR local_hl_status = ''").
+		Updates(map[string]interface{}{"local_hl_status": model.LocalHLStatusPending}).Error; err != nil {
+		return fmt.Errorf("回填本地片段状态(pending): %w", err)
+	}
+	return nil
 }
 
 // ListAllImagePaths 返回所有媒体的海报/背景图路径（用于首帧缓存清理等批量收集）。

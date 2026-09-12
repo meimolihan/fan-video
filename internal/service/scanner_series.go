@@ -958,7 +958,14 @@ func (s *ScannerService) collectEpisodes(folderPath string) []EpisodeInfo {
 	var episodes []EpisodeInfo
 
 	s.walkLibraryPath(folderPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			// 隐藏目录（如 .highlights）不属于正片内容，直接剪枝
+			if strings.HasPrefix(filepath.Base(path), ".") {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(path))

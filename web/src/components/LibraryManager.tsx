@@ -30,6 +30,7 @@ import clsx from 'clsx'
 import { AdminPanel, AdminStatus } from '@/components/admin/AdminPrimitives'
 import { Button, EmptyState, Tag } from '@/components/design-system'
 import HighlightsBatchPanel from '@/components/admin/HighlightsBatchPanel'
+import LocalHighlightsPanel from '@/components/admin/LocalHighlightsPanel'
 import HomeFeaturedPanel from '@/components/admin/HomeFeaturedPanel'
 import { invalidateMediaListCaches } from '@/utils/invalidateMediaCaches'
 
@@ -385,6 +386,8 @@ function LibraryManager({
       </AdminPanel>
 
       <HighlightsBatchPanel />
+
+      <LocalHighlightsPanel />
 
       <HomeFeaturedPanel />
 

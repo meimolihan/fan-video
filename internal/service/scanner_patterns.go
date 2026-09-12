@@ -124,12 +124,18 @@ func isCategoryDirName(name string) bool {
 
 // isXiaoyaSkipDir 按名字判断是否为需要完全跳过的特殊目录
 func isXiaoyaSkipDir(name string) bool {
-	lower := strings.ToLower(strings.TrimSpace(name))
+	trimmed := strings.TrimSpace(name)
+	// 隐藏目录（如 .highlights / .thumbnails / .metadata）不属于媒体库内容，一律跳过；
+	// 与文件监听（注册阶段忽略隐藏目录）的约定保持一致。
+	if strings.HasPrefix(trimmed, ".") {
+		return true
+	}
+	lower := strings.ToLower(trimmed)
 	if xiaoyaSkipDirs[lower] {
 		return true
 	}
 	// 简单兜底：目录名以 "画质演示" 开头的一律跳过
-	if strings.HasPrefix(strings.TrimSpace(name), "画质演示") {
+	if strings.HasPrefix(trimmed, "画质演示") {
 		return true
 	}
 	return false
@@ -264,6 +270,24 @@ func isExtrasPath(filePath string) bool {
 	parts := strings.Split(filepath.ToSlash(filePath), "/")
 	for _, part := range parts {
 		if extrasExcludeDirs[strings.ToLower(part)] {
+			return true
+		}
+	}
+	return false
+}
+
+// isHiddenDirPath 判断路径中是否存在点前缀（隐藏）目录段（如 .highlights）。
+// 用于清理历史误入库的隐藏目录媒体记录；按 "/" 分隔，WebDAV 路径同样适用。
+// 最后一个片段是文件名，不计入目录判断；"." / ".." 等导航段不视为隐藏目录。
+func isHiddenDirPath(filePath string) bool {
+	parts := strings.Split(filepath.ToSlash(filePath), "/")
+	max := len(parts) - 1
+	if max < 0 {
+		return false
+	}
+	for i := 0; i < max; i++ {
+		part := parts[i]
+		if len(part) > 1 && strings.HasPrefix(part, ".") {
 			return true
 		}
 	}

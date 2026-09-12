@@ -230,7 +230,15 @@ func (s *ScannerService) scanMixedLibrary(library *model.Library) (int, error) {
 	for _, entry := range movieDirs {
 		folderPath := vfsJoin(entry.rootPath, entry.entry.Name())
 		err := s.walkLibraryPath(folderPath, func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
+			if err != nil {
+				return nil
+			}
+			if info.IsDir() {
+				// 跳过特典/隐藏目录（如 .highlights / .thumbnails），片段不作为独立电影入库
+				base := filepath.Base(path)
+				if extrasExcludeDirs[strings.ToLower(base)] || strings.HasPrefix(base, ".") {
+					return filepath.SkipDir
+				}
 				return nil
 			}
 			ext := strings.ToLower(filepath.Ext(path))
@@ -542,6 +550,11 @@ func (s *ScannerService) isNestedSingleVideoCollection(path string, subDirs []os
 		videoCount := 0
 		for _, e := range entries {
 			if e.IsDir() {
+				// 隐藏/特典目录（如 .highlights）不构成「更深层级」，
+				// 忽略后不影响单视频子目录的判定；其余目录说明不是简单包装层。
+				if isXiaoyaSkipDir(e.Name()) || extrasExcludeDirs[strings.ToLower(e.Name())] {
+					continue
+				}
 				// 含更深层级：不是简单包装层，保守放行下钻
 				return false
 			}
@@ -587,7 +600,8 @@ func (s *ScannerService) hasDatedVideo(folderPath string) bool {
 	}
 	for _, e := range entries {
 		if e.IsDir() {
-			if extrasExcludeDirs[strings.ToLower(e.Name())] {
+			name := e.Name()
+			if extrasExcludeDirs[strings.ToLower(name)] || strings.HasPrefix(name, ".") {
 				continue
 			}
 			subEntries, err := s.readDirLibraryPath(vfsJoin(folderPath, e.Name()))
@@ -642,7 +656,8 @@ func (s *ScannerService) collectSeriesEvidence(folderPath string) (videoFiles []
 				}
 			}
 			// 特典/花絮目录中的视频不算正片证据，且无需深入
-			if extrasExcludeDirs[strings.ToLower(entry.Name())] {
+			name := entry.Name()
+			if extrasExcludeDirs[strings.ToLower(name)] || strings.HasPrefix(name, ".") {
 				continue
 			}
 			// 递归检查子目录中的视频文件（只深入一层）

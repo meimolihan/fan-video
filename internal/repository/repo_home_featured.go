@@ -14,10 +14,11 @@ func NewHomeFeaturedRepo(db *gorm.DB) *HomeFeaturedRepo {
 	return &HomeFeaturedRepo{db: db}
 }
 
-// List 按添加时间升序返回全部精选条目。
+// List 按 sort_order 升序、其次按添加时间升序返回全部精选条目。
+// sort_order 越小越靠前，即首页轮播最优先展示。
 func (r *HomeFeaturedRepo) List() ([]model.HomeFeatured, error) {
 	var items []model.HomeFeatured
-	if err := r.db.Order("created_at ASC").Find(&items).Error; err != nil {
+	if err := r.db.Order("sort_order ASC, created_at ASC").Find(&items).Error; err != nil {
 		return nil, err
 	}
 	return items, nil
@@ -45,6 +46,20 @@ func (r *HomeFeaturedRepo) ExistsByItem(itemType, itemID string) (bool, error) {
 
 func (r *HomeFeaturedRepo) Create(item *model.HomeFeatured) error {
 	return r.db.Create(item).Error
+}
+
+// NextSortOrder 返回下一个排序序号（当前最大值 + 1），新条目默认排到末尾。
+func (r *HomeFeaturedRepo) NextSortOrder() (int, error) {
+	var max int
+	if err := r.db.Model(&model.HomeFeatured{}).Select("COALESCE(MAX(sort_order), 0)").Scan(&max).Error; err != nil {
+		return 0, err
+	}
+	return max + 1, nil
+}
+
+// UpdateSortOrder 更新单条的排序序号。
+func (r *HomeFeaturedRepo) UpdateSortOrder(id string, sortOrder int) error {
+	return r.db.Model(&model.HomeFeatured{}).Where("id = ?", id).Update("sort_order", sortOrder).Error
 }
 
 // Delete 按主键删除，返回是否确实删除了记录。

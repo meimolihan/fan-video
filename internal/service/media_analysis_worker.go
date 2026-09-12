@@ -564,7 +564,7 @@ func (s *MediaAnalysisService) CompleteWorkerTask(taskID string, input MediaAnal
 			AnalysisMethod: method, Fingerprint: fingerprint, Version: 3,
 		})
 	}
-	if err := s.highlightRepo.ReplaceByMediaID(media.ID, prepared); err != nil {
+	if err := s.highlightRepo.ReplaceNonManualByMediaID(media.ID, prepared); err != nil {
 		_ = os.RemoveAll(runDir)
 		return err
 	}

@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/fan-video/fan-video/internal/model"
@@ -16,7 +18,8 @@ import (
 
 func newHomeFeaturedTestEnv(t *testing.T) (*HomeFeaturedHandler, *repository.Repositories) {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open("file:test_home_featured?mode=memory&cache=shared"), &gorm.Config{})
+	dbName := "test_home_featured_" + strings.ReplaceAll(t.Name(), "/", "_")
+	db, err := gorm.Open(sqlite.Open("file:"+dbName+"?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -79,5 +82,52 @@ func TestHomeFeaturedListForHomeExcludesHiddenLibraries(t *testing.T) {
 	}
 	if resp.Data[0].Media.ID != "mv-1" {
 		t.Fatalf("返回了隐藏库内容: media id = %s", resp.Data[0].Media.ID)
+	}
+}
+
+func TestHomeFeaturedReorderPreservesListOrder(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h, repos := newHomeFeaturedTestEnv(t)
+
+	rows, err := repos.HomeFeatured.List()
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("读取精选条目失败: rows=%v err=%v", rows, err)
+	}
+
+	// 原顺序：[mv-1, mh-1]，反向提交后 List 应按新顺序返回（忽略隐藏库过滤，直接看仓储层面）
+	if err := repos.HomeFeatured.UpdateSortOrder(rows[0].ID, 2); err != nil {
+		t.Fatalf("update sort order: %v", err)
+	}
+	if err := repos.HomeFeatured.UpdateSortOrder(rows[1].ID, 1); err != nil {
+		t.Fatalf("update sort order: %v", err)
+	}
+
+	sorted, err := repos.HomeFeatured.List()
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(sorted) != 2 || sorted[0].ItemID != "mh-1" || sorted[1].ItemID != "mv-1" {
+		t.Fatalf("排序未生效: %+v", sorted)
+	}
+
+	// Reorder 接口按提交顺序整体重排
+	ids := []string{rows[0].ID, rows[1].ID}
+	body, _ := json.Marshal(map[string][]string{"ids": ids})
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPut, "/api/admin/home-featured/sort", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	h.Reorder(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+
+	after, err := repos.HomeFeatured.List()
+	if err != nil {
+		t.Fatalf("list after reorder: %v", err)
+	}
+	if len(after) != 2 || after[0].ItemID != "mv-1" || after[1].ItemID != "mh-1" {
+		t.Fatalf("重排后顺序未恢复为提交顺序: %+v", after)
 	}
 }

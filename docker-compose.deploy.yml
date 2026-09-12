@@ -47,9 +47,6 @@ services:
     # =========================================================
     ports:
       - "8080:8080"
-      # Python 番号刮削微服务（内部自动拉起，默认仅监听 127.0.0.1；
-      # 如需外部直接访问该微服务，取消下行 + 修改 SCRAPER_HOST 为 0.0.0.0）
-      # - "5000:5000"
     volumes:
       # 数据持久化（SQLite、上传、配置等）
       - ./data:/data
@@ -60,7 +57,7 @@ services:
       # - ./backups:/data/backups
       # ---- 媒体目录挂载（按你的 NAS 实际路径改）----
       # 飞牛 OS 的存储池一般挂在 /vol01 /vol02，按实际情况：
-      # - /vol01/Media:/media
+      - /vol01/Media:/media
       # 或分目录：
       # - /vol01/Media/电影:/media/电影
       # - /vol01/Media/电视剧:/media/电视剧
@@ -97,14 +94,6 @@ services:
       - NOWEN_SECRETS_JWT_SECRET=please-change-this-secret-key
       - NOWEN_CACHE_CACHE_DIR=/cache
       - NOWEN_LOGGING_LEVEL=info
-      # ---- 番号刮削（默认关闭）----
-      # 改为 true 后 Go 后端会自动拉起 /app/scripts/adult-scraper/app.py 子进程
-      # 依赖已全部预装（python3 + flask + bs4 + lxml + requests），开箱即用
-      - NOWEN_ADULT_SCRAPER_ENABLED=false
-      - NOWEN_ADULT_SCRAPER_AUTO_START_PYTHON=true
-      - NOWEN_ADULT_SCRAPER_PYTHON_EXECUTABLE=/usr/bin/python3
-      - NOWEN_ADULT_SCRAPER_PYTHON_SERVICE_DIR=/app/scripts/adult-scraper
-      # - NOWEN_ADULT_SCRAPER_PYTHON_SERVICE_API_KEY=your-random-key
       - TZ=Asia/Shanghai
     restart: unless-stopped
     deploy:

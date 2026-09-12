@@ -255,6 +255,78 @@ export interface HighlightExport {
   exported_at: string
 }
 
+// 手动导入 <视频目录>/.highlights/ 片段的结果
+export interface ManualHighlightReport {
+  dirs_found: number
+  media_scanned: number
+  clips_imported: number
+  clips_skipped: number
+  skipped?: Array<{ path: string; reason: string }>
+}
+
+// ==================== 本地精彩片段生成（单视频目录 → 时间线侧车 + 缩略图） ====================
+
+export interface LocalHighlightDirItem {
+  dir: string
+  video_file: string
+  title: string
+  duration: number
+  clips: number
+  generated: boolean
+  status?: 'pending' | 'failed' | string
+  media_id: string
+}
+
+export interface GenerateLocalHighlightsRequest {
+  media_ids?: string[]
+}
+
+export interface LocalHighlightSkipItem {
+  dir: string
+  videos: string[]
+  reason: string
+}
+
+export interface LocalHighlightScanReport {
+  total_dirs: number
+  eligible_dirs: number
+  already_dirs: number
+  skipped_dirs: number
+  full_scan?: boolean
+  eligible?: LocalHighlightDirItem[]
+  skipped?: LocalHighlightSkipItem[]
+}
+
+export interface LocalHighlightVerifyReport {
+  total_checked: number
+  repaired: number
+  completed: number
+  errors: number
+}
+
+export interface LocalHighlightGenStatus {
+  running: boolean
+  stop_requested: boolean
+  total: number
+  processed: number
+  already: number
+  skipped: number
+  failed: number
+  last_error?: string
+  remaining: number
+  current_dir: string
+  current_video: string
+  current_like: number
+  current_done: number
+  started_at: string
+  finished_at?: string | null
+}
+
+export interface LocalHighlightCleanupReport {
+  media_affected: number
+  files_deleted: number
+}
+
 export const mediaAnalysisApi = {
   getHighlights: (mediaId: string) =>
     api.get<{ data: MediaHighlightList }>(`/media/${mediaId}/highlights`),
@@ -307,6 +379,30 @@ export const mediaAnalysisApi = {
 
   deleteHighlightExport: (mediaId: string, highlightId: string) =>
     api.delete<{ message: string }>(`/media/${mediaId}/highlights/${highlightId}/export`),
+
+  // 导入手动精彩片段（扫描各视频同目录的 .highlights/ 下的手工 ffmpeg 剪辑）
+  importManualHighlights: () =>
+    api.post<{ data: ManualHighlightReport; message: string }>('/admin/media-analysis/highlights-import-manual'),
+
+  // 本地精彩片段生成：单视频目录生成时间线侧车+缩略图并自动导入数据库
+  generateLocalHighlights: (req?: GenerateLocalHighlightsRequest) =>
+    api.post<{ data: LocalHighlightGenStatus; message: string }>('/admin/media-analysis/highlights-local/generate', req),
+
+  getLocalHighlightGenerationStatus: () =>
+    api.get<{ data: LocalHighlightGenStatus }>('/admin/media-analysis/highlights-local/status'),
+
+  stopLocalHighlightGeneration: () =>
+    api.delete<{ data: LocalHighlightGenStatus; message: string }>('/admin/media-analysis/highlights-local'),
+
+  scanLocalHighlightDirs: (full = false) =>
+    api.get<{ data: LocalHighlightScanReport }>('/admin/media-analysis/highlights-local/scan', { params: full ? { full: 'true' } : undefined }),
+
+  // 一致性校验：仅用缓存的时长做文件存在检查，修复「已生成但产物被删」/「有产物未记已生成」两类不一致
+  verifyLocalHighlights: () =>
+    api.post<{ data: LocalHighlightVerifyReport; message: string }>('/admin/media-analysis/highlights-local/verify'),
+
+  cleanupLocalHighlights: () =>
+    api.post<{ data: LocalHighlightCleanupReport; message: string }>('/admin/media-analysis/highlights-local/cleanup'),
 
   getWorkerConfig: () =>
     api.get<{ data: MediaAnalysisWorkerConfig }>('/admin/media-analysis/config'),

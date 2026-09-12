@@ -88,12 +88,12 @@ export default function HighlightsBatchPanel() {
   const [showPending, setShowPending] = useState(false)
   const [pendingList, setPendingList] = useState<HighlightPendingVideo[]>([])
   const [pendingLoading, setPendingLoading] = useState(false)
-  const [showAudit, setShowAudit] = useState(false)
-  const [auditReport, setAuditReport] = useState<HighlightAuditReport | null>(null)
-  const [auditLoading, setAuditLoading] = useState(false)
-  const [auditCleaning, setAuditCleaning] = useState(false)
-  const [includeAssets, setIncludeAssets] = useState(true)
-  const pollRef = useRef<number | null>(null)
+   const [showAudit, setShowAudit] = useState(false)
+   const [auditReport, setAuditReport] = useState<HighlightAuditReport | null>(null)
+   const [auditLoading, setAuditLoading] = useState(false)
+   const [auditCleaning, setAuditCleaning] = useState(false)
+   const [includeAssets, setIncludeAssets] = useState(true)
+   const pollRef = useRef<number | null>(null)
 
   // 打开弹窗时实时拉取未处理清单（数据库口径，服务重启后依然准确）
   const openPending = async () => {
@@ -222,9 +222,9 @@ export default function HighlightsBatchPanel() {
     } finally {
       setClearing(false)
     }
-  }
+   }
 
-  const total = status?.total || 0
+   const total = status?.total || 0
   const processed = status?.processed || 0
   const skipped = status?.skipped || 0
   const failed = status?.failed || 0
@@ -256,10 +256,10 @@ export default function HighlightsBatchPanel() {
               aria-label="检查完整性"
               title={running ? '批量运行期间不可用' : '检查已生成片段的完整性（源视频缺失 / 产物文件缺失 / 孤儿缓存目录）'}
             >
-              <RefreshCw size={14} className={auditLoading ? 'animate-spin' : undefined} />
-              <span className="hidden md:inline">检查完整性</span>
-            </Button>
-            {running && (
+             <RefreshCw size={14} className={auditLoading ? 'animate-spin' : undefined} />
+               <span className="hidden md:inline">检查完整性</span>
+             </Button>
+             {running && (
               <Button variant="danger" size="sm" onClick={() => setShowStopConfirm(true)} disabled={stopping}>
                 <Square size={14} />
                 停止
@@ -567,6 +567,6 @@ export default function HighlightsBatchPanel() {
           loading={clearing}
         />
       )}
-    </>
-  )
+     </>
+   )
 }

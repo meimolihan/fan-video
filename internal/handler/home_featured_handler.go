@@ -51,7 +51,8 @@ type HomeFeaturedEntry struct {
 	Kind      string    `json:"kind,omitempty"` // movie | episode | series，便于前端展示精确类型
 	Title     string    `json:"title"`
 	Year      int       `json:"year,omitempty"`
-	Valid     bool      `json:"valid"` // 引用的媒体/剧集是否仍存在
+	SortOrder int       `json:"sort_order"` // 数字越小越靠前
+	Valid     bool      `json:"valid"`      // 引用的媒体/剧集是否仍存在
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -60,6 +61,7 @@ func (h *HomeFeaturedHandler) toEntry(row model.HomeFeatured) HomeFeaturedEntry 
 		ID:        row.ID,
 		ItemType:  row.ItemType,
 		ItemID:    row.ItemID,
+		SortOrder: row.SortOrder,
 		CreatedAt: row.CreatedAt,
 	}
 	switch row.ItemType {
@@ -144,6 +146,11 @@ func (h *HomeFeaturedHandler) Add(c *gin.Context) {
 	}
 
 	row := &model.HomeFeatured{ItemType: req.ItemType, ItemID: req.ItemID}
+	sortOrder, err := h.featuredRepo.NextSortOrder()
+	if err != nil {
+		h.logger.Errorf("计算精选轮播排序号失败: %v", err)
+	}
+	row.SortOrder = sortOrder
 	if err := h.featuredRepo.Create(row); err != nil {
 		h.logger.Errorf("保存首页精选轮播配置失败: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存失败"})
@@ -180,6 +187,28 @@ func (h *HomeFeaturedHandler) Remove(c *gin.Context) {
 		"total":     count,
 		"active":    count >= homeFeaturedMinItems,
 	})
+}
+
+// Reorder 管理端：按前端提交的顺序整体重排精选条目。
+// 请求体为 id 数组，数组下标即最终 sort_order（0 最靠前）。
+func (h *HomeFeaturedHandler) Reorder(c *gin.Context) {
+	var req struct {
+		IDs []string `json:"ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.IDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ids 不能为空"})
+		return
+	}
+
+	for index, id := range req.IDs {
+		if err := h.featuredRepo.UpdateSortOrder(id, index+1); err != nil {
+			h.logger.Errorf("更新精选轮播排序失败 (id=%s): %v", id, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存排序失败"})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 // hiddenLibraryIDSet 返回隐藏媒体库的 ID 集合（首页轮播排除用）。

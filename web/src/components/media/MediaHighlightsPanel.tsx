@@ -48,6 +48,7 @@ function assetUrl(url?: string) {
 }
 
 function analysisLabel(method: string) {
+  if (method === 'manual') return '手动剪辑'
   if (method === 'heuristic') return '结构推断'
   if (method === 'scene') return '场景分析'
   if (method === 'sparse_audio') return '快速音频采样'
@@ -438,6 +439,9 @@ export default function MediaHighlightsPanel({ mediaId, isAdmin }: MediaHighligh
               <div className="nv-highlight-card-copy p-4">
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="min-w-0 flex-1 truncate font-semibold text-[var(--nv-text-primary)]" title={item.title}>{item.title}</h3>
+                  {item.source === 'manual' && (
+                    <span className="shrink-0 rounded-full border border-[var(--nv-accent)]/40 bg-[var(--nv-accent-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--nv-accent)]">手动</span>
+                  )}
                   <span className="shrink-0 rounded-full bg-[var(--nv-accent-soft)] px-2 py-0.5 text-xs font-semibold text-[var(--nv-accent)]">{item.score.toFixed(1)}</span>
                 </div>
                 <div className="nv-highlight-card-meta mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--nv-text-tertiary)]">

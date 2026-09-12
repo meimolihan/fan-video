@@ -132,6 +132,15 @@ func registerCoreAPI(
 	api.GET("/admin/media-analysis/highlights-pending", middleware.AdminOnly(), mediaAnalysis.PendingHighlightVideos)
 	api.GET("/admin/media-analysis/highlights-audit", middleware.AdminOnly(), mediaAnalysis.HighlightAudit)
 	api.POST("/admin/media-analysis/highlights-audit/clean", middleware.AdminOnly(), mediaAnalysis.CleanBrokenHighlights)
+	// 导入手动精彩片段（<视频目录>/.highlights/ 下手工 ffmpeg 剪辑的片段）
+	api.POST("/admin/media-analysis/highlights-import-manual", middleware.AdminOnly(), mediaAnalysis.ImportManualHighlights)
+	// 本地精彩片段生成（单视频目录 → 时间线侧车 + 缩略图 → 自动导入数据库）
+	api.POST("/admin/media-analysis/highlights-local/generate", middleware.AdminOnly(), mediaAnalysis.GenerateLocalHighlights)
+	api.GET("/admin/media-analysis/highlights-local/status", middleware.AdminOnly(), mediaAnalysis.LocalHighlightGenerationStatus)
+	api.DELETE("/admin/media-analysis/highlights-local", middleware.AdminOnly(), mediaAnalysis.StopLocalHighlightGeneration)
+	api.GET("/admin/media-analysis/highlights-local/scan", middleware.AdminOnly(), mediaAnalysis.ScanLocalHighlightDirs)
+	api.POST("/admin/media-analysis/highlights-local/verify", middleware.AdminOnly(), mediaAnalysis.VerifyLocalHighlights)
+	api.POST("/admin/media-analysis/highlights-local/cleanup", middleware.AdminOnly(), mediaAnalysis.CleanupLocalHighlights)
 	api.GET("/admin/media-analysis/workers", middleware.AdminOnly(), mediaAnalysis.Workers)
 	api.POST("/media-analysis/workers/heartbeat", middleware.AdminOnly(), mediaAnalysis.WorkerHeartbeat)
 	api.POST("/media-analysis/workers/claim", middleware.AdminOnly(), mediaAnalysis.WorkerClaim)
@@ -152,6 +161,7 @@ func registerCoreAPI(
 	api.GET("/home/featured", handlers.HomeFeatured.ListForHome)
 	api.GET("/admin/home-featured", middleware.AdminOnly(), handlers.HomeFeatured.AdminList)
 	api.POST("/admin/home-featured", middleware.AdminOnly(), handlers.HomeFeatured.Add)
+	api.PUT("/admin/home-featured/sort", middleware.AdminOnly(), handlers.HomeFeatured.Reorder)
 	api.DELETE("/admin/home-featured/:id", middleware.AdminOnly(), handlers.HomeFeatured.Remove)
 
 	api.GET("/stream/:id/info", guardByMediaID, playbackPlan.GetInfo)

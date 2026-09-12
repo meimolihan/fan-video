@@ -127,6 +127,7 @@ type HomeFeatured struct {
 	ID        string    `json:"id" gorm:"primaryKey;type:text"`
 	ItemType  string    `json:"item_type" gorm:"type:text;not null;uniqueIndex:idx_home_featured_item,priority:1"` // movie / series
 	ItemID    string    `json:"item_id" gorm:"type:text;not null;uniqueIndex:idx_home_featured_item,priority:2"`
+	SortOrder int       `json:"sort_order" gorm:"default:0;not null"` // 数字越小越靠前
 	CreatedAt time.Time `json:"created_at"`
 }
 

@@ -99,6 +99,33 @@ func (s *ScannerService) SetVFSManager(vfsMgr *VFSManager) {
 	s.vfsMgr = vfsMgr
 }
 
+// purgeHiddenDirRecords 移除路径位于隐藏目录（如 .highlights）下的媒体记录。
+// 隐藏目录不属于媒体库内容；扫描器与文件监听都已跳过它们，这里清理历史误入库的存量。
+func (s *ScannerService) purgeHiddenDirRecords(library *model.Library) {
+	paths, err := s.mediaRepo.GetAllFilePathsByLibrary(library.ID)
+	if err != nil || len(paths) == 0 {
+		return
+	}
+	removed := 0
+	for path := range paths {
+		if !isHiddenDirPath(path) {
+			continue
+		}
+		m, findErr := s.mediaRepo.FindByFilePath(path)
+		if findErr != nil || m == nil {
+			continue
+		}
+		if delErr := PurgeMediaCompletely(s.mediaRepo, s.cfg.Cache.CacheDir, s.logger, m, "隐藏目录清理"); delErr != nil {
+			continue
+		}
+		removed++
+		s.logger.Infof("清理隐藏目录误入库的媒体记录: %s", path)
+	}
+	if removed > 0 {
+		s.logger.Infof("扫描清理: 移除路径位于隐藏目录的媒体记录 %d 个 (媒体库: %s)", removed, library.Name)
+	}
+}
+
 // walkLibraryPath 根据媒体库路径前缀自动选择 VFS 遍历
 // 返回的 path 是完整路径（LocalFS 返回原生路径；WebDAVFS 返回 webdav:// 前缀路径）
 func (s *ScannerService) walkLibraryPath(root string, fn filepath.WalkFunc) error {
@@ -270,8 +297,8 @@ func (s *ScannerService) collectMediaRootInfos(root string, kind string) []expan
 		if !shouldExpand {
 			if isCategoryDirName(base) {
 				shouldExpand = true
-			} else if len(subDirs) >= 3 && !hasVideoFile {
-				// 兜底启发式：无视频 + 多子目录，很可能也是分类目录
+			} else if s.subdirVideoCount(path, subDirs) >= 3 && !hasVideoFile {
+				// 兜底启发式：无视频 + 多个「含视频内容子目录」，很可能也是分类目录
 				shouldExpand = true
 			}
 		}
@@ -335,6 +362,55 @@ func (s *ScannerService) collectMediaRootInfos(root string, kind string) []expan
 	return uniq
 }
 
+// subdirVideoCount 统计 parentPath 下、其目录树内（递归，最多 4 层）包含至少一个
+// 视频文件或 NFO 的内容子目录数量。隐藏目录（如 .highlights）与特典目录不计入。
+//
+// 用于展开启发式：是否下钻只取决于「真正承载视频内容」的子目录个数，
+// 避免「人物目录 + 封面图目录」这类纯图片子目录（如 長峰しほ_封面，
+// 仅含 .webp）把计数顶到阈值、把本应整体归组的人物目录拆散成独立电影。
+func (s *ScannerService) subdirVideoCount(parentPath string, subDirs []os.DirEntry) int {
+	count := 0
+	for _, sd := range subDirs {
+		if isXiaoyaSkipDir(sd.Name()) || extrasExcludeDirs[strings.ToLower(sd.Name())] {
+			continue
+		}
+		if s.subdirContainsVideo(vfsJoin(parentPath, sd.Name()), 0) {
+			count++
+		}
+	}
+	return count
+}
+
+func (s *ScannerService) subdirContainsVideo(path string, depth int) bool {
+	if depth > 4 {
+		return false
+	}
+	entries, err := s.readDirLibraryPath(path)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			if isXiaoyaSkipDir(e.Name()) || extrasExcludeDirs[strings.ToLower(e.Name())] {
+				continue
+			}
+			if s.subdirContainsVideo(vfsJoin(path, e.Name()), depth+1) {
+				return true
+			}
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(e.Name()))
+		if supportedExts[ext] {
+			return true
+		}
+		lower := strings.ToLower(e.Name())
+		if lower == "tvshow.nfo" || lower == "movie.nfo" {
+			return true
+		}
+	}
+	return false
+}
+
 // SetOnScanComplete 设置扫描完成回调（用于触发视频预处理）
 func (s *ScannerService) SetOnScanComplete(fn func(libraryID string)) {
 	s.onScanComplete = fn
@@ -388,6 +464,12 @@ func (s *ScannerService) ScanLibraryWithOptions(library *model.Library, opts Sca
 	sizeRemoved := 0
 	if err == nil {
 		sizeRemoved = s.purgeUndersizedMedia(library)
+	}
+
+	// 清理历史误入库的隐藏目录（如 .highlights）媒体记录：扫描器现已跳过隐藏目录，
+	// 但此前已被收录的片段文件仍存在磁盘上，不会走"失效媒体清理"，这里在扫描完成后统一移除。
+	if err == nil {
+		s.purgeHiddenDirRecords(library)
 	}
 
 	// 空剧集合集清理：剧集目录被整体删除、或集数文件在前几次扫描/文件监听/过小清理

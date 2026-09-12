@@ -271,6 +271,14 @@ func (mc *MovieCollection) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+// 本地精彩片段生成状态机取值。
+const (
+	LocalHLStatusPending   = "pending"   // 待生成（新入库或重新可用）
+	LocalHLStatusGenerated = "generated" // 已生成完整侧车+缩略图
+	LocalHLStatusFailed    = "failed"    // 最近一次生成失败（含原因与失败时间）
+	LocalHLStatusSkipped   = "skipped"   // 不可生成（远程流/STRM/目录多视频等）
+)
+
 // Media 媒体项（电影/剧集）
 type Media struct {
 	ID           string  `json:"id" gorm:"primaryKey;type:text"`
@@ -344,6 +352,13 @@ type Media struct {
 	// 个人视频（如人名/日期命名的家庭视频片段）：不对外生成 SxxExx 季集标签，
 	// 季集编号仅用于内部排序与续播定位；分类剧集逻辑不受影响。
 	IsPersonal bool `json:"is_personal" gorm:"default:false"`
+	// 本地精彩片段生成状态（增量模式）：''（未知）/ pending / generated / failed / skipped。
+	// 新入库影片由 MediaRepo.Create 打标；生成/删除/校验时更新，避免每次全库 ffprobe。
+	LocalHLStatus      string     `json:"-" gorm:"column:local_hl_status;type:text;default:'';index"`
+	LocalHLDuration    float64    `json:"-" gorm:"column:local_hl_duration"` // 秒，缓存首次探测时长，避免重复 ffprobe
+	LocalHLGeneratedAt *time.Time `json:"-" gorm:"column:local_hl_generated_at"`
+	LocalHLFailedAt    *time.Time `json:"-" gorm:"column:local_hl_failed_at"`
+	LocalHLLastError   string     `json:"-" gorm:"column:local_hl_last_error;type:text"`
 	// 时间戳
 	CreatedAt time.Time      `json:"created_at" gorm:"index"`
 	UpdatedAt time.Time      `json:"updated_at"`
