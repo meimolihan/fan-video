@@ -107,6 +107,8 @@ func registerCoreAPI(
 	api.GET("/media/:id/highlights/:highlightId/preview", guardByMediaID, mediaAnalysis.Preview)
 	api.POST("/media/:id/highlights/analyze", guardByMediaID, middleware.AdminOnly(), mediaAnalysis.AnalyzeHighlightsDistributed)
 	api.DELETE("/media/:id/highlights", guardByMediaID, middleware.AdminOnly(), mediaAnalysis.DeleteHighlights)
+	// 生成本地片段：在该视频所在目录的 .highlights/ 下生成时间线侧车 + 缩略图并自动导入数据库
+	api.POST("/media/:id/highlights/local", guardByMediaID, middleware.AdminOnly(), mediaAnalysis.GenerateLocalHighlight)
 	api.POST("/media/:id/ai/highlights", guardByMediaID, middleware.AdminOnly(), mediaAnalysis.AnalyzeHighlightsDistributed)
 
 	// 精彩片段导出：导出与删除仅管理员；列表与下载沿用媒体访问权限（可分享）。

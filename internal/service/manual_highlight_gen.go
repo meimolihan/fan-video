@@ -294,7 +294,22 @@ func (s *MediaAnalysisService) scanLocalHighlightDirsIncremental() (*LocalHighli
 				s.logger.Warnf("local highlight scan 重置状态 %s: %v", m.ID, err)
 			}
 			report.Eligible = append(report.Eligible, item)
-		default: // pending / failed
+		case model.LocalHLStatusPending, "":
+			// 增量扫描时：若本地已存在完整 .highlights/ 产物，直接视为已生成并回写状态，
+			// 避免在无变动的影片上重复 ffprobe 与文件写入；若产物缺失则下次生成即补齐。
+			if localHLGenerated(dir, mediaStem(m.FilePath), planLocalHighlightSegments(duration)) {
+				if err := s.mediaRepo.MarkLocalHLGenerated(m.ID, duration); err != nil {
+					s.logger.Warnf("local highlight scan 确认已生成 %s: %v", m.ID, err)
+				}
+				report.AlreadyDirs++
+				continue
+			}
+			// 产物不存在，将其标记为待生成以便下次扫描/生成补齐
+			if err := s.mediaRepo.MarkLocalHLPending(m.ID); err != nil {
+				s.logger.Warnf("local highlight scan 重置状态 %s: %v", m.ID, err)
+			}
+			report.Eligible = append(report.Eligible, item)
+		default: // failed
 			report.Eligible = append(report.Eligible, item)
 		}
 	}
@@ -594,7 +609,7 @@ func (s *MediaAnalysisService) runLocalHighlightGeneration(eligible []model.Medi
 		s.localHL.currentDone = 0
 		s.localHL.mu.Unlock()
 
-		status, err := s.generateOneLocalMedia(m)
+		status, _, err := s.generateOneLocalMedia(m)
 		s.localHL.mu.Lock()
 		if err != nil {
 			s.localHL.lastError = err.Error()
@@ -618,13 +633,13 @@ func (s *MediaAnalysisService) runLocalHighlightGeneration(eligible []model.Medi
 }
 
 // generateOneLocalMedia 为一部视频补全 .highlights/ 侧车（json+缩略图）并自动导入数据库。
-// 返回 "generated"/"already"/"failed" 及失败原因（err 非空时表示失败）。
+// 返回状态（"generated"/"already"/"failed"）、导入数据库的片段数与失败原因（err 非空时表示失败）。
 // 每次调用都会把结果持久化到 media.local_hl_* 状态列（增量模式的正确性基础）。
-func (s *MediaAnalysisService) generateOneLocalMedia(m model.Media) (string, error) {
+func (s *MediaAnalysisService) generateOneLocalMedia(m model.Media) (string, int, error) {
 	if !localHighlightMediaUsable(m) {
 		err := errors.New("视频文件不存在或不受支持的格式")
 		_ = s.mediaRepo.MarkLocalHLFailed(m.ID, err.Error())
-		return "failed", err
+		return "failed", 0, err
 	}
 	dir := filepath.Dir(m.FilePath)
 	stem := mediaStem(m.FilePath)
@@ -637,7 +652,7 @@ func (s *MediaAnalysisService) generateOneLocalMedia(m model.Media) (string, err
 		}
 		s.logger.Warnf("local highlight probe failed media=%s: %v", m.ID, err)
 		_ = s.mediaRepo.MarkLocalHLFailed(m.ID, msg)
-		return "failed", errors.New(msg)
+		return "failed", 0, errors.New(msg)
 	}
 	// 缓存探测时长：后续增量扫描/校验无需重复 ffprobe
 	if m.LocalHLDuration != duration {
@@ -650,13 +665,13 @@ func (s *MediaAnalysisService) generateOneLocalMedia(m model.Media) (string, err
 		imported, _, _, importErr := s.importHighlightDir(filepath.Join(dir, ".highlights"), []model.Media{m})
 		if importErr == nil && imported > 0 {
 			_ = s.mediaRepo.MarkLocalHLGenerated(m.ID, duration)
-			return "already", nil
+			return "already", imported, nil
 		}
 		if importErr == nil {
 			importErr = errors.New("已存在侧车文件但数据库无对应 manual 片段")
 		}
 		_ = s.mediaRepo.MarkLocalHLFailed(m.ID, importErr.Error())
-		return "failed", importErr
+		return "failed", 0, importErr
 	}
 
 	hlDir := filepath.Join(dir, ".highlights")
@@ -664,7 +679,7 @@ func (s *MediaAnalysisService) generateOneLocalMedia(m model.Media) (string, err
 		s.logger.Warnf("local highlight mkdir %s: %v", hlDir, err)
 		msg := fmt.Sprintf("创建 .highlights 目录失败: %v", err)
 		_ = s.mediaRepo.MarkLocalHLFailed(m.ID, msg)
-		return "failed", errors.New(msg)
+		return "failed", 0, errors.New(msg)
 	}
 	webp := s.ffmpegSupportsEncoder("libwebp")
 
@@ -700,23 +715,23 @@ func (s *MediaAnalysisService) generateOneLocalMedia(m model.Media) (string, err
 	if wrote == 0 {
 		err := errors.New("未写入任何片段文件（缩略图生成失败）")
 		_ = s.mediaRepo.MarkLocalHLFailed(m.ID, err.Error())
-		return "failed", err
+		return "failed", 0, err
 	}
 
 	imported, _, _, importErr := s.importHighlightDir(hlDir, []model.Media{m})
 	if importErr != nil {
 		s.logger.Warnf("local highlight import %s: %v", hlDir, importErr)
 		_ = s.mediaRepo.MarkLocalHLFailed(m.ID, importErr.Error())
-		return "failed", importErr
+		return "failed", 0, importErr
 	}
 	if imported == 0 {
 		err := errors.New("导入数据库失败（无片段写入）")
 		_ = s.mediaRepo.MarkLocalHLFailed(m.ID, err.Error())
-		return "failed", err
+		return "failed", 0, err
 	}
 	s.logger.Infof("local highlight generated media=%s clips=%d", m.ID, imported)
 	_ = s.mediaRepo.MarkLocalHLGenerated(m.ID, duration)
-	return "generated", nil
+	return "generated", imported, nil
 }
 
 func thumbsForBase(base string) []string {
@@ -887,4 +902,72 @@ func (s *MediaAnalysisService) VerifyLocalHighlights() (*LocalHighlightVerifyRep
 		}
 	}
 	return report, nil
+}
+
+// ==================== 单媒体生成（详情页入口） ====================
+
+// ErrLocalHighlightUnsupportedMedia 表示媒体无法本地生成
+// （远程流 / STRM / 不支持的格式 / 文件不存在）。
+var ErrLocalHighlightUnsupportedMedia = errors.New("当前媒体不支持本地精彩片段生成（远程流与不支持的格式除外，仅支持本地单文件视频）")
+
+// ErrLocalHighlightMultiVideoDir 表示视频所在目录存在多个视频文件，无法安全归属。
+var ErrLocalHighlightMultiVideoDir = errors.New("该视频所在目录存在多个视频文件，请将每个视频放入独立目录后再生成本地片段")
+
+// ErrLocalHighlightBatchRunning 表示全库批量生成任务运行中，与单媒体生成互斥。
+var ErrLocalHighlightBatchRunning = errors.New("精彩片段批量任务运行中，请先停止或等待完成")
+
+// LocalHighlightSingleResult 单媒体本地精彩片段生成结果。
+type LocalHighlightSingleResult struct {
+	Status  string `json:"status"` // generated / already / failed
+	Clips   int    `json:"clips"`  // 本次导入数据库的片段数（generated / already）
+	MediaID string `json:"media_id"`
+}
+
+// GenerateLocalHighlightsForMedia 为单个媒体在其所在目录的 .highlights/ 下生成
+// 时间线侧车（<茎>_<NN>_<标题>.json）+ 缩略图并自动导入数据库（Source=manual，详情页立即可见）。
+//
+// 同步执行（ffprobe 时长 + 每段单帧截图，通常数秒内完成），返回生成的片段数；
+// 已生成完整侧车时返回 already 无变动。与全库批量生成、本地批量生成互斥，
+// 避免 ffmpeg 争抢与数据库 manual 记录互相覆盖。
+func (s *MediaAnalysisService) GenerateLocalHighlightsForMedia(mediaID string) (*LocalHighlightSingleResult, error) {
+	media, err := s.mediaRepo.FindByID(mediaID)
+	if err != nil {
+		return nil, ErrMediaNotFound
+	}
+	if !localHighlightMediaUsable(*media) {
+		return nil, ErrLocalHighlightUnsupportedMedia
+	}
+
+	// 单视频目录约束：多视频目录无法安全归属（importHighlightDir 以视频茎消歧）。
+	dir := filepath.Dir(media.FilePath)
+	counts, err := s.mediaRepo.CountLocalByParentDirs([]string{dir})
+	if err != nil {
+		return nil, fmt.Errorf("校验目录归属失败: %w", err)
+	}
+	if counts[dir] > 1 {
+		return nil, ErrLocalHighlightMultiVideoDir
+	}
+
+	// 与全库批量生成互斥（与 StartLocalHighlightGeneration 一致的加锁顺序：先 batch 后 localHL）。
+	s.batch.mu.Lock()
+	batchRunning := s.batch.running
+	s.batch.mu.Unlock()
+	if batchRunning {
+		return nil, ErrLocalHighlightBatchRunning
+	}
+	s.localHL.mu.Lock()
+	localRunning := s.localHL.running
+	s.localHL.mu.Unlock()
+	if localRunning {
+		return nil, ErrLocalHighlightGenInProgress
+	}
+
+	status, clips, genErr := s.generateOneLocalMedia(*media)
+	result := &LocalHighlightSingleResult{Status: status, Clips: clips, MediaID: mediaID}
+	if genErr != nil {
+		// generateOneLocalMedia 已持久化 MarkLocalHLFailed（含失败时间与原因）
+		s.logger.Warnf("local highlight per-media generate failed media=%s status=%s: %v", mediaID, status, genErr)
+		return result, genErr
+	}
+	return result, nil
 }

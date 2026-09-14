@@ -327,6 +327,13 @@ export interface LocalHighlightCleanupReport {
   files_deleted: number
 }
 
+// 单媒体「生成本地片段」结果：在视频所在目录生成 .highlights 时间线侧车 + 缩略图
+export interface LocalHighlightSingleResult {
+  status: 'generated' | 'already' | 'failed' | string
+  clips: number
+  media_id: string
+}
+
 export const mediaAnalysisApi = {
   getHighlights: (mediaId: string) =>
     api.get<{ data: MediaHighlightList }>(`/media/${mediaId}/highlights`),
@@ -403,6 +410,10 @@ export const mediaAnalysisApi = {
 
   cleanupLocalHighlights: () =>
     api.post<{ data: LocalHighlightCleanupReport; message: string }>('/admin/media-analysis/highlights-local/cleanup'),
+
+  // 生成本地片段：在当前视频所在目录创建 .highlights/（时间线侧车 json + 缩略图）并自动导入数据库
+  generateLocalHighlightsForMedia: (mediaId: string) =>
+    api.post<{ data: LocalHighlightSingleResult; message: string }>(`/media/${mediaId}/highlights/local`),
 
   getWorkerConfig: () =>
     api.get<{ data: MediaAnalysisWorkerConfig }>('/admin/media-analysis/config'),

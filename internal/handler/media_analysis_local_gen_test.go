@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/fan-video/fan-video/internal/config"
@@ -68,6 +69,7 @@ func TestLocalHighlightEndpoints(t *testing.T) {
 	r.GET("/api/admin/media-analysis/highlights-local/status", h.LocalHighlightGenerationStatus)
 	r.POST("/api/admin/media-analysis/highlights-local/cleanup", h.CleanupLocalHighlights)
 	r.POST("/api/admin/media-analysis/highlights-local/verify", h.VerifyLocalHighlights)
+	r.POST("/api/media/:id/highlights/local", h.GenerateLocalHighlight)
 
 	// 扫描：多视频目录报错并列出原因；单视频目录（文件无效占位）不在可生成集合
 	w := httptest.NewRecorder()
@@ -132,5 +134,83 @@ func TestLocalHighlightEndpoints(t *testing.T) {
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/admin/media-analysis/highlights-local/cleanup", nil))
 	if w.Code != http.StatusOK {
 		t.Fatalf("清理接口应返回 200，实际 %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// 单媒体「生成本地片段」接口：路由与错误映射（真实生成由 Service 集成测试覆盖）。
+func TestGenerateLocalHighlightEndpoint(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	root := t.TempDir()
+	soloDir := filepath.Join(root, "单视频目录")
+	multiDir := filepath.Join(root, "多视频目录")
+	if err := os.MkdirAll(soloDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(multiDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	soloVideo := filepath.Join(soloDir, "甲.mp4")
+	if err := os.WriteFile(soloVideo, []byte("dummy"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if err := db.AutoMigrate(&model.Media{}, &model.VideoHighlight{}, &model.AIAnalysisTask{}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	repos := repository.NewRepositories(db)
+	medias := []model.Media{
+		{ID: "mSolo", Title: "甲", FilePath: soloVideo},
+		{ID: "mMulti1", Title: "乙", FilePath: filepath.Join(multiDir, "乙.mp4")},
+		{ID: "mMulti2", Title: "丙", FilePath: filepath.Join(multiDir, "丙.mp4")},
+		{ID: "mStrm", Title: "丁", FilePath: filepath.Join(soloDir, "丁.strm"), StreamURL: "https://example.invalid/v.mkv"},
+	}
+	for _, m := range medias {
+		if err := db.Create(&m).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cfg := &config.Config{}
+	cfg.App.DataDir = filepath.Join(t.TempDir(), "data")
+	cfg.Cache.CacheDir = filepath.Join(t.TempDir(), "cache")
+	cfg.App.FFprobePath = "ffprobe"
+
+	svc := service.NewMediaAnalysisService(cfg, repos.Media, repos.VideoHighlight, repos.AIAnalysisTask, zap.NewNop().Sugar())
+	r := gin.New()
+	h := NewMediaAnalysisHandler(svc, zap.NewNop().Sugar())
+	r.POST("/api/media/:id/highlights/local", h.GenerateLocalHighlight)
+
+	cases := []struct {
+		name   string
+		media  string
+		status int
+	}{
+		{"媒体不存在返回 404", "mNotExist", http.StatusNotFound},
+		{"多视频目录返回 422", "mMulti1", http.StatusUnprocessableEntity},
+		{"目录存在多个视频（另一媒体）返回 422", "mMulti2", http.StatusUnprocessableEntity},
+		{"远程流返回 422", "mStrm", http.StatusUnprocessableEntity},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/media/"+tc.media+"/highlights/local", nil))
+			if w.Code != tc.status {
+				t.Fatalf("期望 %d，实际 %d: %s", tc.status, w.Code, w.Body.String())
+			}
+		})
+	}
+
+	// 单视频目录但文件为无效占位：进入生成链路后 ffprobe 失败 → 500（错误信息含 ffprobe）
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/media/mSolo/highlights/local", nil))
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("无效视频文件生成应返回 500，实际 %d: %s", w.Code, w.Body.String())
+	}
+	if body := w.Body.String(); !strings.Contains(body, "ffprobe") {
+		t.Fatalf("失败信息应包含 ffprobe 原因，实际 %s", body)
 	}
 }

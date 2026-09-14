@@ -5,7 +5,7 @@ import { useWebSocket, WS_EVENTS } from '@/hooks/useWebSocket'
 import { useToast } from '@/components/Toast'
 import { useTranslation } from '@/i18n'
 import { usePageCache } from '@/hooks/usePageCache'
-import { usePosterVersion } from '@/stores/mediaRefresh'
+import { usePosterVersion, bumpPosterVersion } from '@/stores/mediaRefresh'
 import { formatProgress } from '@/utils/format'
 import type { WatchHistory, RecommendedMedia, MixedItem } from '@/types'
 import MediaCard from '@/components/MediaCard'
@@ -110,17 +110,22 @@ export default function HomePage() {
       silentRefresh()
     }
     const handleContentChanged = () => debouncedRefresh()
+    const handleScrapeCompleted = () => {
+      // 刮削/首帧封面生成完成后：bump 海报版本让浏览器重新拉取，避免 IDB 缓存残留占位图/白图
+      bumpPosterVersion()
+      debouncedRefresh()
+    }
 
     on(WS_EVENTS.LIBRARY_DELETED, handleLibraryDeleted)
     on(WS_EVENTS.LIBRARY_UPDATED, handleContentChanged)
     on(WS_EVENTS.SCAN_COMPLETED, handleContentChanged)
-    on(WS_EVENTS.SCRAPE_COMPLETED, handleContentChanged)
+    on(WS_EVENTS.SCRAPE_COMPLETED, handleScrapeCompleted)
 
     return () => {
       off(WS_EVENTS.LIBRARY_DELETED, handleLibraryDeleted)
       off(WS_EVENTS.LIBRARY_UPDATED, handleContentChanged)
       off(WS_EVENTS.SCAN_COMPLETED, handleContentChanged)
-      off(WS_EVENTS.SCRAPE_COMPLETED, handleContentChanged)
+      off(WS_EVENTS.SCRAPE_COMPLETED, handleScrapeCompleted)
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
     }
   }, [on, off, invalidate, silentRefresh])

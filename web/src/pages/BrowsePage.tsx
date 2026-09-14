@@ -4,7 +4,7 @@ import { mediaApi, seriesApi, libraryApi, streamApi } from '@/api'
 import { useToast } from '@/components/Toast'
 import { useWebSocket, WS_EVENTS } from '@/hooks/useWebSocket'
 import { usePageCache, invalidatePageCachePrefix } from '@/hooks/usePageCache'
-import { usePosterVersion } from '@/stores/mediaRefresh'
+import { usePosterVersion, bumpPosterVersion } from '@/stores/mediaRefresh'
 import type { Series, MixedItem, Library } from '@/types'
 import MediaCard from '@/components/MediaCard'
 import VirtualGrid from '@/components/VirtualGrid'
@@ -289,12 +289,17 @@ export default function BrowsePage() {
         void refetch(true)
       }, 1000)
     }
+    const handleScrapeCompleted = () => {
+      // 刮削/首帧封面生成完成后：bump 海报版本让浏览器重新拉取，避免 IDB 缓存残留占位图/白图
+      bumpPosterVersion()
+      debouncedRefresh()
+    }
     on(WS_EVENTS.SCAN_COMPLETED, debouncedRefresh)
-    on(WS_EVENTS.SCRAPE_COMPLETED, debouncedRefresh)
+    on(WS_EVENTS.SCRAPE_COMPLETED, handleScrapeCompleted)
     on(WS_EVENTS.LIBRARY_UPDATED, debouncedRefresh)
     return () => {
       off(WS_EVENTS.SCAN_COMPLETED, debouncedRefresh)
-      off(WS_EVENTS.SCRAPE_COMPLETED, debouncedRefresh)
+      off(WS_EVENTS.SCRAPE_COMPLETED, handleScrapeCompleted)
       off(WS_EVENTS.LIBRARY_UPDATED, debouncedRefresh)
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
     }

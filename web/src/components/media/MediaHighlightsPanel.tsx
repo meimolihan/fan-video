@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, ChevronUp, Clapperboard, Clock3, Download, Loader2, Play, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
+import { ChevronRight, ChevronUp, Clapperboard, Clock3, Download, Loader2, MonitorPlay, Play, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 import { Button, EmptyState } from '@/components/design-system'
 import { useToast } from '@/components/Toast'
 import { streamApi } from '@/api'
@@ -85,6 +85,7 @@ export default function MediaHighlightsPanel({ mediaId, isAdmin }: MediaHighligh
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [localGenerating, setLocalGenerating] = useState(false)
   const [exportingIds, setExportingIds] = useState<Set<string>>(new Set())
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
@@ -242,6 +243,19 @@ export default function MediaHighlightsPanel({ mediaId, isAdmin }: MediaHighligh
     }
   }
 
+  const handleLocalGenerate = async () => {
+    setLocalGenerating(true)
+    try {
+      const response = await mediaAnalysisApi.generateLocalHighlightsForMedia(mediaId)
+      await loadHighlights()
+      toast.success(response.data.message || '生成本地精彩片段完成')
+    } catch (error) {
+      toast.error(formatErrMsg(error, '生成本地片段失败'))
+    } finally {
+      setLocalGenerating(false)
+    }
+  }
+
   const handleDelete = async () => {
     if (!window.confirm('确定删除当前媒体已生成的全部精彩片段吗？原始影片不会被删除。')) return
     setDeleting(true)
@@ -344,10 +358,16 @@ export default function MediaHighlightsPanel({ mediaId, isAdmin }: MediaHighligh
             ? '上次分析因服务重启而中断，可以重新生成。'
             : '当前媒体尚未生成精彩片段。系统会优先交给可用客户端计算；自动模式下没有客户端时再由服务端 Sparse V2 兜底。'}
         action={isAdmin ? (
-          <Button type="button" variant="primary" size="sm" onClick={handleAnalyze} disabled={submitting}>
-            {submitting ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
-            生成精彩片段
-          </Button>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button type="button" variant="primary" size="sm" onClick={handleAnalyze} disabled={submitting}>
+              {submitting ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+              生成精彩片段
+            </Button>
+            <Button type="button" variant="secondary" size="sm" onClick={handleLocalGenerate} disabled={localGenerating} title="在该视频所在目录创建 .highlights 时间线侧车与缩略图（仅限单视频目录）">
+              {localGenerating ? <Loader2 size={15} className="animate-spin" /> : <MonitorPlay size={15} />}
+              生成本地片段
+            </Button>
+          </div>
         ) : undefined}
       />
     )
@@ -367,6 +387,10 @@ export default function MediaHighlightsPanel({ mediaId, isAdmin }: MediaHighligh
               <Button type="button" variant="secondary" size="sm" onClick={handleAnalyze} disabled={submitting}>
                 {submitting ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
                 重新分析
+              </Button>
+              <Button type="button" variant="secondary" size="sm" onClick={handleLocalGenerate} disabled={localGenerating} title="在该视频所在目录创建 .highlights 时间线侧车与缩略图（仅限单视频目录）">
+                {localGenerating ? <Loader2 size={14} className="animate-spin" /> : <MonitorPlay size={14} />}
+                生成本地片段
               </Button>
               <Button type="button" variant="ghost" size="sm" onClick={handleDelete} disabled={deleting}>
                 {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}

@@ -18,6 +18,11 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("打开测试数据库失败: %v", err)
 	}
+	// 内存库必须固定单个连接：GORM 连接池下多连接各自持有独立内存库，
+	// 并发测试（如后台首帧生成 worker）会命中不一致的表结构。
+	if sqlDB, err := db.DB(); err == nil {
+		sqlDB.SetMaxOpenConns(1)
+	}
 	if err := model.AutoMigrate(db); err != nil {
 		t.Fatalf("迁移测试数据库失败: %v", err)
 	}

@@ -403,6 +403,41 @@ func (h *MediaAnalysisHandler) CleanupLocalHighlights(c *gin.Context) {
 	})
 }
 
+// GenerateLocalHighlight 为单个媒体生成本地精彩片段（同步执行，数秒内完成）：
+// 在该视频所在目录的 .highlights/ 下生成时间线侧车 json + 缩略图，并自动导入数据库
+// 为 Source=manual 的精彩片段，详情页立即可见。
+// POST /api/media/:id/highlights/local
+func (h *MediaAnalysisHandler) GenerateLocalHighlight(c *gin.Context) {
+	mediaID := c.Param("id")
+	result, err := h.analysis.GenerateLocalHighlightsForMedia(mediaID)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrMediaNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "媒体不存在"})
+		case errors.Is(err, service.ErrLocalHighlightUnsupportedMedia):
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		case errors.Is(err, service.ErrLocalHighlightMultiVideoDir):
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		case errors.Is(err, service.ErrLocalHighlightBatchRunning),
+			errors.Is(err, service.ErrLocalHighlightGenInProgress):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			h.logger.Warnf("generate local highlight failed media=%s: %v", mediaID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "生成本地精彩片段失败: " + err.Error()})
+		}
+		return
+	}
+
+	message := "本地精彩片段生成完成"
+	switch result.Status {
+	case "generated":
+		message = fmt.Sprintf("已生成本地精彩片段（%d 个）", result.Clips)
+	case "already":
+		message = "本地精彩片段已存在（未变动）"
+	}
+	c.JSON(http.StatusOK, gin.H{"data": result, "message": message})
+}
+
 // CleanBrokenHighlights 删除完整性检查发现的问题片段。
 // POST /api/admin/media-analysis/highlights-audit/clean  body: {"include_asset_issues": true}
 func (h *MediaAnalysisHandler) CleanBrokenHighlights(c *gin.Context) {

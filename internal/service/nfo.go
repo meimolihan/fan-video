@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/fan-video/fan-video/internal/config"
 	"github.com/fan-video/fan-video/internal/model"
@@ -565,6 +566,72 @@ func (s *NFOService) FindNFOForMedia(mediaFilePath string) string {
 // firstFrameMu 串行化首帧提取，避免并发请求对同一视频重复 spawn ffmpeg
 var firstFrameMu sync.Mutex
 
+// minValidFirstFrameBytes 有效首帧图片的最小字节数：低于该值视为残缺/纯白帧，
+// 命中这类缓存时强制重新提取，避免把坏帧一直当作有效封面。
+const minValidFirstFrameBytes = 2048
+
+// firstFrameFailCooldown 首帧提取失败后的冷却期（负缓存）。
+// 提取失败的视频在冷却期内不再重复 spawn ffmpeg，避免批量无封面媒体
+// 的海报请求反复触发重试而拖垮服务器。
+const firstFrameFailCooldown = 10 * time.Minute
+
+// firstFrameFailUntil 记录视频路径 → 失败冷却截止时间（并发安全）。
+// 成功的提取会立即清除对应条目，保证文件修复后能立刻恢复。
+var (
+	firstFrameFailMu    sync.Mutex
+	firstFrameFailUntil = make(map[string]time.Time)
+)
+
+// validFirstFrameFile 校验首帧缓存文件是否可用：存在、大小达标且带真实图片
+// 魔数（JPEG / PNG / WebP）。纯白、半截、损坏的输出会被判定为无效从而重新提取。
+func validFirstFrameFile(path string) bool {
+	st, err := os.Stat(path)
+	if err != nil || st.Size() < minValidFirstFrameBytes {
+		return false
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	head := make([]byte, 12)
+	if n, err := io.ReadFull(f, head); err != nil || n < 12 {
+		return false
+	}
+	if head[0] == 0xFF && head[1] == 0xD8 && head[2] == 0xFF {
+		return true // JPEG
+	}
+	if string(head[:4]) == "\x89PNG" {
+		return true
+	}
+	if string(head[:4]) == "RIFF" && string(head[8:12]) == "WEBP" {
+		return true
+	}
+	return false
+}
+
+// inFirstFrameFailCooldown 判断视频是否处于首帧提取失败冷却期内。
+func inFirstFrameFailCooldown(videoPath string) bool {
+	firstFrameFailMu.Lock()
+	defer firstFrameFailMu.Unlock()
+	until, ok := firstFrameFailUntil[videoPath]
+	return ok && time.Now().Before(until)
+}
+
+// clearFirstFrameFail 清除视频的首帧提取失败冷却标记。
+func clearFirstFrameFail(videoPath string) {
+	firstFrameFailMu.Lock()
+	defer firstFrameFailMu.Unlock()
+	delete(firstFrameFailUntil, videoPath)
+}
+
+// markFirstFrameFail 记录视频的首帧提取失败，进入冷却期。
+func markFirstFrameFail(videoPath string) {
+	firstFrameFailMu.Lock()
+	defer firstFrameFailMu.Unlock()
+	firstFrameFailUntil[videoPath] = time.Now().Add(firstFrameFailCooldown)
+}
+
 // EnsureFirstFramePoster 提取视频第一帧作为封面海报（带持久化缓存）。
 //
 // 缓存键 = 文件绝对路径 + 大小 + 修改时间：
@@ -588,6 +655,12 @@ func (s *NFOService) EnsureFirstFramePoster(videoPath string) (string, error) {
 		return "", fmt.Errorf("视频文件不存在: %w", err)
 	}
 
+	// 失败冷却：上次提取失败且未过冷却期时直接返回，
+	// 避免批量海报请求对同一批失败视频反复 spawn ffmpeg。
+	if inFirstFrameFailCooldown(videoPath) {
+		return "", fmt.Errorf("首帧提取处于失败冷却期: %s", videoPath)
+	}
+
 	cacheDir := s.firstFrameCacheDir()
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		return "", fmt.Errorf("创建缓存目录失败: %w", err)
@@ -596,8 +669,9 @@ func (s *NFOService) EnsureFirstFramePoster(videoPath string) (string, error) {
 	key := firstFrameCacheKey(videoPath, info)
 	outputPath := filepath.Join(cacheDir, key+".jpg")
 
-	// 命中有效缓存直接返回
-	if st, statErr := os.Stat(outputPath); statErr == nil && st.Size() > 0 {
+	// 命中有效缓存直接返回；存在但缺损/纯白的帧视为无效，需重新提取
+	if validFirstFrameFile(outputPath) {
+		clearFirstFrameFail(videoPath)
 		return outputPath, nil
 	}
 
@@ -605,8 +679,13 @@ func (s *NFOService) EnsureFirstFramePoster(videoPath string) (string, error) {
 	defer firstFrameMu.Unlock()
 
 	// 双重检查：并发场景下可能已被其他请求生成
-	if st, statErr := os.Stat(outputPath); statErr == nil && st.Size() > 0 {
+	if validFirstFrameFile(outputPath) {
+		clearFirstFrameFail(videoPath)
 		return outputPath, nil
+	}
+	// 剔除损坏/白屏缓存帧，避免被列表页直接复用
+	if _, statErr := os.Stat(outputPath); statErr == nil {
+		_ = os.Remove(outputPath)
 	}
 
 	tmpPath := filepath.Join(cacheDir, "."+key+".tmp.jpg")
@@ -626,16 +705,18 @@ func (s *NFOService) EnsureFirstFramePoster(videoPath string) (string, error) {
 		cmd := exec.Command(s.ffmpegPath(), args...)
 		output, cmdErr := cmd.CombinedOutput()
 
-		if st, statErr := os.Stat(tmpPath); statErr == nil && st.Size() > 0 {
+		if validFirstFrameFile(tmpPath) {
 			if renameErr := os.Rename(tmpPath, outputPath); renameErr != nil {
 				return "", fmt.Errorf("保存封面失败: %w", renameErr)
 			}
+			clearFirstFrameFail(videoPath)
 			s.logger.Debugf("提取视频首帧成功(seek=%s): %s -> %s", seekPos, videoPath, outputPath)
 			return outputPath, nil
 		}
 		s.logger.Debugf("提取视频首帧失败(seek=%s): %s - %v\n%s", seekPos, videoPath, cmdErr, string(output))
 	}
 
+	markFirstFrameFail(videoPath)
 	return "", fmt.Errorf("无法从视频提取首帧: %s", videoPath)
 }
 

@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/fan-video/fan-video/internal/config"
@@ -86,6 +88,17 @@ var mimeTypes = map[string]string{
 	".mov":  "video/quicktime",
 }
 
+// maxSyncFirstFrameGenerations 允许在 HTTP 海报请求热路径上同步执行 ffmpeg
+// 首帧提取的并发请求数。超出上限的请求立即返回占位图并转后台队列，
+// 保证批量无封面媒体同时命中时服务器不会把全部请求线程卡死在 ffmpeg 上。
+const maxSyncFirstFrameGenerations = 2
+
+// firstFrameQueueCapacity 后台首帧生成队列容量，超出部分丢弃（下次请求再入队）。
+const firstFrameQueueCapacity = 512
+
+// firstFrameNotifyDebounce 后台首帧批量完成后广播 scrape_completed 的合并窗口。
+const firstFrameNotifyDebounce = 1500 * time.Millisecond
+
 // StreamService 流媒体服务
 type StreamService struct {
 	mediaRepo   *repository.MediaRepo
@@ -97,6 +110,18 @@ type StreamService struct {
 	logger      *zap.SugaredLogger
 	vfsMgr      *VFSManager // V2.1: VFS 管理器，支持 webdav:// 路径
 	nfoService  *NFOService // 本地海报匹配 + 视频首帧兜底（可选注入）
+	wsHub       *WSHub
+
+	// 首帧封面异步兜底：批量无封面媒体并发请求海报时，只允许少量请求在
+	// HTTP 热路径上同步生成，其余转入后台队列，避免卡死整批海报请求。
+	firstFrameSync          atomic.Int32 // 当前占用同步生成槽位的请求数
+	firstFrameOnce          sync.Once    // 后台 worker 只启动一次
+	firstFrameMu            sync.Mutex   // 保护 queue/queued
+	firstFrameQueue         chan string
+	firstFrameQueued        map[string]bool
+	firstFrameNotifyMu      sync.Mutex
+	firstFrameNotifyPending bool
+	firstFrameNotifyTimer   *time.Timer
 }
 
 func NewStreamService(
@@ -123,6 +148,11 @@ func (s *StreamService) SetVFSManager(vfsMgr *VFSManager) {
 // SetNFOService 注入 NFO 服务（用于本地海报缺失时的视频首帧兜底）
 func (s *StreamService) SetNFOService(nfo *NFOService) {
 	s.nfoService = nfo
+}
+
+// SetWSHub 注入 WebSocket Hub（用于首帧封面后台生成完成后的广播通知）
+func (s *StreamService) SetWSHub(hub *WSHub) {
+	s.wsHub = hub
 }
 
 // statMediaFile 返回文件判断：同时支持本地路径和 webdav:// 路径
@@ -503,8 +533,11 @@ func (s *StreamService) GetPosterPath(mediaID string) (string, error) {
 		}
 	}
 
-	// 4. 兜底：提取视频第一帧（带持久化缓存，并回写数据库让列表页直接生效）
-	if generated, ok := s.generateFirstFrameCover(media); ok {
+	// 4. 兜底：提取视频第一帧（带持久化缓存，并回写数据库让列表页直接生效）。
+	//    首帧提取耗时（spawn ffmpeg），批量无封面媒体同时命中时绝不能把全部
+	//    请求线程卡在同步生成上：仅允许少量请求同步生成，其余快速返回占位
+	//    图并转入后台队列，生成成功后广播前台刷新。
+	if generated, ok := s.resolveFirstFrameCover(media); ok {
 		return generated, nil
 	}
 
@@ -541,6 +574,146 @@ func (s *StreamService) generateFirstFrameCover(media *model.Media) (string, boo
 	}
 	s.logger.Debugf("使用视频首帧作为封面 media=%s: %s", media.ID, generated)
 	return generated, true
+}
+
+// resolveFirstFrameCover 首帧封面兜底入口：有界同步 + 后台队列。
+//   - 命中有效缓存 → 直接复用（并回写数据库）；
+//   - 还有同步槽位 → 本请求当场生成（单请求场景行为与旧实现一致，也利于单测）；
+//   - 槽位已满 → 入后台队列，本请求快速返回失败（前端显示占位图）。
+func (s *StreamService) resolveFirstFrameCover(media *model.Media) (string, bool) {
+	if candidate := s.readyFirstFrameCover(media); candidate != "" {
+		return candidate, true
+	}
+	if s.tryAcquireFirstFrameSlot() {
+		defer s.releaseFirstFrameSlot()
+		return s.generateFirstFrameCover(media)
+	}
+	s.enqueueFirstFrame(media)
+	s.logger.Debugf("首帧封面转入后台生成 media=%s", media.ID)
+	return "", false
+}
+
+// readyFirstFrameCover 命中已提取且有效的首帧缓存时直接复用（并回写数据库）。
+func (s *StreamService) readyFirstFrameCover(media *model.Media) string {
+	if s.nfoService == nil || media == nil {
+		return ""
+	}
+	if media.StreamURL != "" || IsWebDAVPath(media.FilePath) {
+		return ""
+	}
+	ext := strings.ToLower(filepath.Ext(media.FilePath))
+	if ext == "" || ext == ".strm" {
+		return ""
+	}
+	info, err := os.Stat(media.FilePath)
+	if err != nil {
+		return ""
+	}
+	candidate := filepath.Join(s.nfoService.firstFrameCacheDir(), firstFrameCacheKey(media.FilePath, info)+".jpg")
+	if !validFirstFrameFile(candidate) {
+		return ""
+	}
+	if media.PosterPath != candidate {
+		if updateErr := s.mediaRepo.UpdateFields(media.ID, map[string]interface{}{"poster_path": candidate}); updateErr == nil {
+			media.PosterPath = candidate
+		}
+	}
+	return candidate
+}
+
+// tryAcquireFirstFrameSlot 尝试获取一个同步首帧生成槽位，超限自动归还并返回 false。
+func (s *StreamService) tryAcquireFirstFrameSlot() bool {
+	n := s.firstFrameSync.Add(1)
+	if n <= maxSyncFirstFrameGenerations {
+		return true
+	}
+	s.firstFrameSync.Add(-1)
+	return false
+}
+
+// releaseFirstFrameSlot 归还同步首帧生成槽位。
+func (s *StreamService) releaseFirstFrameSlot() {
+	s.firstFrameSync.Add(-1)
+}
+
+// ensureFirstFrameWorker 惰性启动后台首帧生成 worker（进程生命周期内常驻）。
+func (s *StreamService) ensureFirstFrameWorker() {
+	s.firstFrameOnce.Do(func() {
+		s.firstFrameQueue = make(chan string, firstFrameQueueCapacity)
+		s.firstFrameQueued = make(map[string]bool)
+		go s.firstFrameWorker()
+	})
+}
+
+// enqueueFirstFrame 将媒体加入后台首帧生成队列（按 mediaID 去重，队列满则丢弃）。
+func (s *StreamService) enqueueFirstFrame(media *model.Media) {
+	if s.nfoService == nil || media == nil {
+		return
+	}
+	s.ensureFirstFrameWorker()
+	s.firstFrameMu.Lock()
+	if s.firstFrameQueued[media.ID] {
+		s.firstFrameMu.Unlock()
+		return
+	}
+	s.firstFrameQueued[media.ID] = true
+	s.firstFrameMu.Unlock()
+	select {
+	case s.firstFrameQueue <- media.ID:
+	default:
+		// 队列已满：丢弃本次入队，后续请求会再次触发
+	}
+}
+
+func (s *StreamService) firstFrameWorker() {
+	for id := range s.firstFrameQueue {
+		s.processFirstFrameJob(id)
+		s.firstFrameMu.Lock()
+		delete(s.firstFrameQueued, id)
+		s.firstFrameMu.Unlock()
+	}
+}
+
+// processFirstFrameJob 后台生成单个媒体的首帧封面，成功后广播前端刷新事件。
+func (s *StreamService) processFirstFrameJob(id string) {
+	media, err := s.mediaRepo.FindByID(id)
+	if err != nil {
+		return
+	}
+	if _, ok := s.generateFirstFrameCover(media); ok {
+		s.notifyFirstFramesReady()
+	}
+}
+
+// notifyFirstFramesReady 合并 1.5s 内的批量后台生成完成，广播一次 scrape_completed，
+// 触发 Home/Browse 等页面对海报做版本 bump 与静默刷新，网格无需手动刷新即可自愈。
+func (s *StreamService) notifyFirstFramesReady() {
+	s.firstFrameNotifyMu.Lock()
+	if s.firstFrameNotifyPending {
+		s.firstFrameNotifyMu.Unlock()
+		return
+	}
+	s.firstFrameNotifyPending = true
+	if s.firstFrameNotifyTimer != nil {
+		s.firstFrameNotifyTimer.Stop()
+		s.firstFrameNotifyTimer = nil
+	}
+	s.firstFrameNotifyTimer = time.AfterFunc(firstFrameNotifyDebounce, func() {
+		s.firstFrameNotifyMu.Lock()
+		s.firstFrameNotifyPending = false
+		s.firstFrameNotifyTimer = nil
+		s.firstFrameNotifyMu.Unlock()
+		if s.wsHub != nil {
+			s.wsHub.BroadcastEvent(EventScrapeCompleted, map[string]interface{}{
+				"media_id":    "",
+				"title":       "",
+				"status":      "done",
+				"source":      "first_frame",
+				"poster_path": "",
+			})
+		}
+	})
+	s.firstFrameNotifyMu.Unlock()
 }
 
 // ==================== STRM 远程流代理 ====================

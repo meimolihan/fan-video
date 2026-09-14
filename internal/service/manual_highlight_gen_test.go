@@ -120,7 +120,7 @@ func TestGenerateLocalHighlightsIntegration(t *testing.T) {
 	}
 	svc := NewMediaAnalysisService(cfg, repos.Media, repos.VideoHighlight, repos.AIAnalysisTask, zap.NewNop().Sugar())
 
-	status, err := svc.generateOneLocalMedia(model.Media{ID: "mGen", Title: "测试大片", FilePath: videoPath})
+	status, _, err := svc.generateOneLocalMedia(model.Media{ID: "mGen", Title: "测试大片", FilePath: videoPath})
 	if err != nil {
 		t.Fatalf("生成失败: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestGenerateLocalHighlightsIntegration(t *testing.T) {
 	}
 
 	// 幂等：再次运行 → already，不新增文件/记录
-	status2, err2 := svc.generateOneLocalMedia(model.Media{ID: "mGen", Title: "测试大片", FilePath: videoPath})
+	status2, _, err2 := svc.generateOneLocalMedia(model.Media{ID: "mGen", Title: "测试大片", FilePath: videoPath})
 	if err2 != nil {
 		t.Fatalf("重复运行失败: %v", err2)
 	}
