@@ -17,8 +17,9 @@ FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS backend
 ARG TARGETOS
 ARG TARGETARCH
 ARG NOWEN_VERSION=1.3.0
+ARG GOPROXY=https://goproxy.cn,https://goproxy.io,direct
 WORKDIR /app
-ENV GOPROXY=https://goproxy.cn,https://goproxy.io,direct
+ENV GOPROXY=${GOPROXY}
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
