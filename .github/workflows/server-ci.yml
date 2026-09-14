@@ -73,6 +73,23 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build frontend for embedded assets
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+      - name: Sync embedded frontend assets
+        working-directory: web
+        run: |
+          mkdir -p ../internal/pwa ../internal/embedded/dist
+          cp -f public/assets/sw.js ../internal/pwa/sw.js
+          cp -f public/assets/manifest.json ../internal/pwa/manifest.json
+          cp -rf dist/. ../internal/embedded/dist/
       - name: Download modules
         run: go mod download
       - name: Test Go packages
