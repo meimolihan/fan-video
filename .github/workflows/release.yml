@@ -1,0 +1,70 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # ==================== 前端构建 ====================
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build frontend
+        working-directory: web
+        run: |
+          npm ci
+          VITE_APP_VERSION=${{ steps.version.outputs.VERSION }} npm run build
+
+      # ==================== 同步内嵌资源（go:embed） ====================
+      - name: Sync embedded web assets
+        run: |
+          mkdir -p internal/pwa internal/embedded/dist
+          cp -f web/public/assets/sw.js internal/pwa/sw.js
+          cp -f web/public/assets/manifest.json internal/pwa/manifest.json
+          cp -rf web/dist/. internal/embedded/dist/
+
+      # ==================== 后端交叉编译（自包含二进制） ====================
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Build amd64
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
+            -ldflags="-s -w -X github.com/fan-video/fan-video/internal/version.Version=${{ steps.version.outputs.VERSION }}" \
+            -o fan-video_linux_amd64 ./cmd/server-lite
+
+      - name: Build arm64
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath \
+            -ldflags="-s -w -X github.com/fan-video/fan-video/internal/version.Version=${{ steps.version.outputs.VERSION }}" \
+            -o fan-video_linux_arm64 ./cmd/server-lite
+
+      # ==================== 创建 GitHub Release ====================
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "fan-video ${{ steps.version.outputs.VERSION }}"
+          files: |
+            fan-video_linux_amd64
+            fan-video_linux_arm64
+          generate_release_notes: true
