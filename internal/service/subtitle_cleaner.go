@@ -3,7 +3,6 @@ package service
 import (
 	"bytes"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -803,7 +802,3 @@ func writeVTTToFile(vttPath string, cues []vttCue) error {
 
 	return os.WriteFile(vttPath, []byte(buf.String()), 0644)
 }
-
-// ==================== 辅助：确保 math 包被使用 ====================
-
-var _ = math.MaxInt64
