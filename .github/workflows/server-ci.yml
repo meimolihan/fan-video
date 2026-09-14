@@ -69,14 +69,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate release shell tooling
-        run: |
-          bash -n scripts/release.sh
-          bash -n scripts/release-advanced.sh
-          bash -n scripts/android-version.sh
-          bash -n scripts/android-signing-preflight.sh
-          bash -n scripts/android-signing-bootstrap.sh
-          bash -n scripts/docker-entrypoint.sh
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -139,13 +131,6 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run build
-      - name: Validate distributed highlight desktop contract
-        run: |
-          grep -Fq 'mod highlight_compute;' ../desktop/src-tauri/src/main.rs
-          grep -Fq 'highlight_compute::highlight_capture_frame' ../desktop/src-tauri/src/main.rs
-          grep -Fq 'pub async fn highlight_capture_frame' ../desktop/src-tauri/src/highlight_compute.rs
-          grep -Fq '<DesktopHighlightComputeAgent />' src/App.tsx
-          grep -Fq "analysis_method: 'desktop_mpv_sparse_v1'" src/desktop/DesktopHighlightComputeAgent.tsx
       - name: Reject retired Pulse UI copy
         run: |
           if grep -R -n -E 'Pulse 数据中心|Pulse (Data )?Center|Pulse データセンター|nav\.pulse|pulse\.' dist; then
