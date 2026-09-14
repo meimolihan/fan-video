@@ -79,32 +79,5 @@ git push origin "${TAG}"
 # ===================== 交由 CI 自动构建发布 =====================
 info "✅ 已推送 tag ${TAG}，GitHub Actions 将自动完成编译与 Release 创建"
 
-# 自动捕获刚触发的 CI run 并实时跟踪（gh 可用时）
-if command -v gh >/dev/null 2>&1; then
-    info "等待 GitHub Actions 捕获本次构建..."
-    EXPECT_SHA="$(git rev-parse "${TAG}")"
-    RUN_ID=""
-    for _ in {1..30}; do
-        RUN_ID="$(gh run list --workflow=release.yml --branch "${TAG}" --event push --limit 5 \
-            --json databaseId,headSha,status \
-            --jq '.[] | select(.headSha == "'"${EXPECT_SHA}"'") | .databaseId' 2>/dev/null | head -1 || true)"
-        [ -n "${RUN_ID}" ] && break
-        sleep 5
-    done
-
-    if [ -n "${RUN_ID}" ]; then
-        info "已捕获 CI 运行 #${RUN_ID}，开始实时跟踪（Ctrl+C 退出后构建会在后台继续）"
-        if gh run watch "${RUN_ID}" --exit-status; then
-            info "🎉 CI 构建成功，查看发布结果: gh release view ${TAG}"
-        else
-            error "CI 构建失败，查看日志: gh run view ${RUN_ID} --log-failed"
-        fi
-    else
-        warn "150 秒内未捕获到 CI 运行（发布流程可能尚未触发），请手动查看: gh run list --workflow=release.yml"
-    fi
-else
-    warn "未找到 gh cli，跳过 CI 自动跟踪（可手动: gh run list --workflow=release.yml）"
-fi
-
 info "查看发布结果: gh release view ${TAG}"
 info "查看镜像: docker pull mobufan/fan-video:${TAG}"
