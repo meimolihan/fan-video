@@ -47,7 +47,7 @@ info "执行版本号更新 ${TARGET_VER}"
 SED_I=""
 if sed --version 2>&1 | grep -q GNU; then SED_I=""; elif sed --version 2>&1 | grep -q busybox; then SED_I=""; else SED_I="''"; fi
 
-BUMP_FILES=("internal/version/version.go" "package.json" "web/package.json" "Dockerfile")
+BUMP_FILES=("internal/version/version.go" "package.json" "web/package.json" "Dockerfile" "Dockerfile.full")
 for f in "${BUMP_FILES[@]}"; do
     [[ ! -f "${f}" ]] && error "缺失文件 ${f}"
 done
@@ -55,21 +55,21 @@ done
 if [[ "${SED_I}" == "''" ]]; then
     sed -i '' "s/^var Version = .*/var Version = \"${TARGET_VER}\"/" internal/version/version.go
     sed -i '' "s/^  \"version\": \".*\",\$/  \"version\": \"${TARGET_VER}\",/" package.json web/package.json
-    sed -i '' "s/^ARG NOWEN_VERSION=.*/ARG NOWEN_VERSION=${TARGET_VER}/" Dockerfile
+    sed -i '' "s/^ARG NOWEN_VERSION=.*/ARG NOWEN_VERSION=${TARGET_VER}/" Dockerfile Dockerfile.full
 else
     sed -i "s/^var Version = .*/var Version = \"${TARGET_VER}\"/" internal/version/version.go
     sed -i "s/^  \"version\": \".*\",\$/  \"version\": \"${TARGET_VER}\",/" package.json web/package.json
-    sed -i "s/^ARG NOWEN_VERSION=.*/ARG NOWEN_VERSION=${TARGET_VER}/" Dockerfile
+    sed -i "s/^ARG NOWEN_VERSION=.*/ARG NOWEN_VERSION=${TARGET_VER}/" Dockerfile Dockerfile.full
 fi
 
 info "版本号确认:"
 grep -n 'var Version' internal/version/version.go
 grep -n '"version"' package.json web/package.json
-grep -n '^ARG NOWEN_VERSION=' Dockerfile
+grep -n '^ARG NOWEN_VERSION=' Dockerfile Dockerfile.full
 
 # ===================== Git 提交 & Tag =====================
 info "提交版本变更"
-git add internal/version/version.go package.json web/package.json Dockerfile
+git add internal/version/version.go package.json web/package.json Dockerfile Dockerfile.full
 git commit -m "chore: bump version to ${TARGET_VER}" || info "无版本文件变更，跳过提交"
 git push origin main
 
