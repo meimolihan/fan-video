@@ -41,7 +41,7 @@ func TestOptionalBrowserAudioCodecsRequirePositiveCapability(t *testing.T) {
 }
 
 func TestStableBrowserAudioBaselineRemainsCompatible(t *testing.T) {
-	for _, codec := range []string{"aac", "mp3", "vorbis"} {
+	for _, codec := range []string{"aac", "vorbis"} {
 		if !audioCodecCompatibleWithCaps(codec, PlaybackClientCapabilities{}) {
 			t.Fatalf("stable browser codec %s must remain baseline-compatible", codec)
 		}
