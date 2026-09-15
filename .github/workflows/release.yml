@@ -1,15 +1,22 @@
 name: release
 
+# 推送 v 开头 tag（由 scripts/build-and-push.sh 打出）时自动：
+#   1) 编译前端 + Go 自包含二进制，创建 GitHub Release
+#      （fan-video_linux_amd64 / fan-video_linux_arm64）
+#   2) 构建并推送 multi-arch Docker 镜像（mobufan/fan-video:latest + 版本标签）
+# 一次发版只产生一条 workflow run（jobs: release -> docker）。
+
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -68,3 +75,51 @@ jobs:
             fan-video_linux_amd64
             fan-video_linux_arm64
           generate_release_notes: true
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "VERSION=$(sed -n 's/^var Version = "\(.*\)"/\1/p' internal/version/version.go | head -1)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ vars.DOCKER_IMAGE_NAME || 'mobufan/fan-video' }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            NOWEN_VERSION=${{ steps.version.outputs.VERSION }}
+            GOPROXY=https://proxy.golang.org,direct
