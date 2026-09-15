@@ -124,8 +124,6 @@ jobs:
         run: go test ./internal/repository -run '^$' -bench '^BenchmarkFindReadableArtifactByEncodingPlan$' -benchtime=100x -benchmem
       - name: Artifact repository execution-contract baseline
         run: go test ./internal/repository -run '^$' -bench '^BenchmarkFindReadableArtifactByExecutionContract$' -benchtime=100x -benchmem
-      - name: Build fixture certification CLI
-        run: CGO_ENABLED=0 go build -trimpath -o /tmp/nowen-transcode-fixture-cert ./cmd/transcode-fixture-cert
       - name: Build production server
         run: CGO_ENABLED=0 go build -trimpath -o /tmp/nowen-video ./cmd/server-lite
 
