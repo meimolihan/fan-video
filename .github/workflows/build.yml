@@ -3,8 +3,6 @@ name: docker-build
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
 
@@ -37,7 +35,6 @@ jobs:
           images: ${{ vars.DOCKER_IMAGE_NAME || 'mobufan/fan-video' }}
           tags: |
             type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
 
       - name: Login to Docker Hub

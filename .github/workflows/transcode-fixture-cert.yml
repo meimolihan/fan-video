@@ -1,24 +1,6 @@
 name: Transcode Fixture Certification
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'cmd/transcode-fixture-cert/**'
-      - 'internal/service/ffmpeg/**'
-      - 'internal/service/transcode_quality.go'
-      - 'internal/service/transcode_startup.go'
-      - 'internal/service/transcode_timestamp_plan.go'
-      - 'internal/transcode/attestation/**'
-      - 'internal/transcode/boundaryevidence/**'
-      - 'internal/transcode/certification/**'
-      - 'internal/transcode/encodingplan/**'
-      - 'internal/transcode/timeline/**'
-      - 'internal/transcode/timestampplan/**'
-      - 'docs/TRANSCODE_BOUNDARY_EVIDENCE.md'
-      - 'docs/TRANSCODE_FIXTURE_CERTIFICATION.md'
-      - '.github/workflows/transcode-fixture-cert.yml'
   pull_request:
     paths:
       - 'cmd/transcode-fixture-cert/**'

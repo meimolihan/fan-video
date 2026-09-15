@@ -1,25 +1,6 @@
 name: Transcode Encoder Time-Base Candidate Certification
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'cmd/transcode-encoder-time-base-cert/**'
-      - 'internal/service/ffmpeg/**'
-      - 'internal/transcode/attestation/**'
-      - 'internal/transcode/avsync/**'
-      - 'internal/transcode/boundaryevidence/**'
-      - 'internal/transcode/certification/encoder_time_base_*.go'
-      - 'internal/transcode/certification/source_origin_*.go'
-      - 'internal/transcode/certification/vfr_isolation_probe.go'
-      - 'internal/transcode/encodingplan/**'
-      - 'internal/transcode/outputcadence/**'
-      - 'internal/transcode/timebasecandidate/**'
-      - 'internal/transcode/timestampplan/**'
-      - 'docs/TRANSCODE_ENCODER_TIME_BASE_CANDIDATES.md'
-      - '.github/scripts/verify_encoder_time_base*.py'
-      - '.github/workflows/transcode-encoder-time-base-cert.yml'
   pull_request:
     paths:
       - 'cmd/transcode-encoder-time-base-cert/**'

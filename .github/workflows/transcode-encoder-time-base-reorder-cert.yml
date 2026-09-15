@@ -1,27 +1,6 @@
 name: Transcode Encoder Time-Base Reorder Certification
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'cmd/transcode-encoder-time-base-reorder-cert/**'
-      - 'internal/service/ffmpeg/**'
-      - 'internal/transcode/attestation/**'
-      - 'internal/transcode/avsync/**'
-      - 'internal/transcode/boundaryevidence/**'
-      - 'internal/transcode/certification/boundary_*.go'
-      - 'internal/transcode/certification/encoder_time_base_*.go'
-      - 'internal/transcode/certification/reorder_cadence_*.go'
-      - 'internal/transcode/certification/reorder_perceptual_*.go'
-      - 'internal/transcode/certification/source_origin_cadence_*.go'
-      - 'internal/transcode/outputcadence/**'
-      - 'internal/transcode/reordercandidate/**'
-      - 'internal/transcode/timebasecandidate/**'
-      - 'internal/transcode/timestampplan/**'
-      - '.github/scripts/verify_encoder_time_base_reorder.py'
-      - '.github/scripts/verify_encoder_time_base_reorder_exact.py'
-      - '.github/workflows/transcode-encoder-time-base-reorder-cert.yml'
   workflow_dispatch:
 
 permissions:

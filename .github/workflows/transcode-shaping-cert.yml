@@ -1,21 +1,6 @@
 name: Transcode Timestamp Execution Certification
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'cmd/transcode-fixture-cert/**'
-      - 'internal/service/ffmpeg/**'
-      - 'internal/transcode/attestation/**'
-      - 'internal/transcode/boundaryevidence/**'
-      - 'internal/transcode/certification/shaping_*.go'
-      - 'internal/transcode/certification/boundary_*.go'
-      - 'internal/transcode/encodingplan/**'
-      - 'internal/transcode/timestampexecution/**'
-      - 'internal/transcode/timestampplan/**'
-      - 'docs/TRANSCODE_TIMESTAMP_EXECUTION_V2.md'
-      - '.github/workflows/transcode-shaping-cert.yml'
   pull_request:
     paths:
       - 'cmd/transcode-fixture-cert/**'

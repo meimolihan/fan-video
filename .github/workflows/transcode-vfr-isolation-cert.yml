@@ -1,22 +1,6 @@
 name: Transcode VFR Layer Isolation Certification
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'cmd/transcode-vfr-isolation-cert/**'
-      - 'internal/service/ffmpeg/**'
-      - 'internal/transcode/certification/output_cadence_*.go'
-      - 'internal/transcode/certification/source_origin_*.go'
-      - 'internal/transcode/certification/vfr_isolation_*.go'
-      - 'internal/transcode/outputcadence/**'
-      - 'internal/transcode/sourceorigin/**'
-      - 'internal/transcode/timestampplan/**'
-      - 'internal/transcode/vfrisolation/**'
-      - 'docs/TRANSCODE_VFR_LAYER_ISOLATION.md'
-      - '.github/scripts/verify_vfr_isolation.py'
-      - '.github/workflows/transcode-vfr-isolation-cert.yml'
   pull_request:
     paths:
       - 'cmd/transcode-vfr-isolation-cert/**'

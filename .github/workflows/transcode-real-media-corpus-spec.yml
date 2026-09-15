@@ -1,15 +1,6 @@
 name: Transcode Real Media Corpus Spec
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'cmd/transcode-real-media-corpus-spec/**'
-      - 'internal/transcode/realmediacorpus/**'
-      - 'docs/TRANSCODE_REAL_MEDIA_CORPUS.md'
-      - '.github/scripts/verify_real_media_corpus_spec.py'
-      - '.github/workflows/transcode-real-media-corpus-spec.yml'
   pull_request:
     paths:
       - 'cmd/transcode-real-media-corpus-spec/**'

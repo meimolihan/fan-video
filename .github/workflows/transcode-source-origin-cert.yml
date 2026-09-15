@@ -1,21 +1,6 @@
 name: Transcode Source Origin Certification
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'cmd/transcode-source-origin-cert/**'
-      - 'internal/service/ffmpeg/**'
-      - 'internal/transcode/attestation/**'
-      - 'internal/transcode/avsync/**'
-      - 'internal/transcode/boundaryevidence/**'
-      - 'internal/transcode/certification/source_origin_*.go'
-      - 'internal/transcode/encodingplan/**'
-      - 'internal/transcode/sourceorigin/**'
-      - 'internal/transcode/timestampplan/**'
-      - 'docs/TRANSCODE_SOURCE_ORIGIN.md'
-      - '.github/workflows/transcode-source-origin-cert.yml'
   pull_request:
     paths:
       - 'cmd/transcode-source-origin-cert/**'
