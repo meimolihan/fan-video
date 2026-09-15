@@ -26,6 +26,19 @@ import (
 )
 
 func main() {
+	// 子命令：fan-video status | uninstall | -version
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "status":
+			os.Exit(fvStatus())
+		case "uninstall":
+			os.Exit(fvUninstall(os.Args[2:]))
+		case "-version", "--version", "-v":
+			fmt.Printf("fan-video %s\n", version.Current())
+			os.Exit(0)
+		}
+	}
+
 	appVer := version.Current()
 	cfg, err := config.Load()
 	if err != nil {
