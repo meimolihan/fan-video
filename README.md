@@ -78,6 +78,22 @@ go build -o fan-video ./cmd/server-lite
 ./fan-video
 ```
 
+## CLI 管理命令
+
+二进制自带管理命令（`uninstall` 需 root）：
+
+| 命令 | 说明 |
+|------|------|
+| `fan-video status` | 显示运行方式（systemd / Docker / 直接运行）、PID、监听端口、运行时长、内存、数据目录 |
+| `fan-video uninstall [-y] [--purge\|--keep-data]` | 停止并移除服务/容器/进程，删除二进制与安装记录；可选删除数据目录 |
+| `fan-video -version` / `fan-video --version` | 显示版本号 |
+
+```bash
+fan-video status
+sudo fan-video uninstall -y            # 免确认卸载，保留数据目录
+sudo fan-video uninstall -y --purge    # 免确认卸载，并删除数据目录
+```
+
 ## 版本
 
 - **v2.2** - 全面优化：
