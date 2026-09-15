@@ -77,7 +77,6 @@ grep -n '^ARG NOWEN_VERSION=' Dockerfile Dockerfile.full
 # ===================== 写发版备注 =====================
 info "写入发版备注 RELEASE_NOTES.md"
 {
-  printf '# %s\n\n' "${TAG}"
   if [ -n "${MSG}" ]; then
     printf '%s\n' "${MSG}"
   fi
