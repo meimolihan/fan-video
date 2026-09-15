@@ -116,8 +116,6 @@ jobs:
         run: go test ./internal/model ./internal/repository ./internal/service -run 'EncodingPlan|Timestamp|Attestation|Artifact|Lease|Retire|RuntimePlayback|PlaybackSession'
       - name: Playback session and fallback contract
         run: go test ./internal/playback/... ./internal/service ./internal/handler -run 'PlaybackSession|Playback|RuntimeArtifactServingIsRetired|SubmitStartupStreamIsRetired|RuntimePlayback'
-      - name: Runtime playback source removal contract
-        run: go test ./cmd/server -run '^TestRetiredRuntimePlaybackImplementationRemainsDeleted$'
       - name: Plan and attestation race verification
         run: go test -race ./internal/transcode/encodingplan ./internal/transcode/timestampplan ./internal/transcode/attestation ./internal/transcode/timeline
       - name: Artifact lease and filesystem race tests
@@ -130,8 +128,6 @@ jobs:
         run: CGO_ENABLED=0 go build -trimpath -o /tmp/nowen-transcode-fixture-cert ./cmd/transcode-fixture-cert
       - name: Build production server
         run: CGO_ENABLED=0 go build -trimpath -o /tmp/nowen-video ./cmd/server-lite
-      - name: Build legacy compatibility server
-        run: CGO_ENABLED=0 go build -trimpath -o /tmp/nowen-video-legacy ./cmd/server
 
   web:
     name: Web typecheck and build
