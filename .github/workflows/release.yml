@@ -74,6 +74,7 @@ jobs:
           files: |
             fan-video_linux_amd64
             fan-video_linux_arm64
+          body_path: RELEASE_NOTES.md
           generate_release_notes: true
 
   docker:

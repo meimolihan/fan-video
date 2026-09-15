@@ -7,8 +7,8 @@
 #                  + multi-arch Docker 镜像（latest + 版本标签，NOWEN_VERSION 由 tag 注入）
 #
 # Usage:
-#   TAG(必填) 形如 v1.3.1; --yes 免交互
-#     bash scripts/build-and-push.sh v1.3.1 --yes
+#   TAG(必填) 形如 v1.3.1; --yes 免交互; -m "备注" 可选发版说明
+#     bash scripts/build-and-push.sh v1.3.1 --yes -m "本次新增 xxx"
 set -euo pipefail
 
 info() { echo -e "\033[32m>>> $*\033[0m"; }
@@ -17,9 +17,16 @@ error() { echo -e "\033[31mERROR: $*\033[0m"; exit 1; }
 
 YES_MODE=0
 TAG=""
+MSG=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --yes) YES_MODE=1; shift ;;
+        -m|--message)
+            shift
+            [ -n "${1:-}" ] || error "缺少 -m/--message 的备注内容"
+            MSG="$1"
+            shift
+            ;;
         *) TAG="$1"; shift ;;
     esac
 done
@@ -67,9 +74,18 @@ grep -n 'var Version' internal/version/version.go
 grep -n '"version"' package.json web/package.json
 grep -n '^ARG NOWEN_VERSION=' Dockerfile Dockerfile.full
 
+# ===================== 写发版备注 =====================
+info "写入发版备注 RELEASE_NOTES.md"
+{
+  printf '# %s\n\n' "${TAG}"
+  if [ -n "${MSG}" ]; then
+    printf '%s\n' "${MSG}"
+  fi
+} > RELEASE_NOTES.md
+
 # ===================== Git 提交 & Tag =====================
 info "提交版本变更"
-git add internal/version/version.go package.json web/package.json Dockerfile Dockerfile.full
+git add RELEASE_NOTES.md internal/version/version.go package.json web/package.json Dockerfile Dockerfile.full
 git commit -m "chore: bump version to ${TARGET_VER}" || info "无版本文件变更，跳过提交"
 git push origin main
 
