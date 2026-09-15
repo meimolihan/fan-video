@@ -35,6 +35,9 @@ func newArtifactMaintenanceTestService(t *testing.T) (*ArtifactMaintenanceServic
 	if err := model.AutoMigrateTranscodeExecution(db); err != nil {
 		t.Fatal(err)
 	}
+	if err := model.AutoMigrateTranscodeStorageIncidents(db); err != nil {
+		t.Fatal(err)
+	}
 	artifactStore, err := transcodeartifactstore.New(filepath.Join(cacheDir, "transcode"))
 	if err != nil {
 		t.Fatal(err)
