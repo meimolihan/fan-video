@@ -23,7 +23,7 @@ function EntryThumb({ entry, posterVersion }: { entry: HomeFeaturedEntry; poster
 
   if (failed || !entry.valid) {
     return (
-      <div className="flex h-10 w-[72px] shrink-0 items-center justify-center rounded-[var(--nv-radius-control)] bg-[var(--nv-bg-hover)] text-[var(--nv-text-tertiary)]">
+      <div className="flex h-16 w-[112px] shrink-0 items-center justify-center rounded-[var(--nv-radius-control)] bg-[var(--nv-bg-hover)] text-[var(--nv-text-tertiary)]">
         <ImageOff size={14} aria-hidden="true" />
       </div>
     )
@@ -33,7 +33,7 @@ function EntryThumb({ entry, posterVersion }: { entry: HomeFeaturedEntry; poster
       src={useBackdrop ? backdrop : poster}
       alt=""
       loading="lazy"
-      className="h-10 w-[72px] shrink-0 rounded-[var(--nv-radius-control)] object-cover"
+      className="h-16 w-[112px] shrink-0 rounded-[var(--nv-radius-control)] object-cover"
       onError={() => {
         if (useBackdrop) setUseBackdrop(false)
         else setFailed(true)
