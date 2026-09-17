@@ -1,34 +1,60 @@
-name: release
+name: Release Pipeline
 
 # 推送 v 开头 tag（由 scripts/build-and-push.sh 打出）时自动：
 #   1) 编译前端 + Go 自包含二进制，创建 GitHub Release
 #      （fan-video_linux_amd64 / fan-video_linux_arm64）
-#   2) 构建并推送 multi-arch Docker 镜像（mobufan/fan-video:latest + 版本标签）
-# 一次发版只产生一条 workflow run（jobs: release -> docker）。
+#   2) 构建并推送 multi-arch Docker 镜像（Docker Hub + GHCR）
+#   3) 同步 Git 仓库与标签到 CNB 镜像仓库
+# 一次发版只产生一条 workflow run（jobs 链式：build-binaries -> publish-release -> build-docker -> sync-cnb）。
 
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: '要构建的标签 (例如: v1.0.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref_name || github.event.inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ github.ref_name || github.event.inputs.tag }}
+  DOCKERHUB_IMAGE: mobufan/fan-video
+  GHCR_IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
-  release:
+  build-binaries:
+    name: 编译二进制 (linux amd64 + arm64 + 内置前端)
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      built: ${{ steps.build.outputs.built }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || format('refs/tags/{0}', github.event.inputs.tag) }}
 
-      - name: Set version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Validate tag format
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [[ ! "${{ github.event.inputs.tag }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+            echo "错误: 标签格式无效，必须以 'v' 开头，例如: v1.0.0"
+            exit 1
+          fi
 
       # ==================== 前端构建 ====================
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
@@ -36,9 +62,11 @@ jobs:
 
       - name: Build frontend
         working-directory: web
+        env:
+          VITE_APP_VERSION: ${{ env.RELEASE_TAG }}
         run: |
           npm ci
-          VITE_APP_VERSION=${{ steps.version.outputs.VERSION }} npm run build
+          npm run build
 
       # ==================== 同步内嵌资源（go:embed） ====================
       - name: Sync embedded web assets
@@ -57,70 +85,159 @@ jobs:
       - name: Build amd64
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
-            -ldflags="-s -w -X github.com/fan-video/fan-video/internal/version.Version=${{ steps.version.outputs.VERSION }}" \
+            -ldflags="-s -w -X github.com/fan-video/fan-video/internal/version.Version=${RELEASE_TAG#v}" \
             -o fan-video_linux_amd64 ./cmd/server-lite
 
       - name: Build arm64
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath \
-            -ldflags="-s -w -X github.com/fan-video/fan-video/internal/version.Version=${{ steps.version.outputs.VERSION }}" \
+            -ldflags="-s -w -X github.com/fan-video/fan-video/internal/version.Version=${RELEASE_TAG#v}" \
             -o fan-video_linux_arm64 ./cmd/server-lite
 
-      # ==================== 创建 GitHub Release ====================
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      - name: Verify build outputs
+        id: build
+        run: |
+          set -e
+          ls -lh fan-video_linux_amd64 fan-video_linux_arm64
+          echo "built=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload binaries as artifacts
+        if: steps.build.outputs.built == 'true'
+        uses: actions/upload-artifact@v6
         with:
-          name: "fan-video ${{ steps.version.outputs.VERSION }}"
-          files: |
+          name: fan-video-binaries
+          path: |
             fan-video_linux_amd64
             fan-video_linux_arm64
-          body_path: RELEASE_NOTES.md
-          generate_release_notes: true
+          if-no-files-found: error
 
-  docker:
+  publish-release:
+    name: 发布 Release (附带二进制)
+    needs: build-binaries
     runs-on: ubuntu-latest
-    needs: release
+    timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || format('refs/tags/{0}', github.event.inputs.tag) }}
 
-      - name: Set version
-        id: version
+      - name: Download binaries
+        if: needs.build-binaries.outputs.built == 'true'
+        uses: actions/download-artifact@v7
+        with:
+          name: fan-video-binaries
+          path: ./
+
+      - name: Prepare release body
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          if [ -f RELEASE_NOTES.md ]; then
+            cp RELEASE_NOTES.md _release_body.md
           else
-            echo "VERSION=$(sed -n 's/^var Version = "\(.*\)"/\1/p' internal/version/version.go | head -1)" >> "$GITHUB_OUTPUT"
+            {
+              echo "fan-video ${{ env.RELEASE_TAG }}"
+              echo ""
+              echo "Docker 镜像："
+              echo "  - Docker Hub：docker pull ${{ env.DOCKERHUB_IMAGE }}:${{ env.RELEASE_TAG }}"
+              echo "  - GHCR：docker pull ${{ env.GHCR_IMAGE }}:${{ env.RELEASE_TAG }}"
+            } > _release_body.md
           fi
 
+      - name: Create / update Release with binaries
+        run: |
+          TAG="${{ env.RELEASE_TAG }}"
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          FILES=""
+          [ -f fan-video_linux_amd64 ] && FILES="$FILES fan-video_linux_amd64"
+          [ -f fan-video_linux_arm64 ] && FILES="$FILES fan-video_linux_arm64"
+          gh release create "$TAG" \
+            --title "fan-video $TAG" \
+            --notes-file _release_body.md \
+            $FILES
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-docker:
+    name: 构建推送 Docker 镜像 (Docker Hub + GHCR)
+    needs: publish-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || format('refs/tags/{0}', github.event.inputs.tag) }}
+
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ vars.DOCKER_IMAGE_NAME || 'mobufan/fan-video' }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: tags
+        run: |
+          VER="${{ env.RELEASE_TAG }}"
+          VER_NO_V="${VER#v}"
+          TAGS="${{ env.DOCKERHUB_IMAGE }}:${VER},${{ env.DOCKERHUB_IMAGE }}:latest"
+          TAGS="${TAGS},${{ env.GHCR_IMAGE }}:${VER},${{ env.GHCR_IMAGE }}:${VER_NO_V}"
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.tags.outputs.tags }}
           build-args: |
-            NOWEN_VERSION=${{ steps.version.outputs.VERSION }}
+            NOWEN_VERSION=${{ env.RELEASE_TAG }}
             GOPROXY=https://proxy.golang.org,direct
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  sync-cnb:
+    name: 同步到 CNB 镜像仓库
+    needs: build-docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'push' && github.ref || format('refs/tags/{0}', github.event.inputs.tag) }}
+
+      - name: Sync to CNB Repository
+        if: ${{ env.CNB_TOKEN != '' }}
+        env:
+          CNB_TOKEN: ${{ secrets.CNB_ACCESS_TOKEN }}
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:${{ github.workspace }} \
+            -w ${{ github.workspace }} \
+            -e PLUGIN_TARGET_URL="https://cnb.cool/meimolihan/fan-video.git" \
+            -e PLUGIN_AUTH_TYPE="https" \
+            -e PLUGIN_USERNAME="cnb" \
+            -e PLUGIN_PASSWORD="$CNB_TOKEN" \
+            -e PLUGIN_FORCE="true" \
+            -e PLUGIN_PUSH_TAGS="true" \
+            tencentcom/git-sync
+
+      - name: Skip CNB sync
+        if: ${{ env.CNB_TOKEN == '' }}
+        env:
+          CNB_TOKEN: ${{ secrets.CNB_ACCESS_TOKEN }}
+        run: echo "::warning::CNB_ACCESS_TOKEN 未配置，跳过同步到 CNB 镜像仓库"
