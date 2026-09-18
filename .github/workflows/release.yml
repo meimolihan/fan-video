@@ -1,16 +1,14 @@
 name: Release Pipeline
 
-# 推送 v 开头 tag（由 scripts/build-and-push.sh 打出）时自动：
+# 执行 scripts/build-and-push.sh <版本号>（自动调用 gh workflow run）时触发：
 #   1) 编译前端 + Go 自包含二进制，创建 GitHub Release
 #      （fan-video_linux_amd64 / fan-video_linux_arm64）
 #   2) 构建并推送 multi-arch Docker 镜像（Docker Hub + GHCR）
 #   3) 同步 Git 仓库与标签到 CNB 镜像仓库
 # 一次发版只产生一条 workflow run（jobs 链式：build-binaries -> publish-release -> build-docker -> sync-cnb）。
+# 注意：日常 push / 打 tag 不会触发本工作流。
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       tag:
@@ -34,7 +32,7 @@ env:
 jobs:
   build-binaries:
     name: 编译二进制 (linux amd64 + arm64 + 内置前端)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     outputs:
       built: ${{ steps.build.outputs.built }}
@@ -42,7 +40,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'push' && github.ref || format('refs/tags/{0}', github.event.inputs.tag) }}
+          ref: ${{ format('refs/tags/{0}', github.event.inputs.tag) }}
 
       - name: Validate tag format
         if: github.event_name == 'workflow_dispatch'
@@ -63,7 +61,7 @@ jobs:
       - name: Build frontend
         working-directory: web
         env:
-          VITE_APP_VERSION: ${{ env.RELEASE_TAG }}
+          VITE_APP_VERSION: ${{ github.ref_name || github.event.inputs.tag }}
         run: |
           npm ci
           npm run build
@@ -78,7 +76,7 @@ jobs:
 
       # ==================== 后端交叉编译（自包含二进制） ====================
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '1.25'
 
@@ -114,13 +112,13 @@ jobs:
   publish-release:
     name: 发布 Release (附带二进制)
     needs: build-binaries
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'push' && github.ref || format('refs/tags/{0}', github.event.inputs.tag) }}
+          ref: ${{ format('refs/tags/{0}', github.event.inputs.tag) }}
 
       - name: Download binaries
         if: needs.build-binaries.outputs.built == 'true'
@@ -160,13 +158,13 @@ jobs:
   build-docker:
     name: 构建推送 Docker 镜像 (Docker Hub + GHCR)
     needs: publish-release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'push' && github.ref || format('refs/tags/{0}', github.event.inputs.tag) }}
+          ref: ${{ format('refs/tags/{0}', github.event.inputs.tag) }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -212,13 +210,13 @@ jobs:
   sync-cnb:
     name: 同步到 CNB 镜像仓库
     needs: build-docker
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          ref: ${{ github.event_name == 'push' && github.ref || format('refs/tags/{0}', github.event.inputs.tag) }}
+          ref: ${{ format('refs/tags/{0}', github.event.inputs.tag) }}
 
       - name: Sync to CNB Repository
         if: ${{ env.CNB_TOKEN != '' }}
