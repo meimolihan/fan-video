@@ -42,7 +42,7 @@ jobs:
     outputs:
       run_media: ${{ steps.detect.outputs.run_media }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 2
@@ -72,8 +72,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -102,7 +102,7 @@ jobs:
             /tmp/nowen-transcode-real-media-corpus-v1/real-media-corpus-manifest-v1.json
           du -sh /tmp/nowen-transcode-real-media-corpus-v1
       - name: Upload immutable corpus
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: transcode-long-duration-scaling-corpus-${{ github.sha }}
           path: /tmp/nowen-transcode-real-media-corpus-v1
@@ -147,8 +147,8 @@ jobs:
             artifact: 6h-mkv-vfr-90k
             shard: multi-hour-depth-6h-v1--profile-mkv-vfr-24-30-v1--encoder-time-base-90k-v1
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -157,7 +157,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Download immutable corpus
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: transcode-long-duration-scaling-corpus-${{ github.sha }}
           path: /tmp/nowen-transcode-real-media-corpus-v1
@@ -177,7 +177,7 @@ jobs:
             /tmp/long-duration-scaling-shards/${{ matrix.artifact }}.json
           du -h /tmp/long-duration-scaling-shards/${{ matrix.artifact }}.json
       - name: Upload scaling shard report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: transcode-long-duration-scaling-shard-${{ matrix.artifact }}-${{ github.sha }}
           path: /tmp/long-duration-scaling-shards/${{ matrix.artifact }}.json
@@ -190,13 +190,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
       - name: Download all shard reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: transcode-long-duration-scaling-shard-*-${{ github.sha }}
           path: /tmp/long-duration-scaling-shards
@@ -216,7 +216,7 @@ jobs:
             /tmp/long-duration-scaling-aggregate-v3.json
           du -h /tmp/long-duration-scaling-aggregate-v3.json
       - name: Upload aggregate report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: transcode-long-duration-scaling-aggregate-${{ github.sha }}
           path: /tmp/long-duration-scaling-aggregate-v3.json

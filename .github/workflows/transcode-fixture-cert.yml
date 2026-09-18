@@ -29,11 +29,11 @@ concurrency:
 jobs:
   real-media-certification:
     name: Overlap and packet-boundary matrices
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -203,7 +203,7 @@ jobs:
           print(json.dumps(summaries, sort_keys=True))
           PY
       - name: Upload certification matrices
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: transcode-fixture-certification-${{ github.sha }}
           path: |

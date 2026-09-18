@@ -30,8 +30,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -57,7 +57,7 @@ jobs:
             /tmp/nowen-transcode-vfr-isolation/vfr-layer-isolation-matrix-v1.json
       - name: Upload VFR layer-isolation evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: transcode-vfr-layer-isolation-${{ github.sha }}
           path: /tmp/nowen-transcode-vfr-isolation/vfr-layer-isolation-matrix-v1.json

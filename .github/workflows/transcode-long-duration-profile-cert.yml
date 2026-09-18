@@ -38,7 +38,7 @@ jobs:
     outputs:
       run_media: ${{ steps.detect.outputs.run_media }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 2
@@ -68,8 +68,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -97,7 +97,7 @@ jobs:
             /tmp/nowen-transcode-real-media-corpus-v1/real-media-corpus-manifest-v1.json
           du -sh /tmp/nowen-transcode-real-media-corpus-v1
       - name: Upload immutable corpus
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: transcode-long-duration-profile-corpus-${{ github.sha }}
           path: /tmp/nowen-transcode-real-media-corpus-v1
@@ -110,8 +110,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -120,7 +120,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Download immutable corpus
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: transcode-long-duration-profile-corpus-${{ github.sha }}
           path: /tmp/nowen-transcode-real-media-corpus-v1
@@ -139,7 +139,7 @@ jobs:
           du -h /tmp/long-duration-profile-matrix-v2.json
       - name: Upload profile matrix report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: transcode-long-duration-profile-matrix-${{ github.sha }}
           path: /tmp/long-duration-profile-matrix-v2.json

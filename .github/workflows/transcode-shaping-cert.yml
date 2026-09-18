@@ -26,11 +26,11 @@ concurrency:
 jobs:
   shaping-certification:
     name: Timestamp execution v2 shaping matrix
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -146,7 +146,7 @@ jobs:
           print(json.dumps(summaries, sort_keys=True))
           PY
       - name: Upload timestamp execution evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: transcode-timestamp-execution-${{ github.sha }}
           path: /tmp/nowen-transcode-shaping/timestamp-execution-shaping-matrix-v1.json

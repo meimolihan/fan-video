@@ -44,7 +44,7 @@ jobs:
     outputs:
       run_media: ${{ steps.detect.outputs.run_media }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 2
@@ -74,8 +74,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -104,7 +104,7 @@ jobs:
             /tmp/nowen-transcode-real-media-corpus-v1/real-media-corpus-manifest-v1.json
           du -sh /tmp/nowen-transcode-real-media-corpus-v1
       - name: Upload immutable corpus
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: transcode-recovery-stress-corpus-${{ github.sha }}
           path: /tmp/nowen-transcode-real-media-corpus-v1
@@ -137,8 +137,8 @@ jobs:
             artifact: stale-lease-fence
             scenario: stale-lease-finalize-fence-v1
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -147,7 +147,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends ffmpeg gcc util-linux
       - name: Download immutable corpus
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: transcode-recovery-stress-corpus-${{ github.sha }}
           path: /tmp/nowen-transcode-real-media-corpus-v1
@@ -167,7 +167,7 @@ jobs:
             /tmp/recovery-stress-scenarios/${{ matrix.artifact }}.json
           du -h /tmp/recovery-stress-scenarios/${{ matrix.artifact }}.json
       - name: Upload recovery scenario report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: transcode-recovery-stress-scenario-${{ matrix.artifact }}-${{ github.sha }}
           path: /tmp/recovery-stress-scenarios/${{ matrix.artifact }}.json
@@ -180,13 +180,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
       - name: Download all scenario reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: transcode-recovery-stress-scenario-*-${{ github.sha }}
           path: /tmp/recovery-stress-scenarios
@@ -206,7 +206,7 @@ jobs:
             /tmp/recovery-resource-stress-aggregate-v4.json
           du -h /tmp/recovery-resource-stress-aggregate-v4.json
       - name: Upload aggregate report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: transcode-recovery-stress-aggregate-${{ github.sha }}
           path: /tmp/recovery-resource-stress-aggregate-v4.json
