@@ -1,17 +1,17 @@
-日常更新
+修复海报显示分辨率
 
 ```bash
 docker pull mobufan/fan-video:latest
 ```
 ```bash
-docker pull mobufan/fan-video:v1.3.7
+docker pull mobufan/fan-video:v1.3.8
 ```
 
 ```bash
 docker pull ghcr.io/meimolihan/fan-video:latest
 ```
 ```bash
-docker pull ghcr.io/meimolihan/fan-video:v1.3.7
+docker pull ghcr.io/meimolihan/fan-video:v1.3.8
 ```
 
 ## 二进制安装
