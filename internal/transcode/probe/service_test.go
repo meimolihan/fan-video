@@ -86,6 +86,63 @@ func TestParseFFprobeOutputRequiresVideo(t *testing.T) {
 	}
 }
 
+func TestParseFFprobeOutputSkipsImageAndCoverStreams(t *testing.T) {
+	// 真实场景：媒体文件内嵌 mjpeg 封面（attached_pic）位于 0 号流，
+	// 真实视频位于 1 号流。图片/封面流的尺寸（如海报 960×540）不能
+	// 用来推导视频分辨率。
+	record, err := parseFFprobeOutput([]byte(`{
+		"streams": [
+			{
+				"index": 0,
+				"codec_type": "video",
+				"codec_name": "mjpeg",
+				"width": 960,
+				"height": 540,
+				"disposition": {"attached_pic": 1}
+			},
+			{
+				"index": 1,
+				"codec_type": "video",
+				"codec_name": "h264",
+				"width": 1920,
+				"height": 1080,
+				"pix_fmt": "yuv420p"
+			},
+			{
+				"index": 2,
+				"codec_type": "audio",
+				"codec_name": "aac",
+				"channels": 2,
+				"sample_rate": "48000"
+			}
+		],
+		"format": {"format_name": "mov,mp4,m4a,3gp,3g2,mj2", "duration": "60"}
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.VideoCodec != "h264" {
+		t.Fatalf("cover/attached_pic must be skipped, got video codec %q", record.VideoCodec)
+	}
+	if record.Width != 1920 || record.Height != 1080 {
+		t.Fatalf("resolution must come from the real video stream, got %dx%d", record.Width, record.Height)
+	}
+}
+
+func TestParseFFprobeOutputRejectsPureImageFile(t *testing.T) {
+	// 把一张 jpg/png/webp 海报当作"视频"探测时，唯一的 video 流是图片流，
+	// 不能据此伪造出视频技术信息。
+	_, err := parseFFprobeOutput([]byte(`{
+		"streams": [
+			{"index": 0, "codec_type": "video", "codec_name": "webp", "width": 800, "height": 450}
+		],
+		"format": {"format_name": "webp"}
+	}`))
+	if err == nil || !strings.Contains(err.Error(), "no video stream") {
+		t.Fatalf("pure image file must not be treated as video, got %v", err)
+	}
+}
+
 func TestParseFrameRateReducesFraction(t *testing.T) {
 	numerator, denominator := parseFrameRate("60000/2002")
 	if numerator != 30000 || denominator != 1001 {

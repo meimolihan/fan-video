@@ -46,3 +46,18 @@ func TestMediaProbeAudioStreamsRoundTrip(t *testing.T) {
 		t.Fatalf("unexpected audio streams: %+v", got)
 	}
 }
+
+func TestIsImageVideoCodec(t *testing.T) {
+	images := []string{"mjpeg", "jpeg", "MJPEG", "png", "PNG", "webp", "bmp", "gif", "tiff"}
+	for _, codec := range images {
+		if !IsImageVideoCodec(codec) {
+			t.Fatalf("%q should be treated as an image-only video codec", codec)
+		}
+	}
+	real := []string{"h264", "hevc", "av1", "mpeg2video", "vc1", "vp9", "", "h265"}
+	for _, codec := range real {
+		if IsImageVideoCodec(codec) {
+			t.Fatalf("%q must not be treated as an image-only video codec", codec)
+		}
+	}
+}

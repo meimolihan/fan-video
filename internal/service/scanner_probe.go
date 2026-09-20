@@ -36,8 +36,11 @@ type FFprobeStream struct {
 
 // FFprobeDisposition 流标志
 type FFprobeDisposition struct {
-	Default int `json:"default"`
-	Forced  int `json:"forced"`
+	Default     int `json:"default"`
+	Forced      int `json:"forced"`
+	AttachedPic int `json:"attached_pic"`
+	StillImage  int `json:"still_image"`
+	TimedThumbs int `json:"timed_thumbnails"`
 }
 
 // FFprobeFormat 格式信息
@@ -176,10 +179,29 @@ func (s *ScannerService) probeMediaInfo(media *model.Media) {
 		return
 	}
 
+	s.applyFFprobeStreams(media, &result)
+}
+
+// applyFFprobeStreams 把 FFprobe 输出写入 media 的编码/音频/分辨率/时长。
+//
+// 注意：海报、预览图、内嵌封面（attached_pic）或缩略图在 FFprobe 中被视为
+// "video" 流，但其 codec 是 mjpeg/png/webp 等图片编码、宽高是图片尺寸。
+// 若把这类流写进 media，会把 media.resolution / video_codec 污染成
+// （如海报 960×540 → "480p"）与真实视频（1080p H.264）完全不符的错误值。
+// 因此这里只采用真正的视频轨，图片类流一律跳过。
+func (s *ScannerService) applyFFprobeStreams(media *model.Media, result *FFprobeResult) {
+	if s == nil || media == nil || result == nil {
+		return
+	}
 	// 提取视频流信息
 	for _, stream := range result.Streams {
 		switch stream.CodecType {
 		case "video":
+			// 跳过内嵌封面 / 缩略图 / 纯图片流（见函数注释）。
+			if stream.Disposition.AttachedPic == 1 || stream.Disposition.StillImage == 1 ||
+				stream.Disposition.TimedThumbs == 1 || model.IsImageVideoCodec(stream.CodecName) {
+				continue
+			}
 			media.VideoCodec = stream.CodecName
 			if stream.Width > 0 && stream.Height > 0 {
 				media.Resolution = s.classifyResolution(stream.Width, stream.Height)

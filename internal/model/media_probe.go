@@ -3,10 +3,24 @@ package model
 import (
 	"encoding/json"
 	"math"
+	"strings"
 	"time"
 )
 
 const MediaProbeVersion = "ffprobe-v1"
+
+// IsImageVideoCodec 判断是否纯图片流编解码器（海报 / 预览图 / 内嵌封面
+// attached_pic）。FFprobe 会把 JPEG/WebP/PNG 等图片当作 video 流探测，
+// 若不拦截，这类流的尺寸与编码会污染 media.resolution / media.video_codec
+// （例如 960×540 的海报被写成 "480p"，而真实视频其实是 1080p）。
+func IsImageVideoCodec(codec string) bool {
+	switch strings.ToLower(strings.TrimSpace(codec)) {
+	case "mjpeg", "jpeg", "png", "webp", "bmp", "gif", "tiff", "apng":
+		return true
+	default:
+		return false
+	}
+}
 
 // MediaProbeAudioStream is the normalized audio information consumed by the
 // playback planner. It deliberately excludes request headers and source URLs.

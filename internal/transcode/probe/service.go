@@ -260,7 +260,10 @@ type ffprobeStream struct {
 	SampleRate       string            `json:"sample_rate"`
 	Tags             map[string]string `json:"tags"`
 	Disposition      struct {
-		Default int `json:"default"`
+		Default     int `json:"default"`
+		AttachedPic int `json:"attached_pic"`
+		StillImage  int `json:"still_image"`
+		TimedThumbs int `json:"timed_thumbnails"`
 	} `json:"disposition"`
 	SideDataList []struct {
 		SideDataType string `json:"side_data_type"`
@@ -283,6 +286,13 @@ func parseFFprobeOutput(data []byte) (*model.MediaProbeRecord, error) {
 	for _, stream := range output.Streams {
 		switch stream.CodecType {
 		case "video":
+			// 跳过内嵌封面/缩略图/纯图片流。这类流（attached_pic，或
+			// mjpeg/png/webp 等图片编解码器）代表海报或预览图而不是真正的
+			// 视频轨，取它们的尺寸/编码会把分辨率与编码污染成错误值。
+			if stream.Disposition.AttachedPic == 1 || stream.Disposition.StillImage == 1 ||
+				stream.Disposition.TimedThumbs == 1 || model.IsImageVideoCodec(stream.CodecName) {
+				continue
+			}
 			if videoFound {
 				continue
 			}

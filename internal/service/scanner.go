@@ -496,6 +496,14 @@ func (s *ScannerService) ScanLibraryWithOptions(library *model.Library, opts Sca
 	if err == nil {
 		s.healStaleArtwork(library)
 	}
+	// 技术元数据修复：历史版本/导入流程可能把海报或预览图（codec 为 mjpeg/png/webp 等）
+	// 当成视频探测，导致 media.video_codec / media.resolution 被写成图片编码与图片尺寸
+	// （例如海报 960×540 被记为 "480p"，而真实视频其实是 1080p），详情页因为每次实时
+	// FFprobe 显示正确值，与卡片角标产生不一致。这里对 video_codec 为空或为图片类编码的
+	// 存量记录重新执行权威探测并回写，保证与真实文件一致。
+	if err == nil {
+		s.syncStaleTechnicalMetadata(library)
+	}
 	// 首帧缓存垃圾回收：清理已被真实海报替换后遗留的孤儿首帧文件。
 	// 与 healFirstFramePosters 不同，这里按全体媒体/剧集引用做全局比对，
 	// 不依赖键匹配或目录海报匹配规则，能可靠删除任何残留首帧缓存。
@@ -580,6 +588,65 @@ func (s *ScannerService) healFirstFramePosters(library *model.Library) {
 	}
 	if deletedFiles > 0 {
 		s.logger.Infof("扫描后清理首帧封面缓存: 删除 %d 个文件", deletedFiles)
+	}
+}
+
+// syncStaleTechnicalMetadata 修复被「图片流/海报」污染的媒体技术字段。
+//
+// 背景：海报图片（如 <video>.webp / .jpg）本质是图片，不是视频轨。若任意
+// 历史流程把图片当作视频探测（或把内嵌封面 attached_pic 当作主视频流），
+// media.video_codec 会被写成 mjpeg/png/webp，media.resolution 会被写成图片
+// 短边导出的标签（如 960×540 → "480p"），与真实视频（1920×1080 → "1080p"）
+// 完全不一致。详情页技术规格每次实时 FFprobe 显示正确值，而卡片角标直接读
+// media.resolution，于是出现「角标 480p、详情 1080p」的矛盾。
+//
+// 该函数在每次扫描完成后，只对 video_codec 为空或为图片类编码的可疑记录
+// 重新执行权威 FFprobe，并将真实编码/分辨率/音频/时长回写，与详情页显示保持一致。
+func (s *ScannerService) syncStaleTechnicalMetadata(library *model.Library) {
+	if s == nil || library == nil || s.mediaRepo == nil {
+		return
+	}
+	mediaList, err := s.mediaRepo.ListByLibraryID(library.ID)
+	if err != nil {
+		s.logger.Warnf("加载媒体库技术元数据修复列表失败: %v", err)
+		return
+	}
+	fixed := 0
+	scanned := 0
+	for i := range mediaList {
+		m := &mediaList[i]
+		// 仅处理本地真实视频文件（.strm / 远程流不做持久化探测）
+		if m.FilePath == "" || m.StreamURL != "" || IsWebDAVPath(m.FilePath) {
+			continue
+		}
+		// 只修复明显可疑的记录：视频编码为空（探测失败）或编码被污染为图片类。
+		// 其余记录说明曾按真实视频成功探测过，不再重复探测以控制扫描开销。
+		if m.VideoCodec != "" && !model.IsImageVideoCodec(m.VideoCodec) {
+			continue
+		}
+		scanned++
+		s.probeMediaInfo(m)
+		// 探测失败时 probeMediaInfo 不改写字段，此处以实时探测结果为准；
+		// 若探测后视频编码仍为空/图片类，说明该文件确实不是可探测的视频，跳过。
+		if m.VideoCodec == "" || model.IsImageVideoCodec(m.VideoCodec) {
+			continue
+		}
+		if err := s.mediaRepo.UpdateTechnicalSummary(
+			m.ID,
+			m.VideoCodec,
+			m.AudioCodec,
+			m.Resolution,
+			m.Duration,
+			m.FileSize,
+		); err != nil {
+			s.logger.Warnf("回写媒体技术字段失败 media=%s: %v", m.ID, err)
+			continue
+		}
+		fixed++
+		s.logger.Debugf("修复媒体技术字段 media=%s -> %s / %s", m.ID, m.Resolution, m.VideoCodec)
+	}
+	if scanned > 0 {
+		s.logger.Infof("扫描后技术元数据修复: 复查 %d 条，修复 %d 条 (媒体库: %s)", scanned, fixed, library.Name)
 	}
 }
 
