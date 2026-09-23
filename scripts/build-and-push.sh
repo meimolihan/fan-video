@@ -297,6 +297,7 @@ info "✅ 已推送 tag ${TAG} 并触发 GitHub Actions 发布流水线"
 
 info "查看发布结果: gh release view ${TAG}"
 info "查看镜像: docker pull mobufan/fan-video:${TAG}"
-bash -c "$(curl -sSL https://raw.githubusercontent.com/meimolihan/fan-video/main/scripts/install.sh)" -p 9060 -d /var/lib/fan-video
+
+echo -e "${gl_bai}远程安装命令： ${gl_lv}bash -c \"\$(curl -sSL https://raw.githubusercontent.com/meimolihan/fan-video/main/scripts/install.sh)\" -p 9060 -d /var/lib/fan-video${gl_bai}"
 
 beautify_gh_run "${TAG}"
