@@ -1,17 +1,17 @@
-修复海报显示分辨率
+自动构建发布 v1.3.9
 
 ```bash
 docker pull mobufan/fan-video:latest
 ```
 ```bash
-docker pull mobufan/fan-video:v1.3.8
+docker pull mobufan/fan-video:v1.3.9
 ```
 
 ```bash
 docker pull ghcr.io/meimolihan/fan-video:latest
 ```
 ```bash
-docker pull ghcr.io/meimolihan/fan-video:v1.3.8
+docker pull ghcr.io/meimolihan/fan-video:v1.3.9
 ```
 
 ## 二进制安装
