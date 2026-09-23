@@ -36,6 +36,9 @@ func main() {
 		case "-version", "--version", "-v":
 			fmt.Printf("fan-video %s\n", version.Current())
 			os.Exit(0)
+		case "-h", "-help", "--help", "help":
+			fvMainHelp()
+			os.Exit(0)
 		}
 	}
 
