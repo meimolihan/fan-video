@@ -1,17 +1,17 @@
-自动构建发布 v1.3.9
+修复 fan-video -h 命令
 
 ```bash
 docker pull mobufan/fan-video:latest
 ```
 ```bash
-docker pull mobufan/fan-video:v1.3.9
+docker pull mobufan/fan-video:v1.3.2
 ```
 
 ```bash
 docker pull ghcr.io/meimolihan/fan-video:latest
 ```
 ```bash
-docker pull ghcr.io/meimolihan/fan-video:v1.3.9
+docker pull ghcr.io/meimolihan/fan-video:v1.3.2
 ```
 
 ## 二进制安装
