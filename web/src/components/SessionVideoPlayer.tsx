@@ -195,6 +195,10 @@ export default function SessionVideoPlayer({
     }).finally(() => { seekInFlightRef.current = false })
   }, [knownDuration, playback.sessionId, playback.loading, playback.restart])
 
+  const handleClientSeekRequest = useCallback((targetSeconds: number, reason: string) => {
+    requestSeek(targetSeconds, reason)
+  }, [requestSeek])
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!playback.sessionId || playback.loading) return
@@ -231,22 +235,21 @@ export default function SessionVideoPlayer({
     }
     const button = target.closest<HTMLButtonElement>('button')
     if (!button || !rootRef.current?.contains(button)) return
-    if (button.querySelector('[class*="lucide-skip-forward"]')) {
+    // 按 aria-label 精确匹配 ±10s 按钮，避免把同样带 SkipForward 图标的「下一个」
+    // 或带 SkipBack 图标的「返回」误判为快进/快退。
+    const ariaLabel = button.getAttribute('aria-label')
+    if (ariaLabel === '前进 10 秒') {
       event.preventDefault()
       event.stopPropagation()
       event.nativeEvent.stopImmediatePropagation()
       requestSeek(absolutePositionRef.current + 10, 'skip_forward')
       return
     }
-    if (button.querySelector('[class*="lucide-skip-back"]')) {
-      const parent = button.parentElement
-      const isTitleBack = Boolean(parent?.classList.contains('absolute') && parent.classList.contains('top-4') && parent.classList.contains('left-4'))
-      if (!isTitleBack) {
-        event.preventDefault()
-        event.stopPropagation()
-        event.nativeEvent.stopImmediatePropagation()
-        requestSeek(absolutePositionRef.current - 10, 'skip_backward')
-      }
+    if (ariaLabel === '后退 10 秒') {
+      event.preventDefault()
+      event.stopPropagation()
+      event.nativeEvent.stopImmediatePropagation()
+      requestSeek(absolutePositionRef.current - 10, 'skip_backward')
     }
   }
 
@@ -290,6 +293,8 @@ export default function SessionVideoPlayer({
         nextTitle={nextTitle}
         onPreprocessReady={onPreprocessReady ? handlePreprocessReady : undefined}
         spriteVttUrl={spriteVttUrl}
+        sessionMode
+        onSeekRequest={handleClientSeekRequest}
       />
 
       {isSeeking && (

@@ -48,6 +48,13 @@ interface VideoPlayerProps {
   onRemuxFallback?: () => void
   onPreprocessReady?: () => void
   spriteVttUrl?: string
+  /**
+   * 会话（HLS 转码）模式：seek 由服务端重启 generation 完成，
+   * 本地 video.currentTime 直接赋值对 live playlist 不可靠，需交给 onSeekRequest。
+   */
+  sessionMode?: boolean
+  /** 会话模式下客户端 seek 请求回调（目标绝对秒数），由上层负责发起服务端重启 */
+  onSeekRequest?: (targetSeconds: number, reason: string) => void
 }
 
 const PLAYER_CONTROL_CLASS = 'flex h-9 min-w-9 items-center justify-center rounded-[var(--nv-player-radius-control)] text-[var(--nv-player-text-secondary)] transition-[background-color,color,transform] hover:bg-[var(--nv-player-surface-hover)] hover:text-[var(--nv-player-text-primary)] active:scale-[0.98]'
@@ -72,6 +79,8 @@ export default function VideoPlayer({
   onPreprocessReady,
   onRemuxFallback,
   spriteVttUrl,
+  sessionMode = false,
+  onSeekRequest,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const hlsRef = useRef<Hls | null>(null)
@@ -644,6 +653,15 @@ export default function VideoPlayer({
   const seek = (seconds: number) => {
     const video = videoRef.current
     if (!video) return
+    if (sessionMode) {
+      // 会话播放的 live playlist 无法靠本地 currentTime 跳转，
+      // 交给上层服务端寻址（目标绝对秒数由 store 中的绝对进度计算）
+      if (onSeekRequest) {
+        const absolute = usePlayerStore.getState().currentTime + seconds
+        onSeekRequest(Math.max(0, Math.min(displayDuration || Number.MAX_SAFE_INTEGER, absolute)), 'keyboard_seek')
+      }
+      return
+    }
     if (mode === 'remux' || mode === 'smart_remux') {
       const currentPos = remuxOffsetRef.current + (video.currentTime || 0)
       remuxSeek(Math.max(0, Math.min(displayDuration, currentPos + seconds)))
@@ -666,6 +684,10 @@ export default function VideoPlayer({
       remuxSeek(targetTime)
       return
     }
+    if (sessionMode) {
+      if (onSeekRequest) onSeekRequest(Math.max(0, Math.min(targetTime, displayDuration || targetTime)), 'progress_seek')
+      return
+    }
     if (video.duration > 0 && targetTime <= video.duration) video.currentTime = targetTime
     else if (video.duration > 0) video.currentTime = video.duration - 0.5
   }
@@ -678,11 +700,15 @@ export default function VideoPlayer({
       remuxSeek(Math.max(0, Math.min(displayDuration, targetTime)))
       return
     }
+    if (sessionMode) {
+      if (onSeekRequest) onSeekRequest(Math.max(0, Math.min(targetTime, displayDuration || targetTime)), 'progress_seek')
+      return
+    }
     const video = videoRef.current
     if (!video) return
     const maxTime = video.duration > 0 ? video.duration - 0.25 : displayDuration
     video.currentTime = Math.max(0, Math.min(targetTime, maxTime))
-  }, [mode, remuxSeek, displayDuration])
+  }, [mode, remuxSeek, displayDuration, sessionMode, onSeekRequest])
 
   const commitProgressSeekRef = useRef(commitProgressSeek)
   commitProgressSeekRef.current = commitProgressSeek

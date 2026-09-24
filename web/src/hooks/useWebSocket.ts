@@ -213,10 +213,12 @@ type WSEventHandler<T> = (data: T) => void
 interface UseWebSocketOptions {
   /** 自动重连（默认 true） */
   autoReconnect?: boolean
-  /** 重连间隔毫秒（默认 3000） */
+  /** 基础重连间隔毫秒（默认 3000，指数退避翻倍） */
   reconnectInterval?: number
   /** 最大重连次数（默认 10） */
   maxRetries?: number
+  /** 重连间隔上限毫秒（默认 30000） */
+  maxBackoffMs?: number
 }
 
 interface UseWebSocketReturn {
@@ -235,10 +237,12 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     autoReconnect = true,
     reconnectInterval = 3000,
     maxRetries = 10,
+    maxBackoffMs = 30_000,
   } = options
 
   const wsRef = useRef<WebSocket | null>(null)
   const retriesRef = useRef(0)
+  const errorReportedRef = useRef(false)
   const listenersRef = useRef<Map<string, Set<(...args: unknown[]) => void>>>(new Map())
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [connected, setConnected] = useState(false)
@@ -290,6 +294,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
         }
         setConnected(true)
         retriesRef.current = 0
+        errorReportedRef.current = false
       }
 
       ws.onmessage = (event) => {
@@ -313,18 +318,27 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 
         if (autoReconnect && retriesRef.current < maxRetries && isAuthenticated) {
           retriesRef.current++
-          reconnectTimerRef.current = setTimeout(connect, reconnectInterval)
+          // 指数退避：第 n 次重连间隔 = interval * 2^(n-1)，封顶 maxBackoffMs
+          const delay = Math.min(
+            reconnectInterval * Math.pow(2, Math.max(0, retriesRef.current - 1)),
+            maxBackoffMs,
+          )
+          reconnectTimerRef.current = setTimeout(connect, delay)
         }
       }
 
-      ws.onerror = (error) => {
+      ws.onerror = () => {
         if (ws !== wsRef.current) return
-        console.error('[WS] 连接错误:', error)
+        if (errorReportedRef.current) return
+        errorReportedRef.current = true
+        // 反代未转发 Upgrade 头时每次握手都会触发浏览器自身的联网报错；
+        // 这里每条连接生命周期最多提示一次，避免与控制台高频刷屏叠加。
+        console.warn('[WS] 实时事件服务连接失败，已开启自动重连（此条仅提示一次）')
       }
     } catch (e) {
       console.error('[WS] 创建连接失败:', e)
     }
-  }, [token, isAuthenticated, autoReconnect, reconnectInterval, maxRetries, dispatchEvent])
+  }, [token, isAuthenticated, autoReconnect, reconnectInterval, maxRetries, maxBackoffMs, dispatchEvent])
 
   useEffect(() => {
     if (isAuthenticated && token) {
