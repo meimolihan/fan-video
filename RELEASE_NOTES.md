@@ -1,17 +1,17 @@
-控制台刷屏修复，WebSocket 修复，HLS 会话播放无法快进
+单个视频上使用更多→刷新元数据，解决转码问题
 
 ```bash
 docker pull mobufan/fan-video:latest
 ```
 ```bash
-docker pull mobufan/fan-video:v1.4.1
+docker pull mobufan/fan-video:v1.4.2
 ```
 
 ```bash
 docker pull ghcr.io/meimolihan/fan-video:latest
 ```
 ```bash
-docker pull ghcr.io/meimolihan/fan-video:v1.4.1
+docker pull ghcr.io/meimolihan/fan-video:v1.4.2
 ```
 
 ## 二进制安装
