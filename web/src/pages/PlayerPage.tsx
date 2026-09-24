@@ -215,12 +215,14 @@ export default function PlayerPage() {
     : undefined
 
   const handleBack = () => {
-    if (highlightMode) {
-      navigate(`/media/${id}`)
-      return
-    }
-    if (hasHistoryOnMountRef.current) {
-      navigate(-1)
+    // 精彩片段 / 普通播放统一走「真实后退」：直接 push 详情页会往历史栈里
+    // 重复压入详情页记录，导致详情页自身的「返回」最终又退回播放页，形成死循环。
+    if (highlightMode || hasHistoryOnMountRef.current) {
+      if (hasHistoryOnMountRef.current) {
+        navigate(-1)
+        return
+      }
+      navigate(`/media/${id}`, { replace: true })
       return
     }
     if (media.media_type === 'episode' && media.series_id) navigate(`/series/${media.series_id}`, { replace: true })
