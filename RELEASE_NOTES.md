@@ -1,17 +1,17 @@
-修复 fan-video -h 命令
+修复精彩片段无线返回
 
 ```bash
 docker pull mobufan/fan-video:latest
 ```
 ```bash
-docker pull mobufan/fan-video:v1.3.2
+docker pull mobufan/fan-video:v1.4.0
 ```
 
 ```bash
 docker pull ghcr.io/meimolihan/fan-video:latest
 ```
 ```bash
-docker pull ghcr.io/meimolihan/fan-video:v1.3.2
+docker pull ghcr.io/meimolihan/fan-video:v1.4.0
 ```
 
 ## 二进制安装
