@@ -68,6 +68,7 @@ export default function MediaDetailPage() {
   const [enhancedLoading, setEnhancedLoading] = useState(false)
 
   const [scraping, setScraping] = useState(false)
+  const [refreshingMetadata, setRefreshingMetadata] = useState(false)
   const [showTrailer, setShowTrailer] = useState(false)
   const [posterVersion, setPosterVersion] = useState<number>(() => Date.now())
 
@@ -246,6 +247,32 @@ export default function MediaDetailPage() {
     }
   }
 
+  const handleRefreshFileMetadata = async () => {
+    if (!id) return
+    setRefreshingMetadata(true)
+    try {
+      await mediaApi.refreshMetadata(id)
+      const [mediaResponse, playInfoResponse, enhancedResponse] = await Promise.all([
+        mediaApi.detail(id),
+        streamApi.getPlayInfo(id),
+        mediaApi.detailEnhanced(id),
+      ])
+      setMedia(mediaResponse.data.data)
+      setPlayInfo(playInfoResponse.data.data)
+      const data = enhancedResponse.data.data
+      setTechSpecs(data.tech_specs)
+      setFileInfo(data.file_info)
+      setLibraryInfo(data.library)
+      setPlaybackStats(data.playback_stats)
+      invalidateMediaListCaches()
+      toast.success(t('mediaDetail.refreshMetadataSuccess'))
+    } catch (error) {
+      toast.error(formatErrMsg(error, t('mediaDetail.refreshMetadataFailed')))
+    } finally {
+      setRefreshingMetadata(false)
+    }
+  }
+
   const handleEditMetadata = () => {
     if (!media) return
     setEditForm({
@@ -388,14 +415,14 @@ export default function MediaDetailPage() {
         isWatchLater={isWatchLater}
         watchProgress={watchProgress}
         playlists={playlists}
-        scraping={scraping}
+        scraping={refreshingMetadata}
         isAdmin={isAdmin}
         posterVersion={posterVersion}
         onFavorite={handleFavorite}
         onToggleWatchLater={handleToggleWatchLater}
         onAddToPlaylist={handleAddToPlaylist}
         onShowTrailer={media.trailer_url ? () => setShowTrailer(true) : undefined}
-        onRefreshMetadata={handleRefreshMetadata}
+        onRefreshMetadata={handleRefreshFileMetadata}
         onEditMetadata={handleEditMetadata}
         onDelete={() => setShowDeleteConfirm(true)}
       />

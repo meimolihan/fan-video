@@ -460,6 +460,8 @@ const enUS: Record<string, string> = {
   'mediaDetail.watchLaterFailed': 'Watch later operation failed',
   'mediaDetail.scrapeSuccess': 'Metadata scraped successfully',
   'mediaDetail.scrapeFailed': 'Metadata scraping failed, please check TMDb config or network/proxy',
+  'mediaDetail.refreshMetadataSuccess': 'Technical metadata refreshed, codec info updated',
+  'mediaDetail.refreshMetadataFailed': 'Failed to refresh technical metadata',
   'mediaDetail.addToPlaylistSuccess': 'Added to playlist',
   'mediaDetail.addToPlaylistFailed': 'Failed to add to playlist',
   'mediaDetail.manualMatch': 'Manual Match',

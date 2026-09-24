@@ -98,6 +98,8 @@ func registerCoreAPI(
 	api.GET("/media/:id", guardByMediaID, handlers.Media.Detail)
 	api.GET("/media/:id/enhanced", guardByMediaID, handlers.Media.DetailEnhanced)
 	api.POST("/media/:id/scrape", guardByMediaID, middleware.AdminOnly(), handlers.Metadata.ScrapeMedia)
+	// 强制刷新单个媒体的技术元数据（重新探测源文件并回写数据库编码/分辨率等）
+	api.POST("/media/:id/refresh-metadata", guardByMediaID, middleware.AdminOnly(), handlers.Metadata.RefreshTechnicalMetadata)
 
 	// 精彩片段由服务端统一调度与持久化。默认 auto 模式优先交给合格客户端，
 	// 没有客户端时自动回退现有 Sparse V2；读/播继续沿用媒体权限，重计算与节点接口仅管理员可用。

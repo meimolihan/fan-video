@@ -511,6 +511,8 @@ const zhCN: Record<string, string> = {
   'mediaDetail.watchLaterFailed': '稍后再看操作失败',
   'mediaDetail.scrapeSuccess': '元数据刮削成功',
   'mediaDetail.scrapeFailed': '元数据刮削失败，请检查 TMDb 配置或网络/代理',
+  'mediaDetail.refreshMetadataSuccess': '技术元数据已刷新，编码信息已更新',
+  'mediaDetail.refreshMetadataFailed': '刷新技术元数据失败',
   'mediaDetail.addToPlaylistSuccess': '已添加到播放列表',
   'mediaDetail.addToPlaylistFailed': '添加到播放列表失败',
   'mediaDetail.manualMatch': '手动匹配影片',

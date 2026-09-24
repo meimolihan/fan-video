@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -18,6 +19,7 @@ import (
 	"github.com/fan-video/fan-video/internal/config"
 	"github.com/fan-video/fan-video/internal/model"
 	"github.com/fan-video/fan-video/internal/repository"
+	transcodeprobe "github.com/fan-video/fan-video/internal/transcode/probe"
 	"go.uber.org/zap"
 )
 
@@ -426,6 +428,39 @@ func (s *StreamService) GetMediaPlayInfo(mediaID string) (*MediaPlayInfo, error)
 	}
 
 	return info, nil
+}
+
+// RefreshMediaTechnicalMetadata 强制刷新单个媒体的技术元数据：对源文件执行一次
+// 权威探测（指纹失效时自动重新 FFprobe），并将真实编码/分辨率/音频/时长/文件大小
+// 回写数据库。用于手动转码或替换文件后 DB 仍记录旧编码（如 hevc）导致播放计划
+// 要求 HLS 转码播放的场景；STRM / 远程流返回 probe.ErrUnsupportedSource。
+func (s *StreamService) RefreshMediaTechnicalMetadata(mediaID string) (*model.Media, error) {
+	media, err := s.mediaRepo.FindByID(mediaID)
+	if err != nil {
+		return nil, err
+	}
+	if s.execution == nil {
+		return nil, fmt.Errorf("media execution service is unavailable")
+	}
+	record, err := s.execution.ProbeMedia(context.Background(), media)
+	if err != nil {
+		return nil, err
+	}
+	transcodeprobe.ApplyToMedia(media, record)
+	if record.SourceSize > 0 {
+		media.FileSize = record.SourceSize
+	}
+	if err := s.mediaRepo.UpdateTechnicalSummary(
+		media.ID,
+		media.VideoCodec,
+		media.AudioCodec,
+		media.Resolution,
+		media.Duration,
+		media.FileSize,
+	); err != nil {
+		return nil, err
+	}
+	return media, nil
 }
 
 // GetDirectStreamInfo 获取直接播放的文件路径和MIME类型

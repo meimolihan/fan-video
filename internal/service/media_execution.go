@@ -76,6 +76,7 @@ func (s *MediaExecutionService) GetCachedMediaProbe(media *model.Media) *model.M
 	return record
 }
 
+// GetMediaProbeStats returns the shared probe service's cache statistics.
 func (s *MediaExecutionService) GetMediaProbeStats() transcodeprobe.Stats {
 	if s == nil || s.mediaProbe == nil {
 		return transcodeprobe.Stats{}

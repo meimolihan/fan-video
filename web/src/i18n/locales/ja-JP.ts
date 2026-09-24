@@ -460,6 +460,8 @@ const jaJP: Record<string, string> = {
   'mediaDetail.watchLaterFailed': '後で見る操作に失敗しました',
   'mediaDetail.scrapeSuccess': 'メタデータのスクレイプに成功しました',
   'mediaDetail.scrapeFailed': 'メタデータのスクレイプに失敗しました。TMDb 設定またはネットワーク/プロキシを確認してください',
+  'mediaDetail.refreshMetadataSuccess': '技術メタデータを更新しました。コーデック情報が更新されました',
+  'mediaDetail.refreshMetadataFailed': '技術メタデータの更新に失敗しました',
   'mediaDetail.addToPlaylistSuccess': 'プレイリストに追加しました',
   'mediaDetail.addToPlaylistFailed': 'プレイリストへの追加に失敗しました',
   'mediaDetail.manualMatch': '手動マッチ',

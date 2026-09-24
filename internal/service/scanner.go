@@ -600,8 +600,15 @@ func (s *ScannerService) healFirstFramePosters(library *model.Library) {
 // 完全不一致。详情页技术规格每次实时 FFprobe 显示正确值，而卡片角标直接读
 // media.resolution，于是出现「角标 480p、详情 1080p」的矛盾。
 //
-// 该函数在每次扫描完成后，只对 video_codec 为空或为图片类编码的可疑记录
-// 重新执行权威 FFprobe，并将真实编码/分辨率/音频/时长回写，与详情页显示保持一致。
+// 该函数在每次扫描完成后，对以下可疑记录重新执行权威 FFprobe 并将真实
+// 编码/分辨率/音频/时长回写：
+//  1. video_codec 为空或为图片类编码（历史探测失败 / 编码被封面流污染）；
+//  2. 磁盘上文件大小与 DB 记录的 file_size 不一致（文件被手动转码/替换后
+//     mtime 可能保持不变，单纯靠增量扫描按 mtime 判断会漏掉，这里用廉价
+//     的 stat 对比兜底，幂等：回写真实大小后不再触发）。
+//
+// 由此保证「扫描媒体库」能批量修复用户手动转码为 H.264 但 DB 仍记录 HEVC 的
+// 媒体，使播放计划不再错误要求 HLS 转码播放。
 func (s *ScannerService) syncStaleTechnicalMetadata(library *model.Library) {
 	if s == nil || library == nil || s.mediaRepo == nil {
 		return
@@ -619,9 +626,16 @@ func (s *ScannerService) syncStaleTechnicalMetadata(library *model.Library) {
 		if m.FilePath == "" || m.StreamURL != "" || IsWebDAVPath(m.FilePath) {
 			continue
 		}
-		// 只修复明显可疑的记录：视频编码为空（探测失败）或编码被污染为图片类。
-		// 其余记录说明曾按真实视频成功探测过，不再重复探测以控制扫描开销。
-		if m.VideoCodec != "" && !model.IsImageVideoCodec(m.VideoCodec) {
+		needsProbe := m.VideoCodec == "" || model.IsImageVideoCodec(m.VideoCodec)
+		if !needsProbe {
+			// 编码看似正常，但文件大小与 DB 不一致：文件被重新转码/替换过，
+			// 需要重新探测并回写（大小一致则说明自上次扫描未变更，跳过）。
+			if info, statErr := os.Stat(m.FilePath); statErr == nil && !info.IsDir() && info.Size() > 0 && m.FileSize > 0 && info.Size() != m.FileSize {
+				m.FileSize = info.Size()
+				needsProbe = true
+			}
+		}
+		if !needsProbe {
 			continue
 		}
 		scanned++

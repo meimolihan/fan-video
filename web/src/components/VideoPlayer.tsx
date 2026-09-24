@@ -416,7 +416,7 @@ export default function VideoPlayer({
     // 降级链：正常播放 → 静音播放（画面先动，提示点击开声）→ 中央 ▶ 手动开始。
     const startPlayback = () => {
       video.play().then(() => {
-        console.info('[VideoPlayer] 自动播放成功')
+        console.debug('[VideoPlayer] 自动播放成功')
       }).catch(() => {
         if (video.muted) {
           setAwaitingStart(true)
@@ -424,7 +424,7 @@ export default function VideoPlayer({
         }
         video.muted = true
         video.play().then(() => {
-          console.info('[VideoPlayer] 带声音自动播放被拦截，已静音自动播放，等待手势恢复声音')
+          console.debug('[VideoPlayer] 带声音自动播放被拦截，已静音自动播放，等待手势恢复声音')
           setAwaitingUnmute(true)
         }).catch((err) => {
           console.warn('[VideoPlayer] 静音自动播放也被拦截，等待手动开始:', err?.name || err)
