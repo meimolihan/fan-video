@@ -1,17 +1,17 @@
-修复精彩片段无线返回
+控制台刷屏修复，WebSocket 修复，HLS 会话播放无法快进
 
 ```bash
 docker pull mobufan/fan-video:latest
 ```
 ```bash
-docker pull mobufan/fan-video:v1.4.0
+docker pull mobufan/fan-video:v1.4.1
 ```
 
 ```bash
 docker pull ghcr.io/meimolihan/fan-video:latest
 ```
 ```bash
-docker pull ghcr.io/meimolihan/fan-video:v1.4.0
+docker pull ghcr.io/meimolihan/fan-video:v1.4.1
 ```
 
 ## 二进制安装
