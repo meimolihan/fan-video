@@ -2519,13 +2519,15 @@
   --nv-fill-active: rgba(116,91,255,.14);
   --nv-text-primary: #f5f6fb;
   --nv-text-secondary: rgba(237,240,249,.72);
-  --nv-text-tertiary: rgba(217,223,238,.48);
+  /* 与 pages-theme.css 的同名令牌保持一致：那里的 :root:not([data-theme="light"])
+     特异性更高（0,2,0）会胜出，本块仅作兜底。两处必须同值，否则改一处就漂移。 */
+  --nv-text-tertiary: rgba(215, 221, 246, .56);
   --nv-border-subtle: rgba(170,181,210,.065);
   --nv-border-default: rgba(170,181,210,.095);
   --nv-border-hover: rgba(180,190,230,.18);
-  --nv-action-primary: #735cff;
-  --nv-action-primary-hover: #806bff;
-  --nv-action-primary-active: #654cea;
+  --nv-action-primary: #5865f8;
+  --nv-action-primary-hover: #6266e8;
+  --nv-action-primary-active: #4d58e0;
   --nv-action-muted: #846fff;
   --nv-action-muted-hover: #9b8aff;
   --nv-text-on-brand: #ffffff;
@@ -2544,12 +2546,15 @@
   --nv-fill-active: rgba(112,87,245,.10);
   --nv-text-primary: #1a1d27;
   --nv-text-secondary: rgba(31,35,49,.70);
-  --nv-text-tertiary: rgba(50,56,75,.47);
+  /* 浅色主题下三级文字实测仅 2.50–2.57:1（比暗色更差），alpha .72 → 4.70–4.96:1。
+     二级文字 .70 合成后为 #626579，仍深于三级文字，层级关系不变。 */
+  --nv-text-tertiary: rgba(50,56,75,.72);
   --nv-border-subtle: rgba(52,60,82,.06);
   --nv-border-default: rgba(52,60,82,.09);
   --nv-border-hover: rgba(75,81,112,.17);
   --nv-action-primary: #7057f5;
-  --nv-action-primary-hover: #7d68fb;
+  /* 悬停态原 #7d68fb 白字仅 4.00:1，改为 #6d56ef（4.97:1），仍比常态略深。 */
+  --nv-action-primary-hover: #6d56ef;
   --nv-action-primary-active: #6048df;
   --nv-action-muted: #765ff1;
   --nv-action-muted-hover: #654ee0;
@@ -2835,7 +2840,8 @@
     margin: 0 0 6px !important;
     padding: 0 10px !important;
     color: var(--nv-text-tertiary) !important;
-    font-size: 9px !important;
+    /* 分组标题原 9px，1440 视口下首页还会被 vw 规则压到 7.7px，抬到 11px 下限。 */
+    font-size: 11px !important;
     font-weight: 600 !important;
     letter-spacing: .02em !important;
   }
@@ -2914,7 +2920,7 @@
     display: block !important;
     flex: 1 1 auto;
     color: currentColor !important;
-    font-size: 11px !important;
+    font-size: 12px !important;
     font-weight: 540 !important;
     line-height: 1 !important;
     text-align: left !important;
@@ -3257,7 +3263,7 @@
   .nv-rail-section-title {
     margin-bottom: 5px !important;
     padding-inline: 10px !important;
-    font-size: 9px !important;
+    font-size: 11px !important;
   }
 
   .nv-rail-section-links {
@@ -3274,7 +3280,7 @@
   }
 
   .nv-rail-label {
-    font-size: 11px !important;
+    font-size: 12px !important;
   }
 
   .nv-rail-footer {
@@ -3633,7 +3639,8 @@
   body:has(.nv-home-page) .nv-rail-section-title {
     margin-bottom: .299vw !important;
     padding-inline: .598vw !important;
-    font-size: .538vw !important;
+    /* 保留随视口缩放的意图，但加 11px 下限：1440 视口下原值仅 7.7px。 */
+    font-size: max(11px, .538vw) !important;
   }
 
   body:has(.nv-home-page) .nv-rail-section-links {
@@ -3657,7 +3664,8 @@
   }
 
   body:has(.nv-home-page) .nv-rail-label {
-    font-size: .778vw !important;
+    /* 同上：原 .778vw 在 1280 视口下只有 10px，加 12px 下限。 */
+    font-size: max(12px, .778vw) !important;
   }
 
   body:has(.nv-home-page) .nv-rail-profile {
@@ -9830,7 +9838,8 @@ html body .nv-home-page .nv-hero-carousel .nv-media-hero-title::after {
   html body .nv-app-shell[data-sidebar-collapsed="false"] .nv-rail-section-title {
     margin-bottom: 6px !important;
     padding-inline: 10px !important;
-    font-size: 9px !important;
+    /* 原 9px。这条选择器特异性最高且带 !important，是分组标题实际生效的字号来源。 */
+    font-size: 11px !important;
   }
 
   html body .nv-app-shell[data-sidebar-collapsed="false"] .nv-rail-section-links {
@@ -9862,7 +9871,7 @@ html body .nv-home-page .nv-hero-carousel .nv-media-hero-title::after {
   }
 
   html body .nv-app-shell[data-sidebar-collapsed="false"] .nv-rail-label {
-    font-size: 11px !important;
+    font-size: 12px !important;
     line-height: 1 !important;
   }
 
@@ -11560,7 +11569,8 @@ html body div:has(> button[title='画质'])
   margin-top: 20px;
   padding-top: 14px;
   border-top: 1px solid var(--nv-border-subtle);
-  font-size: 11px;
+  /* 原 11px，登录页唯一一处低于 13px 的说明文字，抬到 12px 与卡片内说明一致。 */
+  font-size: 12px;
   line-height: 1.6;
   color: var(--nv-text-tertiary);
 }
@@ -12110,4 +12120,181 @@ html body .nv-app-shell .nv-rail-brand {
  * ------------------------------------------------------------------------ */
 [class*="text-[9px]"] {
   font-size: 10px;
+}
+
+/* ==========================================================================
+ * 批次 2：按压反馈 + hover 的键盘等价
+ *
+ * 盘点发现：.nv-media-card / .nv-rail-item / .nv-browse-list-item 三个组件
+ * 有 hover 视觉反馈，但没有任何 :active 规则——鼠标按下时界面毫无反应，
+ * 用户无法确认点击是否已被接收。.nv-filter-chip 有 :active，
+ * .nv-pagination-* 走 .nv-button（已有 :active），本轮不动。
+ *
+ * 同时补 hover 的键盘等价：纯 :hover 反馈对键盘用户不可见，
+ * 因此每条 :hover 都配一条 :focus-visible / :focus-within 等价规则。
+ *
+ * 写法纪律（沿用前几轮已验证的层叠经验）：
+ *   1. 追加在文件末尾，不改动既有规则——app-ui.css 在 main.tsx 里最后 import，
+ *      同特异性下新规则胜出。
+ *   2. 选择器必须与被覆盖的 hover 规则同等特异性，且带 !important 的那些
+ *      （rail-item 系列）新规则同样要带 !important，否则压不动。
+ *   3. 不用 :where()（特异性为 0）、不用 opacity 压暗（会连带拉低对比度）。
+ *   4. 不使用 opacity 做按压反馈，改用颜色令牌，避免与批次 1 的对比度成果冲突。
+ * ========================================================================== */
+
+/* --- 侧栏导航项 ------------------------------------------------------- */
+
+/* 展开态：与既有 hover 同选择器同特异性，靠后加载胜出。 */
+.nv-rail > .nv-rail-scroll .nv-rail-item:active {
+  transform: none !important;
+  background: var(--nv-fill-active) !important;
+  color: var(--nv-text-primary) !important;
+}
+
+/* 展开态 hover 的键盘等价：焦点落在项内链接/按钮上时给出与 hover 同等的底色，
+   否则键盘导航经过侧栏时完全没有视觉痕迹。 */
+.nv-rail > .nv-rail-scroll .nv-rail-item:focus-visible,
+.nv-rail > .nv-rail-scroll .nv-rail-item:focus-within {
+  background: var(--nv-fill-hover) !important;
+  color: var(--nv-text-primary) !important;
+}
+
+[data-theme="light"] .nv-rail > .nv-rail-scroll .nv-rail-item:active {
+  background: rgba(24, 25, 29, .09) !important;
+  color: var(--nv-text-primary) !important;
+}
+
+[data-theme="light"] .nv-rail > .nv-rail-scroll .nv-rail-item:focus-visible,
+[data-theme="light"] .nv-rail > .nv-rail-scroll .nv-rail-item:focus-within {
+  background: rgba(24, 25, 29, .055) !important;
+  color: var(--nv-text-primary) !important;
+}
+
+/* 折叠态：这条选择器特异性 (0,7,0) 且带 !important，是折叠态实际生效的来源，
+   必须原样复刻特异性，否则新规则会被它压掉。 */
+html body .nv-app-shell.nv-app-shell[data-sidebar-collapsed="true"] .nv-rail > .nv-rail-scroll .nv-rail-item:active {
+  border-color: var(--nv-border-default) !important;
+  background: var(--nv-fill-active) !important;
+  color: var(--nv-text-primary) !important;
+  transform: none !important;
+}
+
+html body .nv-app-shell.nv-app-shell[data-sidebar-collapsed="true"] .nv-rail > .nv-rail-scroll .nv-rail-item:focus-visible {
+  border-color: var(--nv-border-subtle) !important;
+  background: var(--nv-fill-hover) !important;
+  color: var(--nv-text-primary) !important;
+}
+
+/* --- 媒体卡片 --------------------------------------------------------- */
+
+/* 按下时海报回落到原位并把阴影收到比静止态更浅的一档——press 阴影必须
+   比 baseline 更轻，否则"按下"看起来像"抬起"。这里不用 --nv-shadow-card：
+   实测该令牌为 0 16px 42px，比卡片实际静止态 0 10px 24px 更重，用它按压
+   会让阴影反而变大（第一版就是这么错的，探针量出 24px -> 42px）。
+   transition-duration 收短，让点击反馈快于悬浮反馈。 */
+.nv-media-card:active .nv-media-card-poster {
+  transform: translateY(0) !important;
+  box-shadow: 0 4px 12px rgba(0, 5, 20, .16) !important;
+  transition-duration: var(--nv-motion-fast) !important;
+}
+
+/* 键盘等价：卡片本身是链接，focus-visible 已由全局 :where 规则给出焦点环，
+   这里补上与 hover 同等的海报抬升，让键盘导航到卡片时也有同样明确的响应。 */
+.nv-media-card:focus-visible .nv-media-card-poster {
+  border-color: var(--nv-border-default) !important;
+  box-shadow: var(--nv-shadow-card-hover) !important;
+}
+
+/* 首页上下文里的 hover 被更高特异性规则抬到 -2px，:active 需同等特异性才能盖住它。
+   注意 :focus-visible 必须与 :active 分开写——合并会让键盘焦点态误拿到按压样式，
+   表现为"Tab 到的卡片是塌陷的"，与鼠标 hover 不一致。 */
+html body .nv-home-page .nv-media-card:active .nv-media-card-poster {
+  transform: translateY(0) !important;
+  box-shadow: 0 4px 12px rgba(0, 5, 20, .16) !important;
+}
+
+/* 焦点态与 hover 同等抬升（不是按压态），保持鼠标/键盘两条路径视觉一致。 */
+html body .nv-home-page .nv-media-card:focus-visible .nv-media-card-poster {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--nv-text-primary) 10%, transparent) !important;
+}
+
+/* 浅色主题的按压阴影要用暖灰而不是近黑，否则浅底上会显脏。 */
+[data-theme="light"] .nv-media-card:active .nv-media-card-poster {
+  box-shadow: 0 4px 12px rgba(35, 42, 70, .07) !important;
+}
+
+html body .nv-home-page .nv-media-card:focus-within .nv-media-card-poster {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--nv-text-primary) 10%, transparent) !important;
+}
+
+/* --- 浏览列表项 ------------------------------------------------------- */
+
+.nv-browse-list-item:active {
+  background: var(--nv-fill-active) !important;
+  transform: none !important;
+}
+
+/* 列表项内的播放按钮等子元素会吃掉焦点，:focus-visible 落在自身上，
+   所以键盘等价用 :focus-within。 */
+.nv-browse-list-item:focus-within {
+  background: var(--nv-fill-hover) !important;
+}
+
+[data-theme="light"] .nv-browse-list-item:focus-within {
+  background: var(--nv-fill-hover) !important;
+}
+
+/* ==========================================================================
+ * 批次 3：WCAG AA 复检清零
+ *
+ * 用同一套对比度算法复检 browse 列表页（暗/浅各 83 个文字节点），剩下 2 处：
+ *   1. .nv-pagination-summary  暗色 3.99:1（需 4.5）—— 11px 且走三级文字令牌，
+ *      偏小偏淡。它是「第 1-30 项 / 共 617 项」这类唯一的数量说明，丢了用户
+ *      就不知道自己看的是第几页，属于有信息量的文字，不能只靠"是次要信息"降级。
+ *   2. 浅色侧栏选中项文字  #6f55e9 on #f0edff = 4.40:1（需 4.5）——
+ *      差 0.1，但选中项是当前所在位置，恰恰是最该看清的一处。
+ *      沿原色相压深一档到 #5f45d6，实测 5.03:1。
+ * ========================================================================== */
+
+/* 分页摘要：字号抬到与相邻控件一致，颜色改走二级文字令牌。
+   12px 下二级文字在两种主题都达标，且仍明显浅于一级标题，层级关系不变。 */
+.nv-pagination-summary {
+  font-size: 12px;
+  color: var(--nv-text-secondary);
+}
+
+/* 浅色侧栏选中态：只压深文字色，底色 #f0edff 保持不变（它承载"选中"语义）。 */
+[data-theme="light"] .nv-rail > .nv-rail-scroll .nv-rail-item[aria-current="page"],
+[data-theme="light"] .nv-rail > .nv-rail-scroll .nv-rail-item.is-active {
+  color: #5f45d6 !important;
+}
+
+/* ==========================================================================
+ * 批次 3 补充：主色「作背景」与「作文字」是两个相反需求，不能共用一个令牌
+ *
+ * 批次 1 为了让主色作背景配白字达标（#6875ff 只有 3.77:1），把
+ * --nv-action-primary 压到 #5865f8。结果压暗的紫在深色背景上作前景文字时
+ * 就不达标了：「查看全部」「更多」这类主色链接实测掉到 4.41 / 4.21（需 4.5）。
+ *
+ * 这是典型的令牌误用：primary 的语义是「实心按钮的填充色」，
+ * 深底上的紫色文字应该走 --nv-action-muted（暗色下 #8795ff，本就是为前景设计的亮紫，
+ * 实测在 #060812 上 8.4:1）。这里只改这些链接的颜色来源，不动 primary。
+ * ========================================================================== */
+html body .nv-home-page .nv-home-rail-action {
+  /* 必须带 !important：9199 行那条同名规则整组都是 !important，
+     非 important 的声明压不过它（第一版漏加，实测仍是 4.41）。 */
+  color: var(--nv-action-muted) !important;
+}
+
+/* 注意这里必须写成 html[data-theme="light"]，不能写 [data-theme="light"] html。
+   data-theme 挂在 <html> 自身上，而「A 后代 B」要求 A 是 B 的真后代——
+   <html> 不是自己的后代，所以 [data-theme="light"] html 永远匹配不到（实测
+   matches() 返回 false、规则进了 CSSOM 却从不生效，这是个静默失效的坑）。 */
+html[data-theme="light"] body .nv-home-page .nv-home-rail-action {
+  /* 浅色下 --nv-action-muted 实测 4.53:1，达标但余量只有 0.03；
+     同族更深的 #5f45d6 是 5.99:1，留出余量以吸收背景随内容变化。
+     （暗色侧走 --nv-action-muted #8795ff = 8.4:1，不动。） */
+  color: #5f45d6 !important;
 }

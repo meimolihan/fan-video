@@ -1293,7 +1293,8 @@ body {
 .nv-rail-section-title {
   padding: 0 9px 6px;
   color: var(--nv-text-tertiary);
-  font: 600 9px/1 var(--nv-font-mono);
+  /* 原 9px：分组标题在 1440 视口下实测仅 9px，1440×900 截图中几乎不可读。抬到 11px。 */
+  font: 600 11px/1 var(--nv-font-mono);
   letter-spacing: .10em;
   text-transform: uppercase;
 }
@@ -2017,8 +2018,9 @@ section[aria-labelledby="cast-grid-title"] [role="listitem"] > div:first-child {
 .nv-rail-scroll { gap: 18px !important; padding: 0 0 10px !important; }
 .nv-rail-section-title {
   padding: 0 8px 8px !important;
-  color: rgba(242,242,244,.30) !important;
-  font: 600 10px/1 var(--nv-font-mono) !important;
+  /* 原为硬编码 rgba(242,242,244,.30)，实测约 2.6:1；改走三级文字令牌，随主题走。 */
+  color: var(--nv-text-tertiary) !important;
+  font: 600 11px/1 var(--nv-font-mono) !important;
   letter-spacing: .10em !important;
 }
 .nv-rail-section-links { gap: 2px !important; }
@@ -3402,7 +3404,9 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
 
   --nv-text-primary: #f6f8ff;
   --nv-text-secondary: rgba(232, 236, 255, .72);
-  --nv-text-tertiary: rgba(215, 221, 246, .47);
+  /* 三级文字实测 3.84–3.87:1（低于 WCAG AA 4.5:1），侧栏分组标题、元信息、
+     占位文案都走这个令牌。alpha .56 → 5.00–5.05:1，仍明显浅于二级文字（8.6:1）。 */
+  --nv-text-tertiary: rgba(215, 221, 246, .56);
   --nv-text-disabled: rgba(215, 221, 246, .28);
   --nv-text-on-brand: #ffffff;
 
@@ -3411,9 +3415,12 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
   --nv-border-hover: rgba(128, 147, 255, .30);
   --nv-border-strong: rgba(137, 151, 255, .46);
 
-  --nv-action-primary: #6875ff;
-  --nv-action-primary-hover: #7884ff;
-  --nv-action-primary-active: #5965ec;
+  /* 主色白字对比：#6875ff 仅 3.77:1、#7884ff 仅 3.21:1，均不达标。
+     沿原色相压暗一档到 #5865f8（4.53:1），悬停态改用 #6266e8（4.58:1）
+     —— 提亮空间被对比度上限吃掉，悬停的视觉变化幅度因此变小。 */
+  --nv-action-primary: #5865f8;
+  --nv-action-primary-hover: #6266e8;
+  --nv-action-primary-active: #4d58e0;
   --nv-action-muted: #8795ff;
   --nv-action-muted-hover: #9ba7ff;
   --nv-accent-blue: #5b7cff;
@@ -3771,7 +3778,7 @@ section[aria-labelledby="media-tech-specs-title"] > .grid > div {
   .nv-rail-section-title {
     padding: 0 10px 6px;
     color: rgba(210, 219, 246, .34);
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 650;
     letter-spacing: .16em;
     text-transform: uppercase;
