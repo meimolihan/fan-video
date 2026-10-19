@@ -1,17 +1,17 @@
-单个视频上使用更多→刷新元数据，解决转码问题
+使用 ui-forge 技能，优化前端ui
 
 ```bash
 docker pull mobufan/fan-video:latest
 ```
 ```bash
-docker pull mobufan/fan-video:v1.4.2
+docker pull mobufan/fan-video:v1.4.3
 ```
 
 ```bash
 docker pull ghcr.io/meimolihan/fan-video:latest
 ```
 ```bash
-docker pull ghcr.io/meimolihan/fan-video:v1.4.2
+docker pull ghcr.io/meimolihan/fan-video:v1.4.3
 ```
 
 ## 二进制安装
