@@ -162,7 +162,7 @@ jobs:
           print(json.dumps({'toolchain': toolchain, 'summaries': summaries, 'comparisons': matrix['comparisons']}, sort_keys=True))
           PY
       - name: Upload A/V sync variance evidence
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: transcode-av-sync-variance-${{ github.sha }}
           path: /tmp/nowen-transcode-av-sync/av-boundary-sync-variance-matrix-v1.json

@@ -2,9 +2,12 @@
 #
 # fan-video (Nowen Video) - 发布脚本（触发 GitHub Actions 自动构建）
 # 不在本地编译任何产物：仅更新版本号、推送代码并打 v 开头 tag。
-# 推送代码、打 tag 后显式调用 gh workflow run 触发发布流水线（日常 push 不会触发）：
-#   release.yml -> amd64/arm64 自包含二进制（内嵌前端 dist/PWA）创建 GitHub Release
-#                  + multi-arch Docker 镜像（latest + 版本标签，NOWEN_VERSION 由 tag 注入）
+# 推送代码、打 tag 后显式调用 gh workflow run 触发发布流水线（日常 push / 打 tag 都不会触发）：
+#   release.yml -> 常规检查 + 镜像冒烟
+#                  -> amd64/arm64 自包含二进制（内嵌前端 dist/PWA）+ sha256 创建 GitHub Release
+#                  -> multi-arch Docker 镜像（vX.Y.Z / X.Y.Z / latest，NOWEN_VERSION 由 tag 注入）
+#                  -> 同步 CNB 镜像仓库
+# 一次发版只产生一条 workflow run。
 #
 # Usage:
 #   TAG(必填) 形如 v1.3.1; --yes 免交互; -m "备注" 可选发版说明
@@ -29,9 +32,9 @@ list_color_init() {
 list_color_init
 
 
-# 拉取本次 tag 触发的 workflow run：tag push 后 Actions 尚未注册新 run，
+# 拉取本次 workflow_dispatch 触发的 release run：dispatch 后 Actions 尚未注册新 run，
 # 直接 --limit 1 取最新会取到上一次的陈旧记录。
-# 这里按 tag 过滤并轮询等待，且用 headSha 校验确实是本次 push 的 run。
+# 这里按 ref(tag) 过滤并轮询等待，且用 headSha 校验确实是本次的 run。
 get_gh_run_info() {
     local tag="$1"
     local expect_sha

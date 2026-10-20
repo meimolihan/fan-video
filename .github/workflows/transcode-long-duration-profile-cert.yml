@@ -97,7 +97,7 @@ jobs:
             /tmp/nowen-transcode-real-media-corpus-v1/real-media-corpus-manifest-v1.json
           du -sh /tmp/nowen-transcode-real-media-corpus-v1
       - name: Upload immutable corpus
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: transcode-long-duration-profile-corpus-${{ github.sha }}
           path: /tmp/nowen-transcode-real-media-corpus-v1
@@ -120,7 +120,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Download immutable corpus
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: transcode-long-duration-profile-corpus-${{ github.sha }}
           path: /tmp/nowen-transcode-real-media-corpus-v1
@@ -139,7 +139,7 @@ jobs:
           du -h /tmp/long-duration-profile-matrix-v2.json
       - name: Upload profile matrix report
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: transcode-long-duration-profile-matrix-${{ github.sha }}
           path: /tmp/long-duration-profile-matrix-v2.json

@@ -104,7 +104,7 @@ jobs:
             /tmp/nowen-transcode-real-media-corpus-v1/real-media-corpus-manifest-v1.json
           du -sh /tmp/nowen-transcode-real-media-corpus-v1
       - name: Upload immutable corpus
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: transcode-recovery-stress-corpus-${{ github.sha }}
           path: /tmp/nowen-transcode-real-media-corpus-v1
@@ -147,7 +147,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends ffmpeg gcc util-linux
       - name: Download immutable corpus
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: transcode-recovery-stress-corpus-${{ github.sha }}
           path: /tmp/nowen-transcode-real-media-corpus-v1
@@ -167,7 +167,7 @@ jobs:
             /tmp/recovery-stress-scenarios/${{ matrix.artifact }}.json
           du -h /tmp/recovery-stress-scenarios/${{ matrix.artifact }}.json
       - name: Upload recovery scenario report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: transcode-recovery-stress-scenario-${{ matrix.artifact }}-${{ github.sha }}
           path: /tmp/recovery-stress-scenarios/${{ matrix.artifact }}.json
@@ -186,7 +186,7 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Download all scenario reports
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: transcode-recovery-stress-scenario-*-${{ github.sha }}
           path: /tmp/recovery-stress-scenarios
@@ -206,7 +206,7 @@ jobs:
             /tmp/recovery-resource-stress-aggregate-v4.json
           du -h /tmp/recovery-resource-stress-aggregate-v4.json
       - name: Upload aggregate report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: transcode-recovery-stress-aggregate-${{ github.sha }}
           path: /tmp/recovery-resource-stress-aggregate-v4.json

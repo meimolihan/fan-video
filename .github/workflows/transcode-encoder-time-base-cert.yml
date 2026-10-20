@@ -62,7 +62,7 @@ jobs:
             /tmp/nowen-transcode-encoder-time-base/encoder-time-base-candidate-matrix-v1.json
       - name: Upload encoder time-base candidate evidence
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: transcode-encoder-time-base-${{ github.sha }}
           path: /tmp/nowen-transcode-encoder-time-base/encoder-time-base-candidate-matrix-v1.json

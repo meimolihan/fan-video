@@ -168,7 +168,7 @@ jobs:
           print(json.dumps({'toolchain': toolchain, 'summary': summary}, sort_keys=True))
           PY
       - name: Upload source-origin evidence
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: transcode-source-origin-${{ github.sha }}
           path: /tmp/nowen-transcode-source-origin/source-origin-matrix-v1.json

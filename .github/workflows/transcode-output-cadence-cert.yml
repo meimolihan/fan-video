@@ -59,7 +59,7 @@ jobs:
             /tmp/nowen-transcode-output-cadence/output-cadence-matrix-v1.json
       - name: Upload output-cadence evidence
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: transcode-output-cadence-${{ github.sha }}
           path: /tmp/nowen-transcode-output-cadence/output-cadence-matrix-v1.json

@@ -1,18 +1,20 @@
 name: Release Pipeline
 
-# 执行 scripts/build-and-push.sh <版本号>（自动调用 gh workflow run）时触发：
-#   1) 编译前端 + Go 自包含二进制，创建 GitHub Release
-#      （fan-video_linux_amd64 / fan-video_linux_arm64）
-#   2) 构建并推送 multi-arch Docker 镜像（Docker Hub + GHCR）
-#   3) 同步 Git 仓库与标签到 CNB 镜像仓库
-# 一次发版只产生一条 workflow run（jobs 链式：build-binaries -> publish-release -> build-docker -> sync-cnb）。
-# 注意：日常 push / 打 tag 不会触发本工作流。
+# 执行 scripts/build-and-push.sh <版本号>（自动调用 gh workflow run --ref <tag>）时触发：
+#   1) 常规检查（go vet / 单元测试 / 编译）
+#   2) 镜像构建与冒烟（健康检查）
+#   3) 前端 + Go 自包含二进制（linux/amd64 + arm64，内嵌前端），生成 sha256 并创建 GitHub Release
+#   4) 构建并推送 multi-arch Docker 镜像（Docker Hub + GHCR）
+#   5) 同步 Git 仓库与标签到 CNB 镜像仓库
+# 一次发版只产生一条 workflow run（jobs 链式：test -> docker-smoke -> build-binaries -> publish-release -> build-docker -> sync-cnb）。
+# 本工作流仅由 workflow_dispatch 触发：日常 push / 打 tag 均不产生 run。
+# 注意：仓库内的转码认证工作流（transcode-*/server-*）为 PR 触发，与发版流水线互不影响。
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: '要构建的标签 (例如: v1.0.0)'
+        description: '要构建的标签 (例如: v1.4.5)'
         required: true
         type: string
 
@@ -21,47 +23,164 @@ permissions:
   packages: write
 
 concurrency:
-  group: release-${{ github.ref_name || github.event.inputs.tag }}
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 env:
-  RELEASE_TAG: ${{ github.ref_name || github.event.inputs.tag }}
+  RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+  GO_VERSION: '1.25'
+  NODE_VERSION: '20'
   DOCKERHUB_IMAGE: mobufan/fan-video
   GHCR_IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
+  test:
+    name: 常规检查 (vet / 测试 / 编译)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ format('refs/tags/{0}', github.event.inputs.tag) }}
+
+      - name: Validate tag format
+        run: |
+          if [[ ! "${{ github.event.inputs.tag }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "错误: 标签格式无效，必须形如 vX.Y.Z，例如: v1.4.5"
+            exit 1
+          fi
+          VER="$(sed -n 's/^var Version = "\([0-9.]*\)"/\1/p' internal/version/version.go | head -1)"
+          if [ "${VER}" != "${{ github.event.inputs.tag }}" ] && [ "v${VER}" != "${{ github.event.inputs.tag }}" ]; then
+            echo "错误: internal/version/version.go 中的 Version=${VER} 与本次 tag ${{ github.event.inputs.tag }} 不一致"
+            echo "请先执行 scripts/build-and-push.sh 更新版本后发布"
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # 前端产物必须先就位：internal/embedded/dist 为 go:embed 目录，不存在会导致 Go 编译失败
+      - name: Build frontend
+        working-directory: web
+        env:
+          VITE_APP_VERSION: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Sync embedded web assets
+        run: |
+          mkdir -p internal/pwa internal/embedded/dist
+          cp -f web/public/assets/sw.js internal/pwa/sw.js
+          cp -f web/public/assets/manifest.json internal/pwa/manifest.json
+          cp -rf web/dist/. internal/embedded/dist/
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: 单元测试
+        run: go test -timeout 900s ./...
+
+      - name: 编译
+        run: CGO_ENABLED=0 go build -trimpath -o /tmp/fan-video ./cmd/server-lite
+
+      - name: CLI 冒烟（--version / --help）
+        run: |
+          /tmp/fan-video --version
+          /tmp/fan-video --help >/dev/null
+
+  docker-smoke:
+    name: 镜像构建与冒烟测试
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ format('refs/tags/{0}', github.event.inputs.tag) }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Compute version
+        id: ver
+        run: |
+          VER="${{ github.event.inputs.tag }}"
+          echo "ver_no_v=${VER#v}" >> "$GITHUB_OUTPUT"
+
+      # 与 build-docker 共用 gha 缓存：此处构建的 amd64 层会在多架构推送时命中缓存
+      - name: 构建镜像 (amd64)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: fan-video:ci
+          build-args: |
+            NOWEN_VERSION=${{ steps.ver.outputs.ver_no_v }}
+            GOPROXY=https://proxy.golang.org,direct
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 冒烟测试
+        run: |
+          docker run -d --name nowen -p 8080:8080 \
+            -e PUID=1000 -e PGID=1000 -e TZ=Asia/Shanghai \
+            fan-video:ci
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/api/health >/dev/null; then
+              echo "健康检查通过"
+              curl -fsS http://127.0.0.1:8080/api/health
+              echo
+              docker logs nowen | tail -20
+              docker rm -f nowen
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "服务启动超时"
+          docker logs nowen
+          docker rm -f nowen
+          exit 1
+
   build-binaries:
     name: 编译二进制 (linux amd64 + arm64 + 内置前端)
+    needs: docker-smoke
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     outputs:
       built: ${{ steps.build.outputs.built }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ format('refs/tags/{0}', github.event.inputs.tag) }}
 
-      - name: Validate tag format
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          if [[ ! "${{ github.event.inputs.tag }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
-            echo "错误: 标签格式无效，必须以 'v' 开头，例如: v1.0.0"
-            exit 1
-          fi
-
-      # ==================== 前端构建 ====================
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      # ==================== 前端构建 ====================
       - name: Build frontend
         working-directory: web
         env:
-          VITE_APP_VERSION: ${{ github.ref_name || github.event.inputs.tag }}
+          VITE_APP_VERSION: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           npm ci
           npm run build
@@ -78,7 +197,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25'
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
 
       - name: Build amd64
         run: |
@@ -97,32 +217,35 @@ jobs:
         run: |
           set -e
           ls -lh fan-video_linux_amd64 fan-video_linux_arm64
+          sha256sum fan-video_linux_amd64 fan-video_linux_arm64 > sha256sums.txt
+          cat sha256sums.txt
           echo "built=true" >> "$GITHUB_OUTPUT"
 
       - name: Upload binaries as artifacts
         if: steps.build.outputs.built == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: fan-video-binaries
           path: |
             fan-video_linux_amd64
             fan-video_linux_arm64
+            sha256sums.txt
           if-no-files-found: error
 
   publish-release:
-    name: 发布 Release (附带二进制)
+    name: 发布 Release (附二进制 + sha256)
     needs: build-binaries
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ format('refs/tags/{0}', github.event.inputs.tag) }}
 
       - name: Download binaries
         if: needs.build-binaries.outputs.built == 'true'
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: fan-video-binaries
           path: ./
@@ -146,6 +269,7 @@ jobs:
           TAG="${{ env.RELEASE_TAG }}"
           gh release delete "$TAG" --yes 2>/dev/null || true
           FILES=""
+          [ -f sha256sums.txt ] && FILES="$FILES sha256sums.txt"
           [ -f fan-video_linux_amd64 ] && FILES="$FILES fan-video_linux_amd64"
           [ -f fan-video_linux_arm64 ] && FILES="$FILES fan-video_linux_arm64"
           gh release create "$TAG" \
@@ -162,7 +286,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ format('refs/tags/{0}', github.event.inputs.tag) }}
 
@@ -190,9 +314,10 @@ jobs:
         run: |
           VER="${{ env.RELEASE_TAG }}"
           VER_NO_V="${VER#v}"
-          TAGS="${{ env.DOCKERHUB_IMAGE }}:${VER},${{ env.DOCKERHUB_IMAGE }}:latest"
-          TAGS="${TAGS},${{ env.GHCR_IMAGE }}:${VER},${{ env.GHCR_IMAGE }}:${VER_NO_V}"
+          TAGS="${{ env.DOCKERHUB_IMAGE }}:${VER},${{ env.DOCKERHUB_IMAGE }}:${VER_NO_V},${{ env.DOCKERHUB_IMAGE }}:latest"
+          TAGS="${TAGS},${{ env.GHCR_IMAGE }}:${VER},${{ env.GHCR_IMAGE }}:${VER_NO_V},${{ env.GHCR_IMAGE }}:latest"
           echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+          echo "ver_no_v=${VER_NO_V}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@v7
@@ -202,7 +327,7 @@ jobs:
           push: true
           tags: ${{ steps.tags.outputs.tags }}
           build-args: |
-            NOWEN_VERSION=${{ env.RELEASE_TAG }}
+            NOWEN_VERSION=${{ steps.tags.outputs.ver_no_v }}
             GOPROXY=https://proxy.golang.org,direct
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -212,11 +337,31 @@ jobs:
     needs: build-docker
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    # CNB 同步为 best-effort：失败不阻塞 Release（二进制 + Docker 已发布完成）
+    continue-on-error: true
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ format('refs/tags/{0}', github.event.inputs.tag) }}
+
+      - name: Ensure CNB repository exists
+        if: ${{ env.CNB_TOKEN != '' }}
+        env:
+          CNB_TOKEN: ${{ secrets.CNB_ACCESS_TOKEN }}
+        run: |
+          # 幂等：CNB 目标仓库不存在时先通过 OpenAPI 创建，存在/无权限则交由 git-sync 校验
+          HTTP_CODE=$(curl -s -o /tmp/cnb_repo.json -w '%{http_code}' \
+            -X POST "https://api.cnb.cool/meimolihan/-/repos" \
+            -H "Authorization: Bearer ${CNB_TOKEN}" \
+            -H "Accept: application/vnd.cnb.api+json" \
+            -H "Content-Type: application/json" \
+            -d '{"name":"fan-video","description":"fan-video 媒体库管理服务（与 GitHub 仓库 main + 全部 tag 同步）","visibility":"public"}')
+          echo "Create CNB repo status: ${HTTP_CODE}"
+          if [ "${HTTP_CODE}" != "201" ]; then
+            echo "非 201（可能已存在），内容如下，继续由同步步骤校验："
+            cat /tmp/cnb_repo.json || true
+          fi
 
       - name: Sync to CNB Repository
         if: ${{ env.CNB_TOKEN != '' }}

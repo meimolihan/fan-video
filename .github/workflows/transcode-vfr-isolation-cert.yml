@@ -57,7 +57,7 @@ jobs:
             /tmp/nowen-transcode-vfr-isolation/vfr-layer-isolation-matrix-v1.json
       - name: Upload VFR layer-isolation evidence
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: transcode-vfr-layer-isolation-${{ github.sha }}
           path: /tmp/nowen-transcode-vfr-isolation/vfr-layer-isolation-matrix-v1.json

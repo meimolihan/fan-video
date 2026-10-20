@@ -43,7 +43,7 @@ jobs:
             /tmp/nowen-transcode-real-media-corpus/real-media-corpus-spec-v1.json
       - name: Upload corpus spec evidence
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: transcode-real-media-corpus-spec-${{ github.sha }}
           path: /tmp/nowen-transcode-real-media-corpus/real-media-corpus-spec-v1.json
