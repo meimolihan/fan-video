@@ -1,17 +1,17 @@
-使用 ui-forge 技能，优化前端ui
+日常更新
 
 ```bash
 docker pull mobufan/fan-video:latest
 ```
 ```bash
-docker pull mobufan/fan-video:v1.4.3
+docker pull mobufan/fan-video:v1.4.4
 ```
 
 ```bash
 docker pull ghcr.io/meimolihan/fan-video:latest
 ```
 ```bash
-docker pull ghcr.io/meimolihan/fan-video:v1.4.3
+docker pull ghcr.io/meimolihan/fan-video:v1.4.4
 ```
 
 ## 二进制安装
