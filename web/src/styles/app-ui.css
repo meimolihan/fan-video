@@ -11974,7 +11974,7 @@ html body .nv-app-shell .nv-rail-brand {
 
 /* --------------------------------------------------------------------------
  * A1. 补齐 6 个「被引用但从未定义」的 CSS 变量（复用既有同义变量）。
- *     影响：HomeFeaturedPanel / HighlightsBatchPanel 边框边缘、
+ *     影响：HomeFeaturedPanel / HighlightsGeneratePanel 边框边缘、
  *           SeriesPosterPickerModal 悬停/占位底、ErrorBoundary 主按钮文字、
  *           LoginPage 默认密码徽章底、剧集进度条轨道、频道源列表底。
  * ------------------------------------------------------------------------ */
