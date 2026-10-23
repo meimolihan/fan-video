@@ -1,17 +1,17 @@
-release 流水线标准化：单条链路 + 常规检查 + 镜像冒烟 + sha256 附件
+精彩片段批量生成
 
 ```bash
 docker pull mobufan/fan-video:latest
 ```
 ```bash
-docker pull mobufan/fan-video:v1.4.5
+docker pull mobufan/fan-video:v1.4.6
 ```
 
 ```bash
 docker pull ghcr.io/meimolihan/fan-video:latest
 ```
 ```bash
-docker pull ghcr.io/meimolihan/fan-video:v1.4.5
+docker pull ghcr.io/meimolihan/fan-video:v1.4.6
 ```
 
 ## 二进制安装
